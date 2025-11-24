@@ -2,9 +2,16 @@ import fetch from 'node-fetch';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const TABLE_METADATA = {
-  customers: ['id', 'name', 'phone', 'city'],
-  products: ['id', 'name', 'price', 'stock'],
-  orders: ['id', 'customer_id', 'product', 'quantity', 'total_price', 'order_date'],
+  attendance: ['attendance_id', 'student_id', 'total_days', 'present_days', 'absent_days'],
+  class_summary: ['summary_id', 'class', 'section', 'total_students'],
+  exams: ['exam_id', 'exam_name', 'class'],
+  fees: ['fee_id', 'student_id', 'total_fee', 'paid_fee', 'due_fee'],
+  leave_records: ['leave_id', 'student_id', 'leave_type', 'leave_days'],
+  marks: ['mark_id', 'student_id', 'exam_id', 'total_marks', 'obtained_marks'],
+  rankings: ['rank_id', 'student_id', 'class_rank'],
+  students: ['student_id', 'student_name', 'class', 'section', 'roll_no', 'gender'],
+  subjects: ['subject_id', 'subject_name'],
+  teachers: ['teacher_id', 'teacher_name', 'SUBJECT'],
   search_history: ['id', 'question', 'generated_sql', 'created_at']
 };
 
@@ -138,24 +145,31 @@ DATABASE SCHEMA:
 ${schemaDescription}
 
 RELATIONSHIPS:
-- orders.customer_id references customers.id
-- orders.product is a product name (string), not a foreign key
+- attendance.student_id references students.student_id
+- fees.student_id references students.student_id
+- leave_records.student_id references students.student_id
+- marks.student_id references students.student_id
+- marks.exam_id references exams.exam_id
+- rankings.student_id references students.student_id
 
 EXAMPLES:
-Question: "Show today sales"
-SQL: SELECT IFNULL(SUM(total_price), 0) AS total_sales FROM orders WHERE DATE(order_date) = CURDATE();
+Question: "Show all students"
+SQL: SELECT student_id, student_name, class, section, roll_no, gender FROM students ORDER BY student_name ASC;
 
-Question: "Low stock products"
-SQL: SELECT id, name, price, stock FROM products WHERE stock < 10;
+Question: "Total students"
+SQL: SELECT COUNT(*) AS total_students FROM students;
 
-Question: "Total orders"
-SQL: SELECT COUNT(*) AS total_orders FROM orders;
+Question: "Students in class 10"
+SQL: SELECT student_id, student_name, class, section, roll_no FROM students WHERE class = '10' ORDER BY roll_no ASC;
 
-Question: "Orders for customer Alice"
-SQL: SELECT o.id, c.name AS customer, o.product, o.quantity, o.total_price, o.order_date FROM orders o JOIN customers c ON c.id = o.customer_id WHERE c.name LIKE '%Alice%' ORDER BY o.order_date DESC;
+Question: "Student marks for exam"
+SQL: SELECT s.student_name, m.obtained_marks, m.total_marks, e.exam_name FROM marks m JOIN students s ON s.student_id = m.student_id JOIN exams e ON e.exam_id = m.exam_id ORDER BY m.obtained_marks DESC;
 
-Question: "Products with price above 100"
-SQL: SELECT id, name, price, stock FROM products WHERE price > 100 ORDER BY price DESC;
+Question: "Attendance summary"
+SQL: SELECT s.student_name, a.present_days, a.absent_days, a.total_days FROM attendance a JOIN students s ON s.student_id = a.student_id;
+
+Question: "Fee due students"
+SQL: SELECT s.student_name, f.total_fee, f.paid_fee, f.due_fee FROM fees f JOIN students s ON s.student_id = f.student_id WHERE f.due_fee > 0 ORDER BY f.due_fee DESC;
 
 IMPORTANT RULES:
 1. Return ONLY the SQL query, no explanations or markdown
@@ -295,8 +309,8 @@ function applyRule(question) {
   }
 
   return {
-    sql: 'SELECT id, name, phone, city FROM customers LIMIT 10;',
-    explanation: 'Fallback query: listing sample customers.',
+    sql: 'SELECT student_id, student_name, class, section FROM students LIMIT 10;',
+    explanation: 'Fallback query: listing sample students.',
     strategy: 'fallback'
   };
 }

@@ -4,182 +4,148 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI SQL Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'chat-bg': '#343541',
+              'chat-sidebar': '#202123',
+              'chat-input': '#40414f',
+            }
+          }
+        }
+      }
+    </script>
     <style>
-      :root {
-        color-scheme: light dark;
-        --bg: #0f172a;
-        --panel: #1e293b;
-        --accent: #38bdf8;
-        --text: #f8fafc;
-        --muted: #94a3b8;
-      }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       * {
-        box-sizing: border-box;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
-      body {
-        margin: 0;
-        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
       }
-      #app {
-        width: min(960px, 100%);
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        gap: 16px;
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
       }
-      .panel {
-        background: var(--panel);
-        border-radius: 18px;
-        padding: 24px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-      }
-      .chat-window {
-        display: flex;
-        flex-direction: column;
-        height: 600px;
-      }
-      .messages {
-        flex: 1;
-        overflow-y: auto;
-        margin-bottom: 16px;
-        padding-right: 8px;
-      }
-      .message {
-        margin-bottom: 18px;
-      }
-      .message.user .bubble {
-        background: var(--accent);
-        color: #0f172a;
-        margin-left: auto;
-      }
-      .message.bot .bubble {
-        background: rgba(148, 163, 184, 0.15);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-      }
-      .bubble {
-        padding: 14px 18px;
-        border-radius: 18px;
-        max-width: 80%;
-        white-space: pre-line;
-      }
-      form {
-        display: flex;
-        gap: 12px;
-      }
-      input {
-        flex: 1;
-        padding: 14px 16px;
-        border-radius: 14px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        background: rgba(15, 23, 42, 0.6);
-        color: var(--text);
-        font-size: 1rem;
-      }
-      button {
-        padding: 14px 20px;
-        border: none;
-        border-radius: 14px;
-        background: var(--accent);
-        color: #0f172a;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .history {
-        height: 600px;
-        display: flex;
-        flex-direction: column;
-      }
-      .history h2 {
-        margin-top: 0;
-      }
-      .history-list {
-        flex: 1;
-        overflow-y: auto;
-        margin-top: 12px;
-      }
-      .history-item {
-        padding: 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        margin-bottom: 12px;
-      }
-      .history-item code {
-        display: block;
-        margin-top: 8px;
-        font-size: 0.85rem;
-        color: var(--muted);
-        white-space: pre-wrap;
-      }
-      .loading {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-      .loading span {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--muted);
-        animation: bounce 0.9s infinite ease-in-out;
-      }
-      .loading span:nth-child(2) {
-        animation-delay: 0.15s;
-      }
-      .loading span:nth-child(3) {
-        animation-delay: 0.3s;
-      }
-      @keyframes bounce {
-        0%,
-        80%,
-        100% {
-          transform: translateY(0);
+      @keyframes pulse-dot {
+        0%, 80%, 100% {
           opacity: 0.3;
+          transform: scale(0.8);
         }
         40% {
-          transform: translateY(-6px);
           opacity: 1;
+          transform: scale(1);
         }
       }
-      @media (max-width: 900px) {
-        #app {
-          grid-template-columns: 1fr;
-        }
-        .chat-window,
-        .history {
-          height: auto;
-        }
+      .animate-pulse-dot {
+        animation: pulse-dot 1.4s infinite ease-in-out;
+      }
+      .animate-pulse-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .animate-pulse-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      code {
+        font-family: 'Courier New', monospace;
       }
     </style>
   </head>
-  <body>
-    <div id="app">
-      <section class="panel chat-window">
-        <div class="messages" id="messages"></div>
-        <form id="chat-form">
-          <input id="user-input" type="text" placeholder="Ask about orders, customers, or products..." autocomplete="off" required />
-          <button type="submit">Ask</button>
-        </form>
-      </section>
-      <aside class="panel history">
-        <div>
-          <h2>Recent Searches</h2>
-          <p class="muted">Examples: "Show today sales", "Low stock products"</p>
+  <body class="bg-gray-900 text-gray-100 h-screen overflow-hidden">
+    <div class="flex h-full">
+      <!-- Sidebar -->
+      <aside class="w-64 bg-chat-sidebar border-r border-gray-700 flex flex-col hidden md:flex">
+        <div class="p-4 border-b border-gray-700">
+          <h1 class="text-xl font-semibold text-white mb-2">AI SQL Chatbot</h1>
+          <p class="text-xs text-gray-400">Query your database with natural language</p>
         </div>
-        <div class="history-list" id="history"></div>
+        
+        <div class="flex-1 overflow-y-auto scrollbar-hide p-4">
+          <div class="mb-4">
+            <h2 class="text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">Recent Searches</h2>
+            <div id="history" class="space-y-2">
+              <!-- History items will be inserted here -->
+            </div>
+          </div>
+        </div>
+
+        <div class="p-4 border-t border-gray-700">
+          <div class="text-xs text-gray-400 space-y-1">
+            <p class="font-medium text-gray-300 mb-2">Try asking:</p>
+            <p>• "Show today sales"</p>
+            <p>• "Low stock products"</p>
+            <p>• "Total orders"</p>
+          </div>
+        </div>
       </aside>
+
+      <!-- Main Chat Area -->
+      <main class="flex-1 flex flex-col bg-chat-bg">
+        <!-- Header -->
+        <header class="border-b border-gray-700 px-4 py-3 bg-chat-bg">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-white">Chat</h2>
+            <button id="sidebar-toggle" class="md:hidden text-gray-400 hover:text-white">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Messages Container -->
+        <div id="messages" class="flex-1 overflow-y-auto scrollbar-hide px-4 py-6 space-y-6">
+          <!-- Welcome Message -->
+          <div class="max-w-3xl mx-auto text-center py-12">
+            <div class="mb-4">
+              <svg class="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+              </svg>
+            </div>
+            <h3 class="text-2xl font-semibold text-white mb-2">How can I help you today?</h3>
+            <p class="text-gray-400">Ask questions about your database in natural language</p>
+          </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="border-t border-gray-700 bg-chat-bg">
+          <form id="chat-form" class="max-w-3xl mx-auto p-4">
+            <div class="relative flex items-end gap-2">
+              <div class="flex-1 relative">
+                <textarea
+                  id="user-input"
+                  rows="1"
+                  placeholder="Message AI SQL Chatbot..."
+                  class="w-full px-4 py-3 pr-12 bg-chat-input text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none max-h-32 overflow-y-auto scrollbar-hide"
+                  autocomplete="off"
+                  required
+                ></textarea>
+              </div>
+              <button
+                type="submit"
+                class="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[44px]"
+                id="submit-btn"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
     </div>
 
     <template id="message-template">
-      <div class="message">
-        <div class="bubble"></div>
+      <div class="message-group flex gap-4 max-w-3xl mx-auto">
+        <div class="avatar flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm"></div>
+        <div class="message-content flex-1">
+          <div class="bubble rounded-lg px-4 py-3 whitespace-pre-wrap"></div>
+        </div>
       </div>
     </template>
 
@@ -188,40 +154,122 @@
       const historyEl = document.getElementById('history');
       const form = document.getElementById('chat-form');
       const input = document.getElementById('user-input');
+      const submitBtn = document.getElementById('submit-btn');
+      let welcomeMessage = messagesEl.querySelector('.max-w-3xl');
+
+      // Auto-resize textarea
+      input.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 128) + 'px';
+      });
+
+      // Handle Enter key (Shift+Enter for new line)
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          form.dispatchEvent(new Event('submit'));
+        }
+      });
 
       function appendMessage(text, role = 'bot') {
+        // Remove welcome message
+        if (welcomeMessage && welcomeMessage.parentNode) {
+          welcomeMessage.remove();
+          welcomeMessage = null;
+        }
+
         const tpl = document.getElementById('message-template').content.cloneNode(true);
-        const messageEl = tpl.querySelector('.message');
+        const messageGroup = tpl.querySelector('.message-group');
+        const avatar = tpl.querySelector('.avatar');
         const bubble = tpl.querySelector('.bubble');
-        messageEl.classList.add(role);
-        bubble.textContent = text;
-        messagesEl.appendChild(messageEl);
+
+        if (role === 'user') {
+          messageGroup.classList.add('flex-row-reverse');
+          avatar.classList.add('bg-blue-600', 'text-white');
+          avatar.textContent = 'U';
+          bubble.classList.add('bg-blue-600', 'text-white', 'ml-auto', 'max-w-[85%]');
+          bubble.textContent = text;
+        } else {
+          avatar.classList.add('bg-gray-700', 'text-gray-300');
+          avatar.textContent = 'AI';
+          bubble.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700');
+          
+          // Format the response with better styling
+          const lines = text.split('\n');
+          let formatted = '';
+          let inCodeBlock = false;
+          
+          lines.forEach(line => {
+            if (line.trim().startsWith('SQL')) {
+              formatted += `<div class="font-semibold text-blue-400 mb-2">${line}</div>`;
+            } else if (line.trim().startsWith('SELECT') || line.trim().startsWith('WITH')) {
+              formatted += `<div class="bg-gray-900 rounded p-3 my-2 border border-gray-700"><code class="text-green-400 text-sm">${line}</code></div>`;
+            } else if (line.trim() === '') {
+              formatted += '<br>';
+            } else {
+              formatted += `<div class="text-gray-300">${line}</div>`;
+            }
+          });
+          
+          bubble.innerHTML = formatted || text;
+        }
+
+        messagesEl.appendChild(messageGroup);
         messagesEl.scrollTop = messagesEl.scrollHeight;
         return bubble;
       }
 
       function showLoading() {
-        const bubble = appendMessage('', 'bot');
-        bubble.innerHTML = '<div class="loading"><span></span><span></span><span></span>Thinking...</div>';
-        return bubble.parentElement;
+        if (welcomeMessage && welcomeMessage.parentNode) {
+          welcomeMessage.remove();
+          welcomeMessage = null;
+        }
+
+        const tpl = document.getElementById('message-template').content.cloneNode(true);
+        const messageGroup = tpl.querySelector('.message-group');
+        const avatar = tpl.querySelector('.avatar');
+        const bubble = tpl.querySelector('.bubble');
+
+        avatar.classList.add('bg-gray-700', 'text-gray-300');
+        avatar.textContent = 'AI';
+        bubble.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700');
+        bubble.innerHTML = `
+          <div class="flex items-center gap-2 text-gray-400">
+            <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-dot"></span>
+            <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-dot"></span>
+            <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-dot"></span>
+            <span class="ml-2">Thinking...</span>
+          </div>
+        `;
+
+        messagesEl.appendChild(messageGroup);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return messageGroup;
       }
 
       async function fetchHistory() {
         try {
           const res = await fetch('/api/chat/history');
           const items = await res.json();
+          
+          if (items.length === 0) {
+            historyEl.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">No search history yet</p>';
+            return;
+          }
+
           historyEl.innerHTML = items
             .map(
               item => `
-            <div class="history-item">
-              <strong>${item.question}</strong>
-              <code>${item.generated_sql}</code>
-              <small>${new Date(item.created_at).toLocaleString()}</small>
+            <div class="group p-3 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer border border-gray-700">
+              <div class="text-sm text-white font-medium mb-1 line-clamp-2">${item.question}</div>
+              <code class="text-xs text-gray-400 block mt-2 line-clamp-2 font-mono">${item.generated_sql}</code>
+              <div class="text-xs text-gray-500 mt-2">${new Date(item.created_at).toLocaleString()}</div>
             </div>`
             )
             .join('');
         } catch (error) {
           console.error('History error', error);
+          historyEl.innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load history</p>';
         }
       }
 
@@ -229,8 +277,14 @@
         event.preventDefault();
         const question = input.value.trim();
         if (!question) return;
+
+        // Disable input during request
+        input.disabled = true;
+        submitBtn.disabled = true;
+
         appendMessage(question, 'user');
         input.value = '';
+        input.style.height = 'auto';
         const loader = showLoading();
 
         try {
@@ -244,21 +298,31 @@
           loader.remove();
 
           if (!response.ok) {
-            appendMessage(`Error: ${data.error || 'Unknown error'}`);
+            appendMessage(`Error: ${data.error || 'Unknown error'}`, 'bot');
             return;
           }
 
           const details = `SQL (${data.strategy}):\n${data.sql}\n\n${data.formatted}`;
-          appendMessage(details);
+          appendMessage(details, 'bot');
           fetchHistory();
         } catch (error) {
           loader.remove();
-          appendMessage(`Request failed: ${error.message}`);
+          appendMessage(`Request failed: ${error.message}`, 'bot');
+        } finally {
+          input.disabled = false;
+          submitBtn.disabled = false;
+          input.focus();
         }
       });
 
+      // Mobile sidebar toggle
+      document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+        document.querySelector('aside').classList.toggle('hidden');
+      });
+
+      // Initialize
       fetchHistory();
+      input.focus();
     </script>
   </body>
 </html>
-
