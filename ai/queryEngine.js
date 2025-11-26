@@ -125,7 +125,7 @@ function extractSqlCandidate(text) {
   return normalized;
 }
 
-async function tryGeminiWithModel(apiKey, modelName, question) {
+async function tryGeminiWithModel(apiKey, modelName, question, historyText = '') {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ 
     model: modelName, 
@@ -138,6 +138,10 @@ async function tryGeminiWithModel(apiKey, modelName, question) {
   const schemaDescription = Object.entries(TABLE_METADATA)
     .map(([table, columns]) => `- ${table}(${columns.join(', ')})`)
     .join('\n');
+
+  const historySection = historyText
+    ? `\nPREVIOUS CONVERSATION (most recent last):\n${historyText}\n\nWhen the user refers to \"he\", \"she\", \"they\", or \"that student\", resolve it using this context.\n`
+    : '';
 
   const prompt = `You are a SQL expert assistant. Convert the user's natural language question into a MySQL SELECT query.
 
@@ -171,6 +175,8 @@ SQL: SELECT s.student_name, a.present_days, a.absent_days, a.total_days FROM att
 Question: "Fee due students"
 SQL: SELECT s.student_name, f.total_fee, f.paid_fee, f.due_fee FROM fees f JOIN students s ON s.student_id = f.student_id WHERE f.due_fee > 0 ORDER BY f.due_fee DESC;
 
+${historySection}
+
 IMPORTANT RULES:
 1. Return ONLY the SQL query, no explanations or markdown
 2. Always end with a semicolon
@@ -181,7 +187,7 @@ IMPORTANT RULES:
 7. Use LIKE for partial name matches
 8. Only use SELECT queries (no INSERT, UPDATE, DELETE)
 
-Question: "${question}"
+Current user question: "${question}"
 SQL:`;
 
   const result = await model.generateContent(prompt);
@@ -211,7 +217,7 @@ SQL:`;
   };
 }
 
-async function tryGemini(question) {
+async function tryGemini(question, historyText = '') {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn('GEMINI_API_KEY not set. Skipping Gemini generation.');
@@ -224,7 +230,7 @@ async function tryGemini(question) {
   for (const modelName of modelsToTry) {
     try {
       console.log(`Trying Gemini model: ${modelName}`);
-      const result = await tryGeminiWithModel(apiKey, modelName, question);
+      const result = await tryGeminiWithModel(apiKey, modelName, question, historyText);
       if (result) {
         console.log(`✓ Successfully used model: ${modelName}`);
         return result;
@@ -315,13 +321,13 @@ function applyRule(question) {
   };
 }
 
-export async function generateSql(question) {
+export async function generateSql(question, historyText = '') {
   if (!question || !question.trim()) {
     throw new Error('Question is required');
   }
   const trimmed = question.trim();
 
-  const geminiResult = await tryGemini(trimmed);
+  const geminiResult = await tryGemini(trimmed, historyText);
   if (geminiResult) {
     return geminiResult;
   }

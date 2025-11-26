@@ -11,9 +11,9 @@
         theme: {
           extend: {
             colors: {
-              'chat-bg': '#343541',
-              'chat-sidebar': '#202123',
-              'chat-input': '#40414f',
+              'chat-bg': '#0f0f0f',
+              'chat-sidebar': '#1a1a1a',
+              'chat-input': '#262626',
             }
           }
         }
@@ -31,65 +31,170 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
-      @keyframes pulse-dot {
-        0%, 80%, 100% {
-          opacity: 0.3;
-          transform: scale(0.8);
+      
+      /* Custom scrollbar for main chat */
+      #messages::-webkit-scrollbar {
+        width: 6px;
+      }
+      #messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #messages::-webkit-scrollbar-thumb {
+        background: #404040;
+        border-radius: 3px;
+      }
+      #messages::-webkit-scrollbar-thumb:hover {
+        background: #525252;
+      }
+      
+      /* Smooth thinking animation */
+      @keyframes thinking-pulse {
+        0%, 100% {
+          opacity: 0.4;
         }
-        40% {
+        50% {
           opacity: 1;
-          transform: scale(1);
         }
       }
-      .animate-pulse-dot {
-        animation: pulse-dot 1.4s infinite ease-in-out;
+      
+      @keyframes thinking-bounce {
+        0%, 100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-4px);
+        }
       }
-      .animate-pulse-dot:nth-child(2) {
+      
+      .thinking-dot {
+        animation: thinking-pulse 1.4s ease-in-out infinite, thinking-bounce 1.4s ease-in-out infinite;
+      }
+      
+      .thinking-dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .thinking-dot:nth-child(2) {
         animation-delay: 0.2s;
       }
-      .animate-pulse-dot:nth-child(3) {
+      
+      .thinking-dot:nth-child(3) {
         animation-delay: 0.4s;
       }
+      
+      /* Smooth fade-in for messages */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      .message-group {
+        animation: fadeInUp 0.3s ease-out;
+      }
+      
+      /* Gradient text animation */
+      @keyframes gradient-shift {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+      
+      .gradient-animate {
+        background-size: 200% 200%;
+        animation: gradient-shift 3s ease infinite;
+      }
+      
       code {
         font-family: 'Courier New', monospace;
       }
     </style>
   </head>
-  <body class="bg-gray-900 text-gray-100 h-screen overflow-hidden">
+  <body class="bg-chat-bg text-gray-100 h-screen overflow-hidden">
     <div class="flex h-full">
       <!-- Sidebar -->
-      <aside class="w-64 bg-chat-sidebar border-r border-gray-700 flex flex-col hidden md:flex">
-        <div class="p-4 border-b border-gray-700">
-          <h1 class="text-xl font-semibold text-white mb-2">AI SQL Chatbot</h1>
-          <p class="text-xs text-gray-400">Query your database with natural language</p>
+      <aside class="w-72 bg-chat-sidebar flex flex-col hidden md:flex">
+        <div class="p-6">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg gradient-animate">
+              <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-xl font-bold text-white tracking-tight">FLASH AI</h1>
+              <p class="text-xs text-gray-500 mt-0.5">AI-Powered Database</p>
+            </div>
+          </div>
         </div>
         
-        <div class="flex-1 overflow-y-auto scrollbar-hide p-4">
-          <div class="mb-4">
-            <h2 class="text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">Recent Searches</h2>
+        <div class="flex-1 overflow-y-auto scrollbar-hide px-5">
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-4">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Recent Searches</h2>
+            </div>
             <div id="history" class="space-y-2">
               <!-- History items will be inserted here -->
             </div>
           </div>
         </div>
 
-        <div class="p-4 border-t border-gray-700">
-          <div class="text-xs text-gray-400 space-y-1">
-            <p class="font-medium text-gray-300 mb-2">Try asking:</p>
-            <p>• "Show today sales"</p>
-            <p>• "Low stock products"</p>
-            <p>• "Total orders"</p>
+        <div class="p-5">
+          <div class="bg-white/5 rounded-2xl p-4 backdrop-blur-sm">
+            <p class="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
+              <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+              Quick Examples
+            </p>
+            <div class="space-y-2 text-xs text-gray-400">
+              <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <span class="text-blue-400 mt-0.5">→</span>
+                <span>"Show all students in grade 10"</span>
+              </div>
+              <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <span class="text-purple-400 mt-0.5">→</span>
+                <span>"Average marks by subject"</span>
+              </div>
+              <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <span class="text-pink-400 mt-0.5">→</span>
+                <span>"Attendance for this week"</span>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
 
       <!-- Main Chat Area -->
-      <main class="flex-1 flex flex-col bg-chat-bg">
+      <main class="flex-1 flex flex-col bg-chat-bg relative">
+        <!-- Gradient overlay for depth -->
+        <div class="absolute inset-0 bg-gradient-to-b from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
+        
         <!-- Header -->
-        <header class="border-b border-gray-700 px-4 py-3 bg-chat-bg">
+        <header class="relative px-6 py-4 backdrop-blur-sm z-10">
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-white">Chat</h2>
-            <button id="sidebar-toggle" class="md:hidden text-gray-400 hover:text-white">
+            <div class="flex items-center gap-3">
+              <h2 class="text-xl font-bold text-white tracking-tight">Chat</h2>
+              <span class="px-3 py-1 text-xs font-medium bg-green-500/20 text-green-400 rounded-full flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                Online
+              </span>
+            </div>
+            <button id="sidebar-toggle" class="md:hidden text-gray-400 hover:text-white transition-all hover:scale-110">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
               </svg>
@@ -98,42 +203,52 @@
         </header>
 
         <!-- Messages Container -->
-        <div id="messages" class="flex-1 overflow-y-auto scrollbar-hide px-4 py-6 space-y-6">
+        <div id="messages" class="relative flex-1 overflow-y-auto px-6 py-8 space-y-8">
           <!-- Welcome Message -->
-          <div class="max-w-3xl mx-auto text-center py-12">
-            <div class="mb-4">
-              <svg class="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
-              </svg>
+          <div class="max-w-4xl mx-auto text-center py-16">
+            <div class="mb-8 relative">
+              <div class="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-3xl"></div>
+              <div class="relative w-24 h-24 mx-auto bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl gradient-animate">
+                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                </svg>
+              </div>
             </div>
-            <h3 class="text-2xl font-semibold text-white mb-2">How can I help you today?</h3>
-            <p class="text-gray-400">Ask questions about your database in natural language</p>
+            <h3 class="text-4xl font-bold text-white mb-4 tracking-tight">
+              <span class="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent gradient-animate">
+                How can I help you today?
+              </span>
+            </h3>
+            <p class="text-gray-400 text-lg leading-relaxed max-w-2xl mx-auto">
+              Ask questions about your database in natural language and get instant responses
+            </p>
           </div>
         </div>
 
         <!-- Input Area -->
-        <div class="border-t border-gray-700 bg-chat-bg">
-          <form id="chat-form" class="max-w-3xl mx-auto p-4">
-            <div class="relative flex items-end gap-2">
-              <div class="flex-1 relative">
+        <div class="relative backdrop-blur-sm z-10">
+          <form id="chat-form" class="max-w-4xl mx-auto p-6">
+            <div class="relative flex items-end gap-3">
+              <div class="flex-1 relative group">
+                <div class="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
                 <textarea
                   id="user-input"
                   rows="1"
-                  placeholder="Message AI SQL Chatbot..."
-                  class="w-full px-4 py-3 pr-12 bg-chat-input text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none max-h-32 overflow-y-auto scrollbar-hide"
+                  placeholder="Ask me anything about your database..."
+                  class="relative w-full px-6 py-4 pr-14 bg-chat-input text-white rounded-2xl focus:outline-none resize-none max-h-32 overflow-y-auto scrollbar-hide transition-all shadow-lg"
                   autocomplete="off"
                   required
                 ></textarea>
+                <button
+                  type="submit"
+                  class="absolute right-3 bottom-3 w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:scale-105"
+                  id="submit-btn"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                  </svg>
+                </button>
               </div>
-              <button
-                type="submit"
-                class="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[44px]"
-                id="submit-btn"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                </svg>
-              </button>
             </div>
           </form>
         </div>
@@ -141,10 +256,10 @@
     </div>
 
     <template id="message-template">
-      <div class="message-group flex gap-4 max-w-3xl mx-auto">
-        <div class="avatar flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm"></div>
+      <div class="message-group flex gap-4 max-w-4xl mx-auto">
+        <div class="avatar flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center font-semibold text-sm"></div>
         <div class="message-content flex-1">
-          <div class="bubble rounded-lg px-4 py-3 whitespace-pre-wrap"></div>
+          <div class="bubble rounded-3xl px-6 py-4 whitespace-pre-wrap"></div>
         </div>
       </div>
     </template>
@@ -155,7 +270,8 @@
       const form = document.getElementById('chat-form');
       const input = document.getElementById('user-input');
       const submitBtn = document.getElementById('submit-btn');
-      let welcomeMessage = messagesEl.querySelector('.max-w-3xl');
+      let welcomeMessage = messagesEl.querySelector('.max-w-4xl');
+      let editContext = null; // Track which message is being edited
 
       // Auto-resize textarea
       input.addEventListener('input', function() {
@@ -185,33 +301,42 @@
 
         if (role === 'user') {
           messageGroup.classList.add('flex-row-reverse');
-          avatar.classList.add('bg-blue-600', 'text-white');
-          avatar.textContent = 'U';
-          bubble.classList.add('bg-blue-600', 'text-white', 'ml-auto', 'max-w-[85%]');
+          avatar.classList.add('bg-gray-700', 'text-white');
+          avatar.innerHTML = '<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>';
+          bubble.classList.add('bg-gray-800', 'text-white', 'ml-auto', 'max-w-[85%]', 'cursor-pointer', 'hover:bg-gray-750', 'transition-colors');
           bubble.textContent = text;
-        } else {
-          avatar.classList.add('bg-gray-700', 'text-gray-300');
-          avatar.textContent = 'AI';
-          bubble.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700');
-          
-          // Format the response with better styling
-          const lines = text.split('\n');
-          let formatted = '';
-          let inCodeBlock = false;
-          
-          lines.forEach(line => {
-            if (line.trim().startsWith('SQL')) {
-              formatted += `<div class="font-semibold text-blue-400 mb-2">${line}</div>`;
-            } else if (line.trim().startsWith('SELECT') || line.trim().startsWith('WITH')) {
-              formatted += `<div class="bg-gray-900 rounded p-3 my-2 border border-gray-700"><code class="text-green-400 text-sm">${line}</code></div>`;
-            } else if (line.trim() === '') {
-              formatted += '<br>';
-            } else {
-              formatted += `<div class="text-gray-300">${line}</div>`;
-            }
+
+          // Store original text and allow click-to-edit & resend
+          bubble.setAttribute('data-user-text', text);
+          bubble.title = 'Click to edit and resend this question';
+          bubble.addEventListener('click', () => {
+            const group = bubble.closest('.message-group');
+            const next = group?.nextElementSibling;
+            const botGroup = next && next.querySelector('.bubble') && !next.classList.contains('flex-row-reverse') ? next : null;
+
+            editContext = {
+              userBubble: bubble,
+              userGroup: group,
+              botGroup: botGroup
+            };
+
+            const original = bubble.getAttribute('data-user-text') || '';
+            input.value = original;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 128) + 'px';
+            input.focus();
           });
+        } else {
+          avatar.classList.add('bg-gradient-to-br', 'from-blue-600', 'via-purple-600', 'to-pink-600', 'text-white');
+          avatar.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>';
+          bubble.classList.add('bg-white/5', 'text-gray-100');
           
-          bubble.innerHTML = formatted || text;
+          // Simple paragraph-style AI response
+          const paragraphs = text.split('\n').filter(p => p.trim().length > 0);
+          const html = paragraphs
+            .map(p => `<p class="text-gray-200 mb-3 last:mb-0 leading-relaxed">${p}</p>`)
+            .join('');
+          bubble.innerHTML = html || `<p class="text-gray-200">${text}</p>`;
         }
 
         messagesEl.appendChild(messageGroup);
@@ -230,15 +355,17 @@
         const avatar = tpl.querySelector('.avatar');
         const bubble = tpl.querySelector('.bubble');
 
-        avatar.classList.add('bg-gray-700', 'text-gray-300');
-        avatar.textContent = 'AI';
-        bubble.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700');
+        avatar.classList.add('bg-gradient-to-br', 'from-blue-600', 'via-purple-600', 'to-pink-600', 'text-white');
+        avatar.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>';
+        bubble.classList.add('bg-white/5', 'text-gray-100');
         bubble.innerHTML = `
-          <div class="flex items-center gap-2 text-gray-400">
-            <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-dot"></span>
-            <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-dot"></span>
-            <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-dot"></span>
-            <span class="ml-2">Thinking...</span>
+          <div class="flex items-center gap-3 py-1">
+            <div class="flex gap-1.5">
+              <span class="w-2.5 h-2.5 bg-blue-500 rounded-full thinking-dot"></span>
+              <span class="w-2.5 h-2.5 bg-purple-500 rounded-full thinking-dot"></span>
+              <span class="w-2.5 h-2.5 bg-pink-500 rounded-full thinking-dot"></span>
+            </div>
+            <span class="text-sm text-gray-400">Thinking...</span>
           </div>
         `;
 
@@ -253,23 +380,47 @@
           const items = await res.json();
           
           if (items.length === 0) {
-            historyEl.innerHTML = '<p class="text-xs text-gray-500 text-center py-4">No search history yet</p>';
+            historyEl.innerHTML = '<div class="text-center py-8"><p class="text-xs text-gray-500">No search history yet</p><p class="text-[10px] text-gray-600 mt-1">Start a conversation!</p></div>';
             return;
           }
 
           historyEl.innerHTML = items
             .map(
               item => `
-            <div class="group p-3 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer border border-gray-700">
-              <div class="text-sm text-white font-medium mb-1 line-clamp-2">${item.question}</div>
-              <code class="text-xs text-gray-400 block mt-2 line-clamp-2 font-mono">${item.generated_sql}</code>
-              <div class="text-xs text-gray-500 mt-2">${new Date(item.created_at).toLocaleString()}</div>
+            <div class="group p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer">
+              <div class="text-sm text-white font-medium mb-1.5 line-clamp-2 leading-snug">${item.question}</div>
+              <div class="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                ${new Date(item.created_at).toLocaleString()}
+              </div>
             </div>`
             )
             .join('');
         } catch (error) {
           console.error('History error', error);
-          historyEl.innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load history</p>';
+          historyEl.innerHTML = '<div class="text-center py-8"><p class="text-xs text-red-400">Failed to load history</p></div>';
+        }
+      }
+
+      async function fetchMessages() {
+        try {
+          const res = await fetch('/api/chat/messages');
+          const items = await res.json();
+          if (!Array.isArray(items) || items.length === 0) {
+            return;
+          }
+
+          // Render past conversation in order
+          messagesEl.innerHTML = '';
+          welcomeMessage = null;
+          items.forEach(msg => {
+            appendMessage(msg.user_message, 'user');
+            appendMessage(msg.ai_response, 'bot');
+          });
+        } catch (error) {
+          console.error('Messages load error', error);
         }
       }
 
@@ -282,10 +433,29 @@
         input.disabled = true;
         submitBtn.disabled = true;
 
-        appendMessage(question, 'user');
+        let loader;
+
+        if (editContext) {
+          // We are editing a previous question: update that bubble text
+          editContext.userBubble.textContent = question;
+          editContext.userBubble.setAttribute('data-user-text', question);
+
+          // Remove old answer bubble (if any)
+          if (editContext.botGroup && editContext.botGroup.parentNode) {
+            editContext.botGroup.remove();
+          }
+
+          // Show new loader
+          loader = showLoading();
+          editContext = null; // Clear edit context
+        } else {
+          // New question: append as usual
+          appendMessage(question, 'user');
+          loader = showLoading();
+        }
+
         input.value = '';
         input.style.height = 'auto';
-        const loader = showLoading();
 
         try {
           const response = await fetch('/api/chat', {
@@ -298,12 +468,12 @@
           loader.remove();
 
           if (!response.ok) {
-            appendMessage(`Error: ${data.error || 'Unknown error'}`, 'bot');
+            appendMessage(data.formatted || `Error: ${data.error || 'Unknown error'}`, 'bot');
             return;
           }
 
-          const details = `SQL (${data.strategy}):\n${data.sql}\n\n${data.formatted}`;
-          appendMessage(details, 'bot');
+          const answer = data.formatted || data.explanation || 'I answered your question using the database.';
+          appendMessage(answer, 'bot');
           fetchHistory();
         } catch (error) {
           loader.remove();
@@ -321,7 +491,7 @@
       });
 
       // Initialize
-      fetchHistory();
+      fetchMessages().then(fetchHistory);
       input.focus();
     </script>
   </body>
