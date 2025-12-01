@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI SQL Chatbot</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -153,7 +154,27 @@
           </div>
         </div>
 
-        <div class="p-5">
+        <div class="p-5 space-y-4">
+          <!-- Upload Section -->
+          <div class="bg-white/5 rounded-2xl p-4 backdrop-blur-sm">
+            <p class="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
+              <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+              Import Students
+            </p>
+            <div class="space-y-2">
+              <input type="file" id="student-upload" accept=".csv,.txt" class="hidden" />
+              <button onclick="document.getElementById('student-upload').click()" class="w-full px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-medium transition-all border border-green-500/30 hover:border-green-500/50">
+                📤 Upload CSV File
+              </button>
+              <a href="/api/upload/template" download class="block text-center text-xs text-gray-400 hover:text-gray-300 transition-colors">
+                📥 Download Template
+              </a>
+            </div>
+          </div>
+
+          <!-- Quick Examples -->
           <div class="bg-white/5 rounded-2xl p-4 backdrop-blur-sm">
             <p class="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
               <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -341,7 +362,287 @@
 
         messagesEl.appendChild(messageGroup);
         messagesEl.scrollTop = messagesEl.scrollHeight;
-        return bubble;
+        return { bubble, messageGroup };
+      }
+
+      function addDownloadButtons(messageElement, data, question) {
+        const bubble = messageElement.bubble || messageElement;
+        const messageGroup = messageElement.messageGroup || bubble.closest('.message-group');
+        
+        // Create download buttons container
+        const downloadContainer = document.createElement('div');
+        downloadContainer.className = 'mt-4 flex flex-wrap gap-2 items-center';
+        
+        // Create filename from question (sanitized)
+        const sanitizedQuestion = question.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_') || 'export';
+        
+        // CSV button
+        const csvBtn = createDownloadButton('CSV', 'text-green-400 hover:bg-green-500/20', () => {
+          downloadData(data, 'csv', sanitizedQuestion);
+        });
+        
+        // JSON button
+        const jsonBtn = createDownloadButton('JSON', 'text-blue-400 hover:bg-blue-500/20', () => {
+          downloadData(data, 'json', sanitizedQuestion);
+        });
+        
+        // Excel button
+        const excelBtn = createDownloadButton('Excel', 'text-purple-400 hover:bg-purple-500/20', () => {
+          downloadData(data, 'excel', sanitizedQuestion);
+        });
+        
+        // PDF button
+        const pdfBtn = createDownloadButton('PDF', 'text-red-400 hover:bg-red-500/20', () => {
+          downloadData(data, 'pdf', sanitizedQuestion);
+        });
+        
+        downloadContainer.appendChild(csvBtn);
+        downloadContainer.appendChild(jsonBtn);
+        downloadContainer.appendChild(excelBtn);
+        downloadContainer.appendChild(pdfBtn);
+        
+        // Add info text
+        const infoText = document.createElement('span');
+        infoText.className = 'text-xs text-gray-500 ml-2';
+        infoText.textContent = `${data.length} rows`;
+        downloadContainer.appendChild(infoText);
+        
+        bubble.appendChild(downloadContainer);
+      }
+
+      function createDownloadButton(text, classes, onClick) {
+        const btn = document.createElement('button');
+        btn.className = `px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${classes} border border-current/20 hover:border-current/40`;
+        btn.textContent = text;
+        btn.addEventListener('click', onClick);
+        return btn;
+      }
+
+      // Chart detection and rendering
+      function detectChartType(data, query) {
+        if (!data || data.length === 0) return null;
+        
+        const queryLower = query.toLowerCase();
+        const keys = Object.keys(data[0]);
+        
+        // Check for 2-column data (category + count) - suitable for pie chart
+        if (keys.length === 2) {
+          const [col1, col2] = keys;
+          const col1Values = data.map(row => row[col1]);
+          const col2Values = data.map(row => row[col2]);
+          
+          const col1IsNumeric = col1Values.every(val => !isNaN(parseFloat(val)) && isFinite(val));
+          const col2IsNumeric = col2Values.every(val => !isNaN(parseFloat(val)) && isFinite(val));
+          
+          if (col1IsNumeric && !col2IsNumeric) {
+            return { type: 'pie', categoryKey: col2, valueKey: col1 };
+          }
+          if (col2IsNumeric && !col1IsNumeric) {
+            return { type: 'pie', categoryKey: col1, valueKey: col2 };
+          }
+        }
+        
+        // Check for distribution queries
+        const distributionKeywords = ['distribution', 'count', 'total', 'by', 'gender', 'class', 'section', 'type', 'category', 'leave'];
+        if (distributionKeywords.some(keyword => queryLower.includes(keyword))) {
+          // Find categorical and numeric columns
+          const categoricalKeys = [];
+          const numericKeys = [];
+          
+          keys.forEach(key => {
+            const values = data.map(row => row[key]);
+            const allNumeric = values.every(val => !isNaN(parseFloat(val)) && isFinite(val) && val !== null && val !== '');
+            
+            if (allNumeric && values.length > 0) {
+              numericKeys.push(key);
+            } else {
+              categoricalKeys.push(key);
+            }
+          });
+          
+          if (categoricalKeys.length > 0 && numericKeys.length > 0) {
+            return { type: 'pie', categoryKey: categoricalKeys[0], valueKey: numericKeys[0] };
+          }
+        }
+        
+        return null;
+      }
+
+      function addChartsIfSuitable(messageElement, data, question) {
+        const bubble = messageElement.bubble || messageElement;
+        const chartInfo = detectChartType(data, question);
+        
+        if (!chartInfo) return;
+        
+        // Create chart container
+        const chartContainer = document.createElement('div');
+        chartContainer.className = 'mt-4 p-4 bg-white/5 rounded-xl';
+        chartContainer.id = `chart-container-${Date.now()}`;
+        
+        // Create toggle buttons
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'flex gap-2 mb-4';
+        
+        const tableBtn = document.createElement('button');
+        tableBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        tableBtn.textContent = '📊 Table';
+        tableBtn.onclick = () => {
+          tableBtn.classList.add('bg-blue-500/20');
+          chartBtn.classList.remove('bg-blue-500/20');
+          chartBtn.classList.add('bg-gray-700/20');
+          chartCanvas.style.display = 'none';
+          tableView.style.display = 'block';
+        };
+        
+        const chartBtn = document.createElement('button');
+        chartBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700/20 text-gray-400 border border-gray-600/30';
+        chartBtn.textContent = '📈 Chart';
+        chartBtn.onclick = () => {
+          chartBtn.classList.add('bg-blue-500/20', 'text-blue-400');
+          chartBtn.classList.remove('bg-gray-700/20', 'text-gray-400');
+          tableBtn.classList.remove('bg-blue-500/20');
+          tableBtn.classList.add('bg-gray-700/20', 'text-gray-400');
+          chartCanvas.style.display = 'block';
+          tableView.style.display = 'none';
+        };
+        
+        toggleContainer.appendChild(tableBtn);
+        toggleContainer.appendChild(chartBtn);
+        chartContainer.appendChild(toggleContainer);
+        
+        // Create table view (hidden by default, shown initially)
+        const tableView = document.createElement('div');
+        tableView.className = 'overflow-x-auto';
+        tableView.style.display = 'block';
+        
+        // Create chart canvas
+        const chartCanvas = document.createElement('canvas');
+        chartCanvas.id = `chart-${Date.now()}`;
+        chartCanvas.style.display = 'none';
+        chartCanvas.style.maxHeight = '400px';
+        
+        chartContainer.appendChild(tableView);
+        chartContainer.appendChild(chartCanvas);
+        
+        // Prepare chart data
+        const labels = data.map(row => {
+          const value = row[chartInfo.categoryKey];
+          return value !== null && value !== undefined ? String(value) : 'N/A';
+        });
+        
+        const values = data.map(row => {
+          const value = row[chartInfo.valueKey];
+          return value !== null && value !== undefined ? parseFloat(value) || 0 : 0;
+        });
+        
+        // Create pie chart
+        if (chartInfo.type === 'pie') {
+          const ctx = chartCanvas.getContext('2d');
+          new Chart(ctx, {
+            type: 'pie',
+            data: {
+              labels: labels,
+              datasets: [{
+                data: values,
+                backgroundColor: [
+                  '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B',
+                  '#EF4444', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+                ],
+                borderColor: '#1F2937',
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: {
+                  position: 'right',
+                  labels: {
+                    color: '#E5E7EB',
+                    font: {
+                      size: 12
+                    },
+                    padding: 15
+                  }
+                },
+                tooltip: {
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  titleColor: '#fff',
+                  bodyColor: '#fff',
+                  borderColor: '#4F46E5',
+                  borderWidth: 1
+                }
+              }
+            }
+          });
+        }
+        
+        // Create simple table view
+        const table = document.createElement('table');
+        table.className = 'w-full text-sm text-gray-300';
+        
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.className = 'bg-white/10';
+        Object.keys(data[0]).forEach(key => {
+          const th = document.createElement('th');
+          th.className = 'px-4 py-2 text-left font-semibold';
+          th.textContent = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Body
+        const tbody = document.createElement('tbody');
+        data.forEach((row, index) => {
+          const tr = document.createElement('tr');
+          tr.className = index % 2 === 0 ? 'bg-white/5' : '';
+          Object.values(row).forEach(value => {
+            const td = document.createElement('td');
+            td.className = 'px-4 py-2';
+            td.textContent = value !== null && value !== undefined ? String(value) : 'N/A';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        tableView.appendChild(table);
+        
+        bubble.appendChild(chartContainer);
+      }
+
+      async function downloadData(data, format, baseFilename) {
+        try {
+          const response = await fetch('/api/chat/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data, format, filename: baseFilename })
+          });
+
+          if (!response.ok) {
+            throw new Error('Export failed');
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+          const extension = format === 'excel' ? 'csv' : format;
+          link.download = `${baseFilename}_${timestamp}.${extension}`;
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('Download error:', error);
+          alert('Failed to download file. Please try again.');
+        }
       }
 
       function showLoading() {
@@ -473,7 +774,14 @@
           }
 
           const answer = data.formatted || data.explanation || 'I answered your question using the database.';
-          appendMessage(answer, 'bot');
+          const messageBubble = appendMessage(answer, 'bot');
+          
+          // Add download buttons and charts if data is available
+          if (data.hasData && data.data && data.data.length > 0) {
+            addDownloadButtons(messageBubble, data.data, question);
+            addChartsIfSuitable(messageBubble, data.data, question);
+          }
+          
           fetchHistory();
         } catch (error) {
           loader.remove();
@@ -488,6 +796,122 @@
       // Mobile sidebar toggle
       document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
         document.querySelector('aside').classList.toggle('hidden');
+      });
+
+      // File upload handler
+      document.getElementById('student-upload')?.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate file type
+        const validTypes = ['text/csv', 'application/vnd.ms-excel', 'text/plain'];
+        const validExtensions = ['csv', 'txt'];
+        const extension = file.name.split('.').pop().toLowerCase();
+        
+        if (!validTypes.includes(file.type) && !validExtensions.includes(extension)) {
+          alert('Please upload a CSV file (.csv or .txt)');
+          return;
+        }
+
+        // Show loading message
+        let loadingGroup = null;
+        const loadingMsg = appendMessage('📤 Uploading and processing file...', 'bot');
+        loadingGroup = loadingMsg.messageGroup || loadingMsg.bubble?.closest('.message-group');
+
+        try {
+          // Read file as base64
+          const reader = new FileReader();
+          reader.onload = async function(event) {
+            try {
+              const base64Data = event.target.result.split(',')[1]; // Remove data:type;base64, prefix
+              
+              // Check if user wants to update existing students
+              const updateExisting = confirm('Some students may already exist. Do you want to UPDATE existing students instead of skipping them?\n\nClick OK to update, Cancel to skip duplicates.');
+              
+              const url = updateExisting 
+                ? '/api/upload/students?update=true'
+                : '/api/upload/students';
+              
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileData: base64Data,
+                  filename: file.name,
+                  mimeType: file.type
+                })
+              });
+
+              const result = await response.json();
+              if (loadingGroup) loadingGroup.remove();
+
+              if (!response.ok) {
+                appendMessage(`❌ Upload failed: ${result.message || result.error}`, 'bot');
+                return;
+              }
+
+              // Show success message with summary
+              const summary = result.summary;
+              let successMsg = `✅ Upload completed!\n\n` +
+                `📊 Summary:\n` +
+                `• Total rows: ${summary.total}\n` +
+                `• ✅ Imported: ${summary.imported}\n` +
+                `• ⚠️ Skipped: ${summary.skipped}\n` +
+                `• ❌ Errors: ${summary.errors}`;
+
+              const resultMsg = appendMessage(successMsg, 'bot');
+
+              // Show skipped students details
+              if (result.details.skipped && result.details.skipped.length > 0) {
+                const skippedDetails = result.details.skipped
+                  .slice(0, 10) // Show first 10 skipped
+                  .map(skip => {
+                    const reason = skip.reason || `Roll ${skip.data.roll_no} already exists in Class ${skip.data.class} ${skip.data.section}`;
+                    return `Row ${skip.row}: ${skip.data.student_name} (Class ${skip.data.class} ${skip.data.section}, Roll ${skip.data.roll_no})\n   → ${reason}`;
+                  })
+                  .join('\n');
+                
+                let skippedMsg = `\n⚠️ Skipped Students:\n${skippedDetails}`;
+                if (result.details.skipped.length > 10) {
+                  skippedMsg += `\n... and ${result.details.skipped.length - 10} more skipped`;
+                }
+                skippedMsg += `\n\n💡 Tip: Roll numbers must be unique within each class+section. To update, click OK when prompted to update existing students.`;
+                appendMessage(skippedMsg, 'bot');
+              }
+
+              // Show detailed errors if any
+              if (result.details.errors && result.details.errors.length > 0) {
+                const errorDetails = result.details.errors
+                  .slice(0, 5) // Show first 5 errors
+                  .map(err => `Row ${err.row}: ${err.errors.join(', ')}`)
+                  .join('\n');
+                
+                let errorMsg = `\n❌ Errors:\n${errorDetails}`;
+                if (result.details.errors.length > 5) {
+                  errorMsg += `\n... and ${result.details.errors.length - 5} more errors`;
+                }
+                appendMessage(errorMsg, 'bot');
+              }
+
+              // Refresh history to show new students
+              setTimeout(() => {
+                fetchHistory();
+              }, 1000);
+
+            } catch (error) {
+              if (loadingGroup) loadingGroup.remove();
+              appendMessage(`❌ Upload error: ${error.message}`, 'bot');
+            }
+          };
+
+          reader.readAsDataURL(file);
+        } catch (error) {
+          if (loadingGroup) loadingGroup.remove();
+          appendMessage(`❌ Failed to read file: ${error.message}`, 'bot');
+        }
+
+        // Reset file input
+        e.target.value = '';
       });
 
       // Initialize
