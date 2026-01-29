@@ -1,0 +1,224 @@
+import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../../core/theme/color_palette.dart';
+import '../../services/database_service.dart';
+
+class ItemAssignmentScreen extends StatefulWidget {
+  const ItemAssignmentScreen({super.key});
+
+  @override
+  State<ItemAssignmentScreen> createState() => _ItemAssignmentScreenState();
+}
+
+class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
+  final _db = DatabaseService();
+
+  String? _selectedItem, _selectedSize, _selectedDia, _selectedEfficiency;
+  final _dozenWeightController = TextEditingController();
+
+  List<String> _items = [], _sizes = [], _dias = [], _efficiencies = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDropdowns();
+  }
+
+  Future<void> _loadDropdowns() async {
+    final db = await _db.database;
+    final List<Map<String, dynamic>> res = await db.query('dropdowns');
+
+    setState(() {
+      _items = res
+          .where((m) => m['category'] == 'item_group')
+          .map((m) => m['value'] as String)
+          .toList();
+      _sizes = res
+          .where((m) => m['category'] == 'size')
+          .map((m) => m['value'] as String)
+          .toList();
+      _dias = res
+          .where((m) => m['category'] == 'dia')
+          .map((m) => m['value'] as String)
+          .toList();
+      _efficiencies = res
+          .where((m) => m['category'] == 'efficiency')
+          .map((m) => m['value'] as String)
+          .toList();
+    });
+  }
+
+  Future<void> _save() async {
+    if (_selectedItem == null ||
+        _selectedSize == null ||
+        _selectedDia == null ||
+        _selectedEfficiency == null ||
+        _dozenWeightController.text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+      return;
+    }
+
+    final db = await _db.database;
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+
+    await db.insert('item_assignments', {
+      'id': id,
+      'item_name': _selectedItem,
+      'size': _selectedSize,
+      'dia': _selectedDia,
+      'efficiency': _selectedEfficiency,
+      'dozen_weight': double.tryParse(_dozenWeightController.text) ?? 0.0,
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Assignment Saved Successfully')),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Item Assignment')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: ColorPalette.softShadow,
+              ),
+              child: Column(
+                children: [
+                  _buildFieldLabel('Fabric Item'),
+                  _buildDropdown(
+                    _items,
+                    (v) => setState(() => _selectedItem = v),
+                    'Select Item',
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildFieldLabel('Size'),
+                            _buildDropdown(
+                              _sizes,
+                              (v) => setState(() => _selectedSize = v),
+                              'Select Size',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildFieldLabel('Dia'),
+                            _buildDropdown(
+                              _dias,
+                              (v) => setState(() => _selectedDia = v),
+                              'Select Dia',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildFieldLabel('Efficiency (%)'),
+                  _buildDropdown(
+                    _efficiencies,
+                    (v) => setState(() => _selectedEfficiency = v),
+                    'Select %',
+                  ),
+                  const SizedBox(height: 20),
+                  _buildFieldLabel('Dozen Weight (Kg)'),
+                  TextField(
+                    controller: _dozenWeightController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: '0.00',
+                      suffixIcon: Icon(
+                        LucideIcons.edit3,
+                        size: 20,
+                        color: ColorPalette.textMuted,
+                      ),
+                      helperText: 'Manual override supported',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton(
+              onPressed: _save,
+              child: const Text('Save Assignment'),
+            ),
+
+            const SizedBox(height: 20),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 56),
+                side: BorderSide(color: Colors.grey.shade200),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: ColorPalette.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+          color: ColorPalette.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdown(
+    List<String> items,
+    Function(String?) onChanged,
+    String hint,
+  ) {
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      hint: Text(hint, style: const TextStyle(fontSize: 14)),
+      items: items
+          .map(
+            (i) => DropdownMenuItem(
+              value: i,
+              child: Text(i, style: const TextStyle(fontSize: 14)),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+}

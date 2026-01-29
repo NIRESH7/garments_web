@@ -1,0 +1,145 @@
+import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../../core/theme/color_palette.dart';
+import 'overview_report.dart';
+import 'lot_aging_report.dart';
+import 'inward_outward_report.dart';
+import 'monthly_summary_report.dart';
+
+class ReportsDashboard extends StatelessWidget {
+  const ReportsDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Reports')),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          _ReportCard(
+            title: 'Overview',
+            subtitle: 'Lot name, rolls, and weights',
+            icon: LucideIcons.eye,
+            color: ColorPalette.primary,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const OverviewReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Lot Aging',
+            subtitle: 'Tracking lots with days since inward',
+            icon: LucideIcons.calendarClock,
+            color: Colors.orange,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LotAgingReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Inward vs Outward',
+            subtitle: 'Comparison of production vs dispatch',
+            icon: LucideIcons.history,
+            color: Colors.indigo,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const InwardOutwardReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Monthly Summary',
+            subtitle: 'Opening, closing, and movements',
+            icon: LucideIcons.layers,
+            color: ColorPalette.success,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MonthlySummaryReportScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ReportCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: ColorPalette.softShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: ColorPalette.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              LucideIcons.chevronRight,
+              color: ColorPalette.textMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
