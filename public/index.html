@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI SQL Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'chat-bg': '#0f0f0f',
+              'chat-sidebar': '#1a1a1a',
+              'chat-input': '#262626',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      
+      /* Custom scrollbar for main chat */
+      #messages::-webkit-scrollbar {
+        width: 6px;
+      }
+      #messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #messages::-webkit-scrollbar-thumb {
+        background: #404040;
+        border-radius: 3px;
+      }
+      #messages::-webkit-scrollbar-thumb:hover {
+        background: #525252;
+      }
+      
+      /* Smooth thinking animation */
+      @keyframes thinking-pulse {
+        0%, 100% {
+          opacity: 0.4;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      
+      @keyframes thinking-bounce {
+        0%, 100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-4px);
+        }
+      }
+      
+      .thinking-dot {
+        animation: thinking-pulse 1.4s ease-in-out infinite, thinking-bounce 1.4s ease-in-out infinite;
+      }
+      
+      .thinking-dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .thinking-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      .thinking-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      
+      /* Smooth fade-in for messages */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      .message-group {
+        animation: fadeInUp 0.3s ease-out;
+      }
+      
+      /* Gradient text animation */
+      @keyframes gradient-shift {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+      
+      .gradient-animate {
+        background-size: 200% 200%;
+        animation: gradient-shift 3s ease infinite;
+      }
+      
+      code {
+        font-family: 'Courier New', monospace;
+      }
+    </style>
+  </head>
+  <body class="bg-chat-bg text-gray-100 h-screen overflow-hidden">
+    <div class="flex h-full">
+      <!-- Sidebar -->
+      <aside class="w-72 bg-chat-sidebar flex flex-col hidden md:flex">
+        <div class="p-6">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg gradient-animate">
+              <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-xl font-bold text-white tracking-tight">FLASH AI</h1>
+              <p class="text-xs text-gray-500 mt-0.5">AI-Powered Database</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto scrollbar-hide px-5">
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-4">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Recent Searches</h2>
+            </div>
+            <div id="history" class="space-y-2">
+              <!-- History items will be inserted here -->
+            </div>
+          </div>
+        </div>
+
+        <div class="p-5 space-y-4">
+          <!-- Upload Section -->
+          <div class="bg-white/5 rounded-2xl p-4 backdrop-blur-sm">
+            <p class="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
+              <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+              Import Students
+            </p>
+            <div class="space-y-2">
+              <input type="file" id="student-upload" accept=".csv,.txt" class="hidden" />
+              <button onclick="document.getElementById('student-upload').click()" class="w-full px-3 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-medium transition-all border border-green-500/30 hover:border-green-500/50">
+                📤 Upload CSV File
+              </button>
+              <a href="/api/upload/template" download class="block text-center text-xs text-gray-400 hover:text-gray-300 transition-colors">
+                📥 Download Template
+              </a>
+            </div>
+          </div>
+
+          <!-- Quick Examples -->
+          <div class="bg-white/5 rounded-2xl p-4 backdrop-blur-sm">
+            <p class="font-semibold text-white mb-3 flex items-center gap-2 text-sm">
+              <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+              Quick Examples
+            </p>
+            <div class="space-y-2 text-xs text-gray-400">
+              <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <span class="text-blue-400 mt-0.5">→</span>
+                <span>"Show all students in grade 10"</span>
+              </div>
+              <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <span class="text-purple-400 mt-0.5">→</span>
+                <span>"Average marks by subject"</span>
+              </div>
+              <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                <span class="text-pink-400 mt-0.5">→</span>
+                <span>"Attendance for this week"</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Chat Area -->
+      <main class="flex-1 flex flex-col bg-chat-bg relative">
+        <!-- Gradient overlay for depth -->
+        <div class="absolute inset-0 bg-gradient-to-b from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
+        
+        <!-- Header -->
+        <header class="relative px-6 py-4 backdrop-blur-sm z-10">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <h2 class="text-xl font-bold text-white tracking-tight">Chat</h2>
+              <span class="px-3 py-1 text-xs font-medium bg-green-500/20 text-green-400 rounded-full flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                Online
+              </span>
+            </div>
+            <button id="sidebar-toggle" class="md:hidden text-gray-400 hover:text-white transition-all hover:scale-110">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Messages Container -->
+        <div id="messages" class="relative flex-1 overflow-y-auto px-6 py-8 space-y-8">
+          <!-- Welcome Message -->
+          <div class="max-w-4xl mx-auto text-center py-16">
+            <div class="mb-8 relative">
+              <div class="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-3xl"></div>
+              <div class="relative w-24 h-24 mx-auto bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl gradient-animate">
+                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-4xl font-bold text-white mb-4 tracking-tight">
+              <span class="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent gradient-animate">
+                How can I help you today?
+              </span>
+            </h3>
+            <p class="text-gray-400 text-lg leading-relaxed max-w-2xl mx-auto">
+              Ask questions about your database in natural language and get instant responses
+            </p>
+          </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="relative backdrop-blur-sm z-10">
+          <form id="chat-form" class="max-w-4xl mx-auto p-6">
+            <div class="relative flex items-end gap-3">
+              <div class="flex-1 relative group">
+                <div class="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                <textarea
+                  id="user-input"
+                  rows="1"
+                  placeholder="Ask me anything about your database..."
+                  class="relative w-full px-6 py-4 pr-14 bg-chat-input text-white rounded-2xl focus:outline-none resize-none max-h-32 overflow-y-auto scrollbar-hide transition-all shadow-lg"
+                  autocomplete="off"
+                  required
+                ></textarea>
+                <button
+                  type="submit"
+                  class="absolute right-3 bottom-3 w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:scale-105"
+                  id="submit-btn"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+
+    <template id="message-template">
+      <div class="message-group flex gap-4 max-w-4xl mx-auto">
+        <div class="avatar flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center font-semibold text-sm"></div>
+        <div class="message-content flex-1">
+          <div class="bubble rounded-3xl px-6 py-4 whitespace-pre-wrap"></div>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      const messagesEl = document.getElementById('messages');
+      const historyEl = document.getElementById('history');
+      const form = document.getElementById('chat-form');
+      const input = document.getElementById('user-input');
+      const submitBtn = document.getElementById('submit-btn');
+      let welcomeMessage = messagesEl.querySelector('.max-w-4xl');
+      let editContext = null; // Track which message is being edited
+
+      // Auto-resize textarea
+      input.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 128) + 'px';
+      });
+
+      // Handle Enter key (Shift+Enter for new line)
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          form.dispatchEvent(new Event('submit'));
+        }
+      });
+
+      function appendMessage(text, role = 'bot') {
+        // Remove welcome message
+        if (welcomeMessage && welcomeMessage.parentNode) {
+          welcomeMessage.remove();
+          welcomeMessage = null;
+        }
+
+        const tpl = document.getElementById('message-template').content.cloneNode(true);
+        const messageGroup = tpl.querySelector('.message-group');
+        const avatar = tpl.querySelector('.avatar');
+        const bubble = tpl.querySelector('.bubble');
+
+        if (role === 'user') {
+          messageGroup.classList.add('flex-row-reverse');
+          avatar.classList.add('bg-gray-700', 'text-white');
+          avatar.innerHTML = '<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>';
+          bubble.classList.add('bg-gray-800', 'text-white', 'ml-auto', 'max-w-[85%]', 'cursor-pointer', 'hover:bg-gray-750', 'transition-colors');
+          bubble.textContent = text;
+
+          // Store original text and allow click-to-edit & resend
+          bubble.setAttribute('data-user-text', text);
+          bubble.title = 'Click to edit and resend this question';
+          bubble.addEventListener('click', () => {
+            const group = bubble.closest('.message-group');
+            const next = group?.nextElementSibling;
+            const botGroup = next && next.querySelector('.bubble') && !next.classList.contains('flex-row-reverse') ? next : null;
+
+            editContext = {
+              userBubble: bubble,
+              userGroup: group,
+              botGroup: botGroup
+            };
+
+            const original = bubble.getAttribute('data-user-text') || '';
+            input.value = original;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 128) + 'px';
+            input.focus();
+          });
+        } else {
+          avatar.classList.add('bg-gradient-to-br', 'from-blue-600', 'via-purple-600', 'to-pink-600', 'text-white');
+          avatar.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>';
+          bubble.classList.add('bg-white/5', 'text-gray-100');
+          
+          // Simple paragraph-style AI response
+          const paragraphs = text.split('\n').filter(p => p.trim().length > 0);
+          const html = paragraphs
+            .map(p => `<p class="text-gray-200 mb-3 last:mb-0 leading-relaxed">${p}</p>`)
+            .join('');
+          bubble.innerHTML = html || `<p class="text-gray-200">${text}</p>`;
+        }
+
+        messagesEl.appendChild(messageGroup);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return { bubble, messageGroup };
+      }
+
+      function addDownloadButtons(messageElement, data, question) {
+        const bubble = messageElement.bubble || messageElement;
+        const messageGroup = messageElement.messageGroup || bubble.closest('.message-group');
+        
+        // Create download buttons container
+        const downloadContainer = document.createElement('div');
+        downloadContainer.className = 'mt-4 flex flex-wrap gap-2 items-center';
+        
+        // Create filename from question (sanitized)
+        const sanitizedQuestion = question.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_') || 'export';
+        
+        // CSV button
+        const csvBtn = createDownloadButton('CSV', 'text-green-400 hover:bg-green-500/20', () => {
+          downloadData(data, 'csv', sanitizedQuestion);
+        });
+        
+        // JSON button
+        const jsonBtn = createDownloadButton('JSON', 'text-blue-400 hover:bg-blue-500/20', () => {
+          downloadData(data, 'json', sanitizedQuestion);
+        });
+        
+        // Excel button
+        const excelBtn = createDownloadButton('Excel', 'text-purple-400 hover:bg-purple-500/20', () => {
+          downloadData(data, 'excel', sanitizedQuestion);
+        });
+        
+        // PDF button
+        const pdfBtn = createDownloadButton('PDF', 'text-red-400 hover:bg-red-500/20', () => {
+          downloadData(data, 'pdf', sanitizedQuestion);
+        });
+        
+        downloadContainer.appendChild(csvBtn);
+        downloadContainer.appendChild(jsonBtn);
+        downloadContainer.appendChild(excelBtn);
+        downloadContainer.appendChild(pdfBtn);
+        
+        // Add info text
+        const infoText = document.createElement('span');
+        infoText.className = 'text-xs text-gray-500 ml-2';
+        infoText.textContent = `${data.length} rows`;
+        downloadContainer.appendChild(infoText);
+        
+        bubble.appendChild(downloadContainer);
+      }
+
+      function createDownloadButton(text, classes, onClick) {
+        const btn = document.createElement('button');
+        btn.className = `px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${classes} border border-current/20 hover:border-current/40`;
+        btn.textContent = text;
+        btn.addEventListener('click', onClick);
+        return btn;
+      }
+
+      // Chart detection and rendering
+      function detectChartType(data, query) {
+        if (!data || data.length === 0) return null;
+        
+        const queryLower = query.toLowerCase();
+        const keys = Object.keys(data[0]);
+        
+        // Check for 2-column data (category + count) - suitable for pie chart
+        if (keys.length === 2) {
+          const [col1, col2] = keys;
+          const col1Values = data.map(row => row[col1]);
+          const col2Values = data.map(row => row[col2]);
+          
+          const col1IsNumeric = col1Values.every(val => !isNaN(parseFloat(val)) && isFinite(val));
+          const col2IsNumeric = col2Values.every(val => !isNaN(parseFloat(val)) && isFinite(val));
+          
+          if (col1IsNumeric && !col2IsNumeric) {
+            return { type: 'pie', categoryKey: col2, valueKey: col1 };
+          }
+          if (col2IsNumeric && !col1IsNumeric) {
+            return { type: 'pie', categoryKey: col1, valueKey: col2 };
+          }
+        }
+        
+        // Check for distribution queries
+        const distributionKeywords = ['distribution', 'count', 'total', 'by', 'gender', 'class', 'section', 'type', 'category', 'leave'];
+        if (distributionKeywords.some(keyword => queryLower.includes(keyword))) {
+          // Find categorical and numeric columns
+          const categoricalKeys = [];
+          const numericKeys = [];
+          
+          keys.forEach(key => {
+            const values = data.map(row => row[key]);
+            const allNumeric = values.every(val => !isNaN(parseFloat(val)) && isFinite(val) && val !== null && val !== '');
+            
+            if (allNumeric && values.length > 0) {
+              numericKeys.push(key);
+            } else {
+              categoricalKeys.push(key);
+            }
+          });
+          
+          if (categoricalKeys.length > 0 && numericKeys.length > 0) {
+            return { type: 'pie', categoryKey: categoricalKeys[0], valueKey: numericKeys[0] };
+          }
+        }
+        
+        return null;
+      }
+
+      function addChartsIfSuitable(messageElement, data, question) {
+        const bubble = messageElement.bubble || messageElement;
+        const chartInfo = detectChartType(data, question);
+        
+        if (!chartInfo) return;
+        
+        // Create chart container
+        const chartContainer = document.createElement('div');
+        chartContainer.className = 'mt-4 p-4 bg-white/5 rounded-xl';
+        chartContainer.id = `chart-container-${Date.now()}`;
+        
+        // Create toggle buttons
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'flex gap-2 mb-4';
+        
+        const tableBtn = document.createElement('button');
+        tableBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        tableBtn.textContent = '📊 Table';
+        tableBtn.onclick = () => {
+          tableBtn.classList.add('bg-blue-500/20');
+          chartBtn.classList.remove('bg-blue-500/20');
+          chartBtn.classList.add('bg-gray-700/20');
+          chartCanvas.style.display = 'none';
+          tableView.style.display = 'block';
+        };
+        
+        const chartBtn = document.createElement('button');
+        chartBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700/20 text-gray-400 border border-gray-600/30';
+        chartBtn.textContent = '📈 Chart';
+        chartBtn.onclick = () => {
+          chartBtn.classList.add('bg-blue-500/20', 'text-blue-400');
+          chartBtn.classList.remove('bg-gray-700/20', 'text-gray-400');
+          tableBtn.classList.remove('bg-blue-500/20');
+          tableBtn.classList.add('bg-gray-700/20', 'text-gray-400');
+          chartCanvas.style.display = 'block';
+          tableView.style.display = 'none';
+        };
+        
+        toggleContainer.appendChild(tableBtn);
+        toggleContainer.appendChild(chartBtn);
+        chartContainer.appendChild(toggleContainer);
+        
+        // Create table view (hidden by default, shown initially)
+        const tableView = document.createElement('div');
+        tableView.className = 'overflow-x-auto';
+        tableView.style.display = 'block';
+        
+        // Create chart canvas
+        const chartCanvas = document.createElement('canvas');
+        chartCanvas.id = `chart-${Date.now()}`;
+        chartCanvas.style.display = 'none';
+        chartCanvas.style.maxHeight = '400px';
+        
+        chartContainer.appendChild(tableView);
+        chartContainer.appendChild(chartCanvas);
+        
+        // Prepare chart data
+        const labels = data.map(row => {
+          const value = row[chartInfo.categoryKey];
+          return value !== null && value !== undefined ? String(value) : 'N/A';
+        });
+        
+        const values = data.map(row => {
+          const value = row[chartInfo.valueKey];
+          return value !== null && value !== undefined ? parseFloat(value) || 0 : 0;
+        });
+        
+        // Create pie chart
+        if (chartInfo.type === 'pie') {
+          const ctx = chartCanvas.getContext('2d');
+          new Chart(ctx, {
+            type: 'pie',
+            data: {
+              labels: labels,
+              datasets: [{
+                data: values,
+                backgroundColor: [
+                  '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B',
+                  '#EF4444', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+                ],
+                borderColor: '#1F2937',
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: {
+                  position: 'right',
+                  labels: {
+                    color: '#E5E7EB',
+                    font: {
+                      size: 12
+                    },
+                    padding: 15
+                  }
+                },
+                tooltip: {
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  titleColor: '#fff',
+                  bodyColor: '#fff',
+                  borderColor: '#4F46E5',
+                  borderWidth: 1
+                }
+              }
+            }
+          });
+        }
+        
+        // Create simple table view
+        const table = document.createElement('table');
+        table.className = 'w-full text-sm text-gray-300';
+        
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.className = 'bg-white/10';
+        Object.keys(data[0]).forEach(key => {
+          const th = document.createElement('th');
+          th.className = 'px-4 py-2 text-left font-semibold';
+          th.textContent = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Body
+        const tbody = document.createElement('tbody');
+        data.forEach((row, index) => {
+          const tr = document.createElement('tr');
+          tr.className = index % 2 === 0 ? 'bg-white/5' : '';
+          Object.values(row).forEach(value => {
+            const td = document.createElement('td');
+            td.className = 'px-4 py-2';
+            td.textContent = value !== null && value !== undefined ? String(value) : 'N/A';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        tableView.appendChild(table);
+        
+        bubble.appendChild(chartContainer);
+      }
+
+      async function downloadData(data, format, baseFilename) {
+        try {
+          const response = await fetch('/api/chat/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data, format, filename: baseFilename })
+          });
+
+          if (!response.ok) {
+            throw new Error('Export failed');
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+          const extension = format === 'excel' ? 'csv' : format;
+          link.download = `${baseFilename}_${timestamp}.${extension}`;
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('Download error:', error);
+          alert('Failed to download file. Please try again.');
+        }
+      }
+
+      function showLoading() {
+        if (welcomeMessage && welcomeMessage.parentNode) {
+          welcomeMessage.remove();
+          welcomeMessage = null;
+        }
+
+        const tpl = document.getElementById('message-template').content.cloneNode(true);
+        const messageGroup = tpl.querySelector('.message-group');
+        const avatar = tpl.querySelector('.avatar');
+        const bubble = tpl.querySelector('.bubble');
+
+        avatar.classList.add('bg-gradient-to-br', 'from-blue-600', 'via-purple-600', 'to-pink-600', 'text-white');
+        avatar.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>';
+        bubble.classList.add('bg-white/5', 'text-gray-100');
+        bubble.innerHTML = `
+          <div class="flex items-center gap-3 py-1">
+            <div class="flex gap-1.5">
+              <span class="w-2.5 h-2.5 bg-blue-500 rounded-full thinking-dot"></span>
+              <span class="w-2.5 h-2.5 bg-purple-500 rounded-full thinking-dot"></span>
+              <span class="w-2.5 h-2.5 bg-pink-500 rounded-full thinking-dot"></span>
+            </div>
+            <span class="text-sm text-gray-400">Thinking...</span>
+          </div>
+        `;
+
+        messagesEl.appendChild(messageGroup);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return messageGroup;
+      }
+
+      async function fetchHistory() {
+        try {
+          const res = await fetch('/api/chat/history');
+          const items = await res.json();
+          
+          if (items.length === 0) {
+            historyEl.innerHTML = '<div class="text-center py-8"><p class="text-xs text-gray-500">No search history yet</p><p class="text-[10px] text-gray-600 mt-1">Start a conversation!</p></div>';
+            return;
+          }
+
+          historyEl.innerHTML = items
+            .map(
+              item => `
+            <div class="group p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer">
+              <div class="text-sm text-white font-medium mb-1.5 line-clamp-2 leading-snug">${item.question}</div>
+              <div class="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                ${new Date(item.created_at).toLocaleString()}
+              </div>
+            </div>`
+            )
+            .join('');
+        } catch (error) {
+          console.error('History error', error);
+          historyEl.innerHTML = '<div class="text-center py-8"><p class="text-xs text-red-400">Failed to load history</p></div>';
+        }
+      }
+
+      async function fetchMessages() {
+        try {
+          const res = await fetch('/api/chat/messages');
+          const items = await res.json();
+          if (!Array.isArray(items) || items.length === 0) {
+            return;
+          }
+
+          // Render past conversation in order
+          messagesEl.innerHTML = '';
+          welcomeMessage = null;
+          items.forEach(msg => {
+            appendMessage(msg.user_message, 'user');
+            appendMessage(msg.ai_response, 'bot');
+          });
+        } catch (error) {
+          console.error('Messages load error', error);
+        }
+      }
+
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        const question = input.value.trim();
+        if (!question) return;
+
+        // Disable input during request
+        input.disabled = true;
+        submitBtn.disabled = true;
+
+        let loader;
+
+        if (editContext) {
+          // We are editing a previous question: update that bubble text
+          editContext.userBubble.textContent = question;
+          editContext.userBubble.setAttribute('data-user-text', question);
+
+          // Remove old answer bubble (if any)
+          if (editContext.botGroup && editContext.botGroup.parentNode) {
+            editContext.botGroup.remove();
+          }
+
+          // Show new loader
+          loader = showLoading();
+          editContext = null; // Clear edit context
+        } else {
+          // New question: append as usual
+          appendMessage(question, 'user');
+          loader = showLoading();
+        }
+
+        input.value = '';
+        input.style.height = 'auto';
+
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: question })
+          });
+
+          const data = await response.json();
+          loader.remove();
+
+          if (!response.ok) {
+            appendMessage(data.formatted || `Error: ${data.error || 'Unknown error'}`, 'bot');
+            return;
+          }
+
+          const answer = data.formatted || data.explanation || 'I answered your question using the database.';
+          const messageBubble = appendMessage(answer, 'bot');
+          
+          // Add download buttons and charts if data is available
+          if (data.hasData && data.data && data.data.length > 0) {
+            addDownloadButtons(messageBubble, data.data, question);
+            addChartsIfSuitable(messageBubble, data.data, question);
+          }
+          
+          fetchHistory();
+        } catch (error) {
+          loader.remove();
+          appendMessage(`Request failed: ${error.message}`, 'bot');
+        } finally {
+          input.disabled = false;
+          submitBtn.disabled = false;
+          input.focus();
+        }
+      });
+
+      // Mobile sidebar toggle
+      document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+        document.querySelector('aside').classList.toggle('hidden');
+      });
+
+      // File upload handler
+      document.getElementById('student-upload')?.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate file type
+        const validTypes = ['text/csv', 'application/vnd.ms-excel', 'text/plain'];
+        const validExtensions = ['csv', 'txt'];
+        const extension = file.name.split('.').pop().toLowerCase();
+        
+        if (!validTypes.includes(file.type) && !validExtensions.includes(extension)) {
+          alert('Please upload a CSV file (.csv or .txt)');
+          return;
+        }
+
+        // Show loading message
+        let loadingGroup = null;
+        const loadingMsg = appendMessage('📤 Uploading and processing file...', 'bot');
+        loadingGroup = loadingMsg.messageGroup || loadingMsg.bubble?.closest('.message-group');
+
+        try {
+          // Read file as base64
+          const reader = new FileReader();
+          reader.onload = async function(event) {
+            try {
+              const base64Data = event.target.result.split(',')[1]; // Remove data:type;base64, prefix
+              
+              // Check if user wants to update existing students
+              const updateExisting = confirm('Some students may already exist. Do you want to UPDATE existing students instead of skipping them?\n\nClick OK to update, Cancel to skip duplicates.');
+              
+              const url = updateExisting 
+                ? '/api/upload/students?update=true'
+                : '/api/upload/students';
+              
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileData: base64Data,
+                  filename: file.name,
+                  mimeType: file.type
+                })
+              });
+
+              const result = await response.json();
+              if (loadingGroup) loadingGroup.remove();
+
+              if (!response.ok) {
+                appendMessage(`❌ Upload failed: ${result.message || result.error}`, 'bot');
+                return;
+              }
+
+              // Show success message with summary
+              const summary = result.summary;
+              let successMsg = `✅ Upload completed!\n\n` +
+                `📊 Summary:\n` +
+                `• Total rows: ${summary.total}\n` +
+                `• ✅ Imported: ${summary.imported}\n` +
+                `• ⚠️ Skipped: ${summary.skipped}\n` +
+                `• ❌ Errors: ${summary.errors}`;
+
+              const resultMsg = appendMessage(successMsg, 'bot');
+
+              // Show skipped students details
+              if (result.details.skipped && result.details.skipped.length > 0) {
+                const skippedDetails = result.details.skipped
+                  .slice(0, 10) // Show first 10 skipped
+                  .map(skip => {
+                    const reason = skip.reason || `Roll ${skip.data.roll_no} already exists in Class ${skip.data.class} ${skip.data.section}`;
+                    return `Row ${skip.row}: ${skip.data.student_name} (Class ${skip.data.class} ${skip.data.section}, Roll ${skip.data.roll_no})\n   → ${reason}`;
+                  })
+                  .join('\n');
+                
+                let skippedMsg = `\n⚠️ Skipped Students:\n${skippedDetails}`;
+                if (result.details.skipped.length > 10) {
+                  skippedMsg += `\n... and ${result.details.skipped.length - 10} more skipped`;
+                }
+                skippedMsg += `\n\n💡 Tip: Roll numbers must be unique within each class+section. To update, click OK when prompted to update existing students.`;
+                appendMessage(skippedMsg, 'bot');
+              }
+
+              // Show detailed errors if any
+              if (result.details.errors && result.details.errors.length > 0) {
+                const errorDetails = result.details.errors
+                  .slice(0, 5) // Show first 5 errors
+                  .map(err => `Row ${err.row}: ${err.errors.join(', ')}`)
+                  .join('\n');
+                
+                let errorMsg = `\n❌ Errors:\n${errorDetails}`;
+                if (result.details.errors.length > 5) {
+                  errorMsg += `\n... and ${result.details.errors.length - 5} more errors`;
+                }
+                appendMessage(errorMsg, 'bot');
+              }
+
+              // Refresh history to show new students
+              setTimeout(() => {
+                fetchHistory();
+              }, 1000);
+
+            } catch (error) {
+              if (loadingGroup) loadingGroup.remove();
+              appendMessage(`❌ Upload error: ${error.message}`, 'bot');
+            }
+          };
+
+          reader.readAsDataURL(file);
+        } catch (error) {
+          if (loadingGroup) loadingGroup.remove();
+          appendMessage(`❌ Failed to read file: ${error.message}`, 'bot');
+        }
+
+        // Reset file input
+        e.target.value = '';
+      });
+
+      // Initialize
+      fetchMessages().then(fetchHistory);
+      input.focus();
+    </script>
+  </body>
+</html>
