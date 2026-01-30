@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
-import 'lot_master_screen.dart';
+import 'categories_master_screen.dart';
+import 'dropdown_setup_screen.dart';
 import 'item_master_screen.dart';
 import 'party_master_screen.dart';
-import 'dropdown_setup_screen.dart';
 
 class MastersDashboard extends StatelessWidget {
   const MastersDashboard({super.key});
@@ -21,28 +21,32 @@ class MastersDashboard extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         children: [
           _MenuTile(
-            title: 'Lot Master',
-            subtitle: 'Create and manage production lots',
-            icon: LucideIcons.package,
+            title: 'Categories Master',
+            subtitle: 'Create and manage master categories',
+            icon: LucideIcons.layoutTemplate,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const LotMasterScreen()),
+              MaterialPageRoute(
+                builder: (context) => const CategoriesMasterScreen(),
+              ),
             ),
           ),
           const SizedBox(height: 16),
           _MenuTile(
-            title: 'Item Master',
-            subtitle: 'Manage fabric items and parameters',
-            icon: LucideIcons.layers,
+            title: 'Dropdown Setup',
+            subtitle: 'Add values to categories',
+            icon: LucideIcons.listPlus,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ItemMasterScreen()),
+              MaterialPageRoute(
+                builder: (context) => const DropdownSetupScreen(),
+              ),
             ),
           ),
           const SizedBox(height: 16),
           _MenuTile(
             title: 'Party Master',
-            subtitle: 'Customer and supplier directory',
+            subtitle: 'Manage parties and details',
             icon: LucideIcons.users,
             onTap: () => Navigator.push(
               context,
@@ -53,13 +57,13 @@ class MastersDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _MenuTile(
-            title: 'Dropdown Setup',
-            subtitle: 'Configure reusable dropdown values',
-            icon: LucideIcons.settings2,
+            title: 'Item Group Master',
+            subtitle: 'Manage items and groups',
+            icon: LucideIcons.layoutGrid,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const DropdownSetupScreen(),
+                builder: (context) => const ItemMasterScreen(),
               ),
             ),
           ),

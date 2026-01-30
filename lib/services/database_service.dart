@@ -1,125 +1,129 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'dart:async';
+import 'package:uuid/uuid.dart';
 
+// MOCK DATABASE SERVICE FOR WEB/DEMO
 class DatabaseService {
-  static Database? _database;
+  static final DatabaseService _instance = DatabaseService._internal();
+  factory DatabaseService() => _instance;
+  DatabaseService._internal();
 
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
-  }
+  static final MockDatabase _mockDb = MockDatabase();
 
-  Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'textile_lot_management.db');
-    return await openDatabase(
-      path,
-      version: 3, // Bumped version
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 3) {
-          // Force recreate all tables for dev consistency
-          var tables = [
-            'lots',
-            'items',
-            'parties',
-            'item_assignments',
-            'inwards',
-            'inward_rows',
-            'outwards',
-            'outward_items',
-            'dropdowns',
-          ];
-          for (var table in tables) {
-            await db.execute("DROP TABLE IF EXISTS $table");
-          }
-          await _createTables(db);
-        }
-      },
-      onCreate: (db, version) async {
-        await _createTables(db);
-      },
-    );
-  }
-
-  Future<void> _createTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE dropdowns (
-        id TEXT PRIMARY KEY,
-        category TEXT,
-        value TEXT
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE lots (
-        id TEXT PRIMARY KEY,
-        lot_number TEXT,
-        party_name TEXT,
-        process TEXT,
-        remarks TEXT
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE items (
-        id TEXT PRIMARY KEY,
-        item_name TEXT,
-        gsm TEXT,
-        item_group TEXT,
-        size TEXT,
-        set_val TEXT
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE parties (
-        id TEXT PRIMARY KEY,
-        name TEXT
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE item_assignments (
-        id TEXT PRIMARY KEY,
-        item_name TEXT,
-        size TEXT,
-        dia TEXT,
-        efficiency TEXT,
-        dozen_weight REAL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE inwards (
-        id TEXT PRIMARY KEY,
-        lot_number TEXT,
-        from_party TEXT,
-        process TEXT,
-        created_at TEXT
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE inward_rows (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        inward_id TEXT,
-        dia TEXT,
-        colour TEXT,
-        roll INTEGER,
-        weight REAL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE outwards (
-        id TEXT PRIMARY KEY,
-        lot_number TEXT,
-        set_no TEXT,
-        party_name TEXT,
-        dc_number TEXT,
-        created_at TEXT
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE outward_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        outward_id TEXT,
-        colour TEXT,
-        weight REAL
-      )
-    ''');
+  Future<MockDatabase> get database async {
+    return _mockDb;
   }
 }
+
+class MockDatabase {
+  // In-memory storage: Table Name -> List of Rows
+  final Map<String, List<Map<String, dynamic>>> _data = {
+    'categories': [
+      {'id': '1', 'name': 'Lot Name'},
+      {'id': '2', 'name': 'Dia'},
+      {'id': '3', 'name': 'Colour'},
+      {'id': '4', 'name': 'Size'},
+      {'id': '5', 'name': 'Set'},
+      {'id': '6', 'name': 'Process'},
+      {'id': '7', 'name': 'Efficiency'},
+      {'id': '8', 'name': 'Item Name'},
+      {'id': '9', 'name': 'GSM'},
+    ],
+    'dropdowns': [],
+    'parties': [],
+    'items': [],
+    'lots': [],
+  };
+
+  Future<List<Map<String, dynamic>>> query(
+    String table, {
+    bool? distinct,
+    List<String>? columns,
+    String? where,
+    List<Object?>? whereArgs,
+    String? groupBy,
+    String? having,
+    String? orderBy,
+    int? limit,
+    int? offset,
+  }) async {
+    if (!_data.containsKey(table)) {
+      _data[table] = [];
+    }
+    
+    List<Map<String, dynamic>> result = List.from(_data[table]!);
+
+    // Simple WHERE filtering
+    if (where != null && whereArgs != null && whereArgs.isNotEmpty) {
+      if (where.contains('category = ?')) {
+        final category = whereArgs[0] as String;
+        result = result.where((row) => row['category'] == category).toList();
+      } else if (where.contains('name = ?')) {
+        final name = whereArgs[0] as String;
+        result = result.where((row) => row['name'] == name).toList();
+      } else if (where.contains('id = ?')) {
+         final id = whereArgs[0] as String;
+         result = result.where((row) => row['id'] == id).toList();
+      }
+    }
+
+    // Simple OrderBy (basic string sorting on 'value')
+    if (orderBy != null && orderBy.contains('value')) {
+       result.sort((a, b) => (a['value'] as String).compareTo(b['value'] as String));
+    }
+
+    return result;
+  }
+
+  Future<int> insert(
+    String table,
+    Map<String, dynamic> values, {
+    String? nullColumnHack,
+    dynamic conflictAlgorithm,
+  }) async {
+    if (!_data.containsKey(table)) {
+      _data[table] = [];
+    }
+    _data[table]!.add(Map.from(values));
+    return 1;
+  }
+
+  Future<int> delete(
+    String table, {
+    String? where,
+    List<Object?>? whereArgs,
+  }) async {
+     if (!_data.containsKey(table)) return 0;
+     
+     int initialLength = _data[table]!.length;
+     
+     if (where != null && whereArgs != null) {
+       if (where.contains('id = ?')) {
+         final id = whereArgs[0];
+         _data[table]!.removeWhere((row) => row['id'] == id);
+       }
+     }
+     
+     return initialLength - _data[table]!.length;
+  }
+  
+  // Mock rawQuery to prevent crashes in reports/dashboard
+  Future<List<Map<String, dynamic>>> rawQuery(String sql, [List<Object?>? arguments]) async {
+    // Simple mock for COUNT(*) queries
+    if (sql.contains('COUNT(*)')) {
+      // Extract table name roughly
+      for (var table in _data.keys) {
+        if (sql.contains(table)) {
+           return [{'count': _data[table]!.length}];
+        }
+      }
+      return [{'count': 0}];
+    }
+    
+    // Default empty return for other complex queries to unblock UI
+    return [];
+  }
+
+  // No-op execute
+  Future<void> execute(String sql) async {}
+}
+

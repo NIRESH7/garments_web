@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import '../../models/lot.dart';
 import '../../services/database_service.dart';
 
 class ItemMasterScreen extends StatefulWidget {
@@ -14,11 +13,13 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   final _db = DatabaseService();
   final _formKey = GlobalKey<FormState>();
 
-  final _nameController = TextEditingController();
-  final _gsmController = TextEditingController();
-  String? _itemGroup, _size, _set;
+  String? _selectedLotName;
+  String? _selectedItemName;
+  String? _selectedGsm;
 
-  List<String> _itemGroups = [], _sizes = [], _sets = [];
+  List<String> _lotNames = [];
+  List<String> _itemNames = [];
+  List<String> _gsmValues = [];
 
   @override
   void initState() {
@@ -28,20 +29,35 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
   Future<void> _loadDropdowns() async {
     final db = await _db.database;
-    final List<Map<String, dynamic>> res = await db.query('dropdowns');
+    
+    // Load Lot Names
+    final lots = await db.query(
+      'dropdowns',
+      where: 'category = ?',
+      whereArgs: ['Lot Name'],
+      orderBy: 'value ASC',
+    );
+    
+    // Load Item Names
+    final items = await db.query(
+      'dropdowns',
+      where: 'category = ?',
+      whereArgs: ['Item Name'],
+      orderBy: 'value ASC',
+    );
+
+    // Load GSMs
+    final gsms = await db.query(
+      'dropdowns',
+      where: 'category = ?',
+      whereArgs: ['GSM'],
+      orderBy: 'value ASC',
+    );
+
     setState(() {
-      _itemGroups = res
-          .where((m) => m['category'] == 'item_group')
-          .map((m) => m['value'] as String)
-          .toList();
-      _sizes = res
-          .where((m) => m['category'] == 'size')
-          .map((m) => m['value'] as String)
-          .toList();
-      _sets = res
-          .where((m) => m['category'] == 'set')
-          .map((m) => m['value'] as String)
-          .toList();
+      _lotNames = lots.map((m) => m['value'] as String).toList();
+      _itemNames = items.map((m) => m['value'] as String).toList();
+      _gsmValues = gsms.map((m) => m['value'] as String).toList();
     });
   }
 
@@ -49,93 +65,81 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       final db = await _db.database;
-      final item = Item(
-        id: const Uuid().v4(),
-        itemName: _nameController.text,
-        gsm: _gsmController.text,
-        itemGroup: _itemGroup!,
-        size: _size!,
-        setVal: _set!,
-      );
-      await db.insert('items', item.toMap());
+      
+      await db.insert('items', {
+        'id': const Uuid().v4(),
+        'lot_name': _selectedLotName,
+        'item_name': _selectedItemName,
+        'gsm': _selectedGsm,
+        'item_group': '', 
+        'size': '',
+        'set_val': '',
+      });
+      
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Item saved')));
-      Navigator.pop(context);
+      
+      setState(() {
+        _selectedLotName = null;
+        _selectedItemName = null;
+        _selectedGsm = null;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Item Master')),
+      appBar: AppBar(title: const Text('Item Group Master')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              TextFormField(
-                controller: _nameController,
+               DropdownButtonFormField<String>(
+                value: _selectedLotName,
+                decoration: const InputDecoration(labelText: 'Group Name'),
+                items: _lotNames
+                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedLotName = val),
+                 validator: (val) => val == null ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedItemName,
                 decoration: const InputDecoration(labelText: 'Item Name'),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+                items: _itemNames
+                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedItemName = val),
+                 validator: (val) => val == null ? 'Required' : null,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _gsmController,
-                decoration: const InputDecoration(
-                  labelText: 'GSM (Manual Entry)',
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) => v!.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              _buildDropdown(
-                'Item Group',
-                _itemGroups,
-                (v) => setState(() => _itemGroup = v),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDropdown(
-                      'Size',
-                      _sizes,
-                      (v) => setState(() => _size = v),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildDropdown(
-                      'Set',
-                      _sets,
-                      (v) => setState(() => _set = v),
-                    ),
-                  ),
-                ],
+               DropdownButtonFormField<String>(
+                value: _selectedGsm,
+                decoration: const InputDecoration(labelText: 'GSM'),
+                items: _gsmValues
+                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedGsm = val),
+                 validator: (val) => val == null ? 'Required' : null,
               ),
               const SizedBox(height: 48),
-              ElevatedButton(onPressed: _save, child: const Text('Save Item')),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _save, 
+                  child: const Text('Save Item')
+                ),
+              ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildDropdown(
-    String label,
-    List<String> items,
-    Function(String?) onChanged,
-  ) {
-    return DropdownButtonFormField<String>(
-      decoration: InputDecoration(labelText: label),
-      items: items
-          .map((i) => DropdownMenuItem(value: i, child: Text(i)))
-          .toList(),
-      onChanged: onChanged,
-      validator: (v) => v == null ? 'Required' : null,
     );
   }
 }
