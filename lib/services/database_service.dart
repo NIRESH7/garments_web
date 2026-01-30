@@ -32,6 +32,9 @@ class MockDatabase {
     'parties': [],
     'items': [],
     'lots': [],
+    'inwards': [],
+    'inward_rows': [],
+    'inward_sets_allocation': [],
   };
 
   Future<List<Map<String, dynamic>>> query(

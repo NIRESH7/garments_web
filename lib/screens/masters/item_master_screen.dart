@@ -16,10 +16,12 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   String? _selectedLotName;
   String? _selectedItemName;
   String? _selectedGsm;
+  String? _selectedColour;
 
   List<String> _lotNames = [];
   List<String> _itemNames = [];
   List<String> _gsmValues = [];
+  List<String> _colours = [];
 
   @override
   void initState() {
@@ -54,10 +56,19 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       orderBy: 'value ASC',
     );
 
+    // Load Colours
+    final colours = await db.query(
+      'dropdowns',
+      where: 'category = ?',
+      whereArgs: ['Colour'],
+      orderBy: 'value ASC',
+    );
+
     setState(() {
       _lotNames = lots.map((m) => m['value'] as String).toList();
       _itemNames = items.map((m) => m['value'] as String).toList();
       _gsmValues = gsms.map((m) => m['value'] as String).toList();
+      _colours = colours.map((m) => m['value'] as String).toList();
     });
   }
 
@@ -71,6 +82,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         'lot_name': _selectedLotName,
         'item_name': _selectedItemName,
         'gsm': _selectedGsm,
+        'colour': _selectedColour,
         'item_group': '', 
         'size': '',
         'set_val': '',
@@ -85,6 +97,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         _selectedLotName = null;
         _selectedItemName = null;
         _selectedGsm = null;
+        _selectedColour = null;
       });
     }
   }
@@ -126,6 +139,16 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                     .map((i) => DropdownMenuItem(value: i, child: Text(i)))
                     .toList(),
                 onChanged: (val) => setState(() => _selectedGsm = val),
+                 validator: (val) => val == null ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+               DropdownButtonFormField<String>(
+                value: _selectedColour,
+                decoration: const InputDecoration(labelText: 'Colour'),
+                items: _colours
+                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedColour = val),
                  validator: (val) => val == null ? 'Required' : null,
               ),
               const SizedBox(height: 48),
