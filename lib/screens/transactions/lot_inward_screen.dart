@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
-import 'package:uuid/uuid.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/database_service.dart';
-import 'lot_inward_allocation_screen.dart';
+import '../../services/api_service.dart';
+
+// Implementation of Niresh (1).docx Requirements
+// Integrated with FastAPI Backend.
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -14,594 +14,398 @@ class LotInwardScreen extends StatefulWidget {
 }
 
 class _LotInwardScreenState extends State<LotInwardScreen> {
-  final _db = DatabaseService();
+  final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
 
-  // Header Fields
-  final DateTime _inwardDate = DateTime.now();
-  final String _inTime = DateFormat('hh:mm a').format(DateTime.now());
-  String? _outTime;
+  // --- 1. Header Logic ---
+  final DateTime _inwardDate = DateTime.now(); 
+  late String _inTime; 
+  String? _outTime; 
   
   String? _selectedLotName;
-  String? _lotNumber;
+  final _lotNumberController = TextEditingController();
   String? _selectedParty;
-  String _process = "";
-  
+  String _process = ""; 
   final _vehicleController = TextEditingController();
-  final _dcController = TextEditingController();
+  final _dcController = TextEditingController(); 
 
-  // Master Data
-  List<Map<String, dynamic>> _lotNames = [];
-  List<Map<String, dynamic>> _parties = [];
+  // --- 2. Main Grid State ---
+  List<InwardRow> _rows = [InwardRow()];
+
+  // --- 3. Navigation & Sticker State ---
+  int _currentPage = 0; 
+  String? _selectedStickerDia; 
+  
+  // Storage per requirements: 3 dropdowns for Rack, 3 for Pallet
+  List<String?> _selectedRacks = [null, null, null];
+  List<String?> _selectedPallets = [null, null, null];
+  
+  Map<String, List<StickerRow>> _stickerData = {};
+
+  // Master Data Mock/Load
   List<String> _dias = [];
   List<String> _colours = [];
-
-  // Grouped Entry Data
-  final List<DiaGroup> _diaGroups = [DiaGroup()];
+  List<String> _lotNames = [];
+  List<String> _parties = [];
+  List<String> _rackNames = []; 
+  List<String> _palletNos = [];
+  
+  bool _isSaved = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    _inTime = DateFormat('hh:mm a').format(DateTime.now());
     _loadMasterData();
   }
-
+  
   Future<void> _loadMasterData() async {
-    final db = await _db.database;
-    final drops = await db.query('dropdowns');
-    
+    setState(() => _isLoading = true);
+    final data = await _api.getMasterData();
     setState(() {
-      _lotNames = drops.where((e) => e['category'] == 'Lot Name').toList();
-      _parties = []; // Will load from 'parties' table below
-      _dias = drops.where((e) => e['category'] == 'Dia').map((e) => e['value'] as String).toList();
-      _colours = drops.where((e) => e['category'] == 'Colour').map((e) => e['value'] as String).toList();
-    });
-
-    final partiesData = await db.query('parties');
-    setState(() {
-      _parties = partiesData;
-    });
-  }
-
-  Future<void> _onPartyChanged(String? partyName) async {
-    if (partyName == null) return;
-    final db = await _db.database;
-    final res = await db.query('parties', where: 'name = ?', whereArgs: [partyName]);
-    setState(() {
-      _selectedParty = partyName;
-      if (res.isNotEmpty) {
-        _process = res.first['process'] ?? "Not Set";
+      _isLoading = false;
+      if (data.isNotEmpty) {
+        _lotNames = data['lots'] ?? [];
+        _parties = data['parties'] ?? [];
+        _dias = data['dias'] ?? [];
+        _colours = data['colours'] ?? [];
+        _rackNames = data['racks'] ?? [];
+        _palletNos = data['pallets'] ?? [];
+      } else {
+        // Fallback for demo if API fails/empty
+        _lotNames = ['Lot Alpha', 'Lot Beta'];
+        _parties = ['Client A', 'Client B'];
+        _dias = ['30', '32', '34', '36'];
+        _colours = ['Red', 'Blue', 'Black'];
+        _rackNames = ['R-1', 'R-2', 'R-3'];
+        _palletNos = ['P-1', 'P-2', 'P-3'];
       }
     });
   }
 
-  void _addDiaGroup() {
+  void _onPartyChanged(String? val) {
     setState(() {
-      _diaGroups.add(DiaGroup());
+      _selectedParty = val;
+      _process = "Auto-fetched Process"; 
+    });
+  }
+
+  // --- Calculations (Requirement Strict) ---
+  void _updateRowMath(InwardRow row) {
+    setState(() {
+      // SET RULE: (ROLL / 11). If decimal >= .5, Round UP. If < .5, Round DOWN.
+      if (row.rolls > 0) {
+        row.sets = (row.rolls / 11).round();
+      } else {
+        row.sets = 0;
+      }
+      
+      row.recRoll = row.rolls; 
+      row.difference = row.recWeight - row.deliveredWeight;
+      
+      if (row.deliveredWeight > 0) {
+        row.lossPercent = (row.difference / row.deliveredWeight) * 100;
+      } else {
+        row.lossPercent = 0;
+      }
     });
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     
-    // Auto-fill out time on save
-    _outTime = DateFormat('hh:mm a').format(DateTime.now());
-
-    final db = await _db.database;
-    final inwardId = const Uuid().v4();
-
-    // 1. Save Header
-    await db.insert('inwards', {
-      'id': inwardId,
-      'inward_date': _inwardDate.toIso8601String(),
-      'lot_name': _selectedLotName,
-      'lot_number': _lotNumber,
-      'party': _selectedParty,
-      'process': _process,
-      'vehicle_number': _vehicleController.text,
-      'dc_number': _dcController.text,
-      'in_time': _inTime,
-      'out_time': _outTime,
+    setState(() {
+      _outTime = DateFormat('hh:mm a').format(DateTime.now()); // Out Time on save
+      _isLoading = true;
     });
 
-    // 2. Save Rows
-    for (var group in _diaGroups) {
-      if (group.selectedDia == null) continue;
-      for (var row in group.rows) {
-        if (row.colour == null || row.weight <= 0) continue;
-        await db.insert('inward_rows', {
-          'id': const Uuid().v4(),
-          'inward_id': inwardId,
-          'dia': group.selectedDia,
-          'colour': row.colour,
-          'roll_count': row.rollCount,
-          'delivered_weight': row.deliveredWeight,
-          'received_weight': row.weight,
-        });
-      }
-    }
+    // Construct Payload
+    final inwardData = {
+      "inward_date": DateFormat('yyyy-MM-dd').format(_inwardDate),
+      "in_time": _inTime,
+      "out_time": _outTime,
+      "lot_name": _selectedLotName,
+      "lot_number": _lotNumberController.text,
+      "party_name": _selectedParty,
+      "process": _process,
+      "vehicle_no": _vehicleController.text,
+      "dc_number": _dcController.text,
+      "sticker_dia": _selectedStickerDia,
+      "racks": _selectedRacks,
+      "pallets": _selectedPallets,
+      "grid_rows": _rows.map((r) => {
+        "dia": r.dia ?? "",
+        "rolls": r.rolls,
+        "sets": r.sets,
+        "delivered_weight": r.deliveredWeight,
+        "rec_roll": r.recRoll,
+        "rec_weight": r.recWeight,
+        "difference": r.difference,
+        "loss_percent": r.lossPercent
+      }).toList(),
+      "sticker_rows": _selectedStickerDia != null && _stickerData.containsKey(_selectedStickerDia) 
+        ? _stickerData[_selectedStickerDia]!.map((r) => {
+            "colour": r.colour,
+            "set_weights": r.setWeights
+          }).toList() 
+        : []
+    };
 
-    // 3. Prepare for next page
-    List<Map<String, dynamic>> selectedLines = [];
-    for (var group in _diaGroups) {
-      if (group.selectedDia == null) continue;
-      for (var row in group.rows) {
-        if (row.colour == null || row.weight <= 0) continue;
-        selectedLines.add({
-          'dia': group.selectedDia,
-          'colour': row.colour,
-          'roll_count': row.rollCount,
-        });
-      }
-    }
+    final success = await _api.saveInward(inwardData);
 
-    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      if (success) _isSaved = true;
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Lot Inward Saved Successfully')),
-    );
-    
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => LotInwardAllocationScreen(
-          inwardId: inwardId,
-          selectedLines: selectedLines,
-        ),
-      ),
+      SnackBar(
+        content: Text(success ? "Inward Saved to Backend!" : "Failed to Save (Ensure Backend is Running)"),
+        backgroundColor: success ? Colors.green : Colors.red,
+      )
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text('Lot Inward', style: TextStyle(fontWeight: FontWeight.w600)),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1A1A2E),
-        elevation: 0,
+        title: const Text('Lot Inward Entry', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            child: ElevatedButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.save_outlined, size: 18),
-              label: const Text('Save & Continue'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90E2),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+          if (_currentPage == 0)
+            IconButton(
+              icon: const Icon(Icons.print),
+              color: _isSaved ? Colors.blue : Colors.grey,
+              onPressed: _isSaved ? () {} : null, 
             ),
-          )
         ],
       ),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeaderCard(),
-              const SizedBox(height: 28),
-              Row(
-                children: [
-                  Container(
-                    width: 4,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A90E2),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'DIA-wise Entry Grid',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ..._diaGroups.asMap().entries.map((e) => _buildDiaGroup(e.value, e.key)),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: _addDiaGroup,
-                icon: const Icon(Icons.add_circle_outline, color: Color(0xFF4A90E2)),
-                label: const Text('Add Another DIA Group', style: TextStyle(color: Color(0xFF4A90E2), fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 54),
-                  side: const BorderSide(color: Color(0xFF4A90E2), width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-              ),
-              const SizedBox(height: 100),
-            ],
-          ),
+          padding: const EdgeInsets.all(12),
+          child: _currentPage == 0 ? _buildMainPage() : _buildStickerPage(),
         ),
       ),
+      bottomNavigationBar: _isLoading ? const LinearProgressIndicator() : null,
     );
   }
 
-  Widget _buildHeaderCard() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Inward Details',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A2E),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(child: _buildReadOnlyField('Inward Date', DateFormat('dd-MM-yyyy').format(_inwardDate), Icons.calendar_today)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildReadOnlyField('In Time', _inTime, Icons.access_time)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdown(
-                  'Lot Name', 
-                  _selectedLotName, 
-                  _lotNames.map((e) => e['value'] as String).toList(),
-                  (val) => setState(() => _selectedLotName = val),
-                  Icons.inventory_2_outlined,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildTextField('Lot Number', Icons.tag, (val) => _lotNumber = val),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildDropdown(
-            'From Party', 
-            _selectedParty, 
-            _parties.map((e) => e['name'] as String).toList(),
-            _onPartyChanged,
-            Icons.business,
-          ),
-          const SizedBox(height: 16),
-          _buildReadOnlyField('Process (Auto-fetched)', _process, Icons.settings_suggest),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField('Vehicle Number', Icons.local_shipping_outlined, (val) => _vehicleController.text = val),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildTextField('Party DC Number', Icons.receipt_long, (val) => _dcController.text = val),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDiaGroup(DiaGroup group, int index) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE8ECF0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 15,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [const Color(0xFF4A90E2).withOpacity(0.1), const Color(0xFF4A90E2).withOpacity(0.05)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A90E2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.circle_outlined, size: 20, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                const Text('DIA Selection:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Color(0xFF1A1A2E))),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE8ECF0)),
-                    ),
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: group.selectedDia,
-                      hint: const Text('Select DIA', style: TextStyle(color: Colors.grey)),
-                      underline: const SizedBox(),
-                      icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4A90E2)),
-                      items: _dias.map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontWeight: FontWeight.w500)))).toList(),
-                      onChanged: (v) => setState(() => group.selectedDia = v),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Color(0xFFE74C3C)),
-                  onPressed: () => setState(() => _diaGroups.removeAt(index)),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFE74C3C).withOpacity(0.1),
-                  ),
-                )
-              ],
-            ),
-          ),
-          _buildDiaSummary(group),
-          const Divider(height: 1, color: Color(0xFFE8ECF0)),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: const [
-                    Expanded(flex: 2, child: Text('Colour', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey))),
-                    SizedBox(width: 8),
-                    Expanded(child: Text('Rolls', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey), textAlign: TextAlign.center)),
-                    SizedBox(width: 8),
-                    Expanded(child: Text('Deliv.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey), textAlign: TextAlign.center)),
-                    SizedBox(width: 8),
-                    Expanded(child: Text('Recv.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey), textAlign: TextAlign.center)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: group.rows.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) => _buildGridRow(group, i),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: TextButton.icon(
-              onPressed: () => setState(() => group.addRow()),
-              icon: const Icon(Icons.add, size: 18, color: Color(0xFF4A90E2)),
-              label: const Text('Add Row (Max 11)', style: TextStyle(color: Color(0xFF4A90E2), fontWeight: FontWeight.w600)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDiaSummary(DiaGroup group) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _summaryText('Total Rolls', '${group.totalRolls}', const Color(0xFF4A90E2)),
-          _summaryText('Sets', '${group.noOfSets}', const Color(0xFF27AE60)),
-          _summaryText('Weight Diff', '${group.weightDiff.toStringAsFixed(2)} Kg', const Color(0xFFE67E22)),
-          _summaryText('Loss %', '${group.lossPercent.toStringAsFixed(1)}%', const Color(0xFFE74C3C)),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryText(String label, String value, Color color) {
+  Widget _buildMainPage() {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+        _buildHeader(),
+        const SizedBox(height: 16),
+        _buildGridHeader(),
+        _buildDataTable(),
+        const SizedBox(height: 24),
+        _buildNavigationButtons(),
       ],
     );
   }
 
-  Widget _buildGridRow(DiaGroup group, int i) {
-    final row = group.rows[i];
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE8ECF0)),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isDense: true,
-                value: row.colour,
-                hint: const Text('Select', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                icon: const Icon(Icons.arrow_drop_down, size: 20, color: Color(0xFF4A90E2)),
-                items: _colours.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 13)))).toList(),
-                onChanged: (v) => setState(() => row.colour = v),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildCompactField('0', (v) => setState(() => row.rollCount = int.tryParse(v) ?? 0)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildCompactField('0.0', (v) => setState(() => row.deliveredWeight = double.tryParse(v) ?? 0)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildCompactField('0.0', (v) => setState(() => row.weight = double.tryParse(v) ?? 0), highlight: true),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCompactField(String hint, Function(String) onChanged, {bool highlight = false}) {
-    return Container(
-      height: 42,
-      decoration: BoxDecoration(
-        color: highlight ? const Color(0xFF4A90E2).withOpacity(0.08) : const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: highlight ? const Color(0xFF4A90E2).withOpacity(0.3) : const Color(0xFFE8ECF0)),
-      ),
-      child: TextFormField(
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: highlight ? const Color(0xFF4A90E2) : const Color(0xFF1A1A2E)),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        ),
-        onChanged: onChanged,
-      ),
-    );
-  }
-
-  Widget _buildReadOnlyField(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF4A90E2)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
               children: [
-                Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E))),
+                Expanded(child: _buildReadOnly("Inward Date", DateFormat('dd-MM-yyyy').format(_inwardDate))),
+                const SizedBox(width: 8),
+                Expanded(child: _buildReadOnly("In Time", _inTime)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildReadOnly("Out Time", _outTime ?? "--:--")),
               ],
             ),
-          ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildDropdown("Lot Name", _selectedLotName, _lotNames, (v) => setState(() => _selectedLotName = v))),
+                const SizedBox(width: 8),
+                Expanded(child: _buildTextField("Lot No", _lotNumberController)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildDropdown("From Party", _selectedParty, _parties, _onPartyChanged)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildReadOnly("Process", _process)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildTextField("Vehicle No", _vehicleController)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildTextField("Party DC No", _dcController)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataTable() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columnSpacing: 12,
+        border: TableBorder.all(color: Colors.grey.shade300),
+        columns: const [
+          DataColumn(label: Text("DIA")),
+          DataColumn(label: Text("ROLL")),
+          DataColumn(label: Text("SETS")),
+          DataColumn(label: Text("DELIV. WT")),
+          DataColumn(label: Text("REC. ROLL")),
+          DataColumn(label: Text("REC. WT")),
+          DataColumn(label: Text("DIFF")),
+          DataColumn(label: Text("LOSS %")),
+          DataColumn(label: Text("")),
         ],
+        rows: _rows.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final row = entry.value;
+          return DataRow(cells: [
+            DataCell(_buildSmallDropdown(row.dia, _dias, (v) => setState(() => row.dia = v))),
+            DataCell(_buildGridInput(row.rolls, (v) {
+              row.rolls = int.tryParse(v) ?? 0;
+              _updateRowMath(row);
+            })),
+            DataCell(Text(row.sets.toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
+            DataCell(_buildGridInput(row.deliveredWeight, (v) {
+              row.deliveredWeight = double.tryParse(v) ?? 0;
+              _updateRowMath(row);
+            })),
+            DataCell(Text(row.recRoll.toString())),
+            DataCell(_buildGridInput(row.recWeight, (v) {
+               row.recWeight = double.tryParse(v) ?? 0;
+               _updateRowMath(row);
+            })),
+            DataCell(Text(row.difference.toStringAsFixed(2))),
+            DataCell(Text("${row.lossPercent.toStringAsFixed(2)}%")),
+            DataCell(IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => setState(() => _rows.removeAt(idx)))),
+          ]);
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildTextField(String label, IconData icon, Function(String) onChanged) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-      ),
-      child: TextFormField(
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-          prefixIcon: Icon(icon, size: 18, color: const Color(0xFF4A90E2)),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-        onChanged: onChanged,
-      ),
-    );
-  }
-
-  Widget _buildDropdown(String label, String? current, List<String> items, Function(String?) onChanged, IconData icon) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-      ),
-      child: DropdownButtonFormField<String>(
-        value: items.contains(current) ? current : null,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-          prefixIcon: Icon(icon, size: 18, color: const Color(0xFF4A90E2)),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-        icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4A90E2)),
-        items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 14)))).toList(),
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class DiaGroup {
-  String? selectedDia;
-  List<InwardRowData> rows = [InwardRowData()];
-
-  void addRow() {
-    if (rows.length < 11) {
-      rows.add(InwardRowData());
+  Widget _buildStickerPage() {
+    final enteredDias = _rows.where((r) => r.dia != null).map((r) => r.dia!).toSet().toList();
+    int setsCount = 0;
+    if (_selectedStickerDia != null) {
+      final found = _rows.where((r) => r.dia == _selectedStickerDia);
+      if (found.isNotEmpty) setsCount = found.first.sets;
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _currentPage = 0)),
+            const Text("Sticker & Storage Details", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildDropdown("Select DIA for Stickers", _selectedStickerDia, enteredDias, (v) => setState(() => _selectedStickerDia = v)),
+        const SizedBox(height: 16),
+        if (_selectedStickerDia != null) ...[
+          _buildStorageDropdowns(),
+          const SizedBox(height: 16),
+          _buildDynamicSetTable(setsCount),
+        ]
+      ],
+    );
   }
 
-  int get totalRolls => rows.fold(0, (sum, r) => sum + r.rollCount);
-  int get noOfSets {
-    double sets = totalRolls / 11;
-    if (sets - sets.floor() > 0.5) return sets.ceil();
-    return sets.floor();
+  Widget _buildStorageDropdowns() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            const Text("Rack & Pallet (Select 3 each)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Row(
+              children: List.generate(3, (i) => Expanded(
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: _buildSmallDropdown(_selectedRacks[i], _rackNames, (v) => setState(() => _selectedRacks[i] = v))),
+              )),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: List.generate(3, (i) => Expanded(
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: _buildSmallDropdown(_selectedPallets[i], _palletNos, (v) => setState(() => _selectedPallets[i] = v))),
+              )),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-  double get totalDelivered => rows.fold(0, (sum, r) => sum + r.deliveredWeight);
-  double get totalReceived => rows.fold(0, (sum, r) => sum + r.weight);
-  double get weightDiff => totalReceived - totalDelivered;
-  double get lossPercent => totalDelivered == 0 ? 0 : (weightDiff / totalDelivered) * 100;
+
+  Widget _buildDynamicSetTable(int sets) {
+    if (!_stickerData.containsKey(_selectedStickerDia!)) _stickerData[_selectedStickerDia!] = [StickerRow()];
+    final rows = _stickerData[_selectedStickerDia!]!;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        border: TableBorder.all(color: Colors.grey.shade300),
+        columns: [
+          const DataColumn(label: Text("S.No")),
+          const DataColumn(label: Text("Colour")),
+          ...List.generate(sets, (i) => DataColumn(label: Text("Set-${i+1}"))),
+          const DataColumn(label: Text("")),
+        ],
+        rows: rows.asMap().entries.map((e) {
+          final idx = e.key;
+          final r = e.value;
+          return DataRow(cells: [
+            DataCell(Text("${idx + 1}")),
+            DataCell(_buildSmallDropdown(r.colour, _colours, (v) => r.colour = v)),
+            ...List.generate(sets, (i) {
+              if (r.setWeights.length <= i) r.setWeights.add("");
+              return DataCell(SizedBox(width: 60, child: TextFormField(
+                initialValue: r.setWeights[i],
+                onChanged: (v) => r.setWeights[i] = v,
+                decoration: const InputDecoration(isDense: true),
+              )));
+            }),
+             DataCell(IconButton(icon: const Icon(Icons.add, color: Colors.green), onPressed: () => setState(() => rows.add(StickerRow())))),
+          ]);
+        }).toList(),
+      ),
+    );
+  }
+
+  // --- UI Helpers ---
+  Widget _buildReadOnly(String label, String val) => InputDecorator(decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.all(8)), child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)));
+  Widget _buildTextField(String label, TextEditingController c) => TextFormField(controller: c, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()));
+  Widget _buildDropdown(String label, String? val, List<String> items, Function(String?) chg) => DropdownButtonFormField<String>(value: items.contains(val) ? val : null, items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(), onChanged: chg, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()));
+  Widget _buildSmallDropdown(String? val, List<String> items, Function(String?) chg) => DropdownButton<String>(value: items.contains(val) ? val : null, items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 12)))).toList(), onChanged: chg, underline: const SizedBox(), isExpanded: true, hint: const Text("-"));
+  Widget _buildGridInput(num val, Function(String) chg) => TextFormField(initialValue: val == 0 ? "" : val.toString(), keyboardType: TextInputType.number, decoration: const InputDecoration(border: InputBorder.none, hintText: "0"), onChanged: chg);
+  Widget _buildGridHeader() => Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("DIA-wise Entry", style: TextStyle(fontWeight: FontWeight.bold)), TextButton.icon(onPressed: () => setState(() => _rows.add(InwardRow())), icon: const Icon(Icons.add), label: const Text("Add Row"))]);
+  Widget _buildNavigationButtons() => Column(children: [SizedBox(width: double.infinity, height: 45, child: ElevatedButton(onPressed: () => setState(() => _currentPage = 1), style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white), child: const Text("Next Page (Storage Details)"))), const SizedBox(height: 12), SizedBox(width: double.infinity, height: 45, child: ElevatedButton.icon(onPressed: _save, icon: const Icon(Icons.save), label: const Text("Save Entry"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white)))]);
 }
 
-class InwardRowData {
-  String? colour;
-  int rollCount = 0;
+class InwardRow {
+  String? dia;
+  int rolls = 0;
+  int sets = 0;
   double deliveredWeight = 0;
-  double weight = 0;
+  int recRoll = 0;
+  double recWeight = 0;
+  double difference = 0;
+  double lossPercent = 0;
+}
+
+class StickerRow {
+  String? colour;
+  List<String> setWeights = [];
 }

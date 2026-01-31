@@ -34,6 +34,7 @@ class MockDatabase {
     'lots': [],
     'inwards': [],
     'inward_rows': [],
+    'inward_dia_summary': [], // NEW: DIA-level calculated values
     'inward_sets_allocation': [],
   };
 
