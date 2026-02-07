@@ -49,14 +49,44 @@ class OutwardItemModel(BaseModel):
 
 class LotOutwardModel(BaseModel):
     dc_number: str
-    outward_date: str
+    outward_date_time: str # Combined date and time
+    lot_name: str
     lot_number: str
-    set_no: str
+    dia: str
     party_name: str
+    process: Optional[str]
+    address: Optional[str]
     vehicle_no: Optional[str]
     in_time: str
     out_time: Optional[str]
     
-    items: List[OutwardItemModel]
+    items: List[OutwardItemModel] # Represents selected sets/colours
     
     created_at: datetime = Field(default_factory=datetime.now)
+
+# --- Item Master Models ---
+
+class ItemModel(BaseModel):
+    id: str
+    lot_name: Optional[str] = Field(alias="group_name") # Mapping 'lot_name' (db col) to 'group_name' concept if needed, or just keeping 'lot_name'
+    item_name: str
+    gsm: Optional[str]
+    colour: str
+    item_group: Optional[str]
+    size: Optional[str]
+    set_val: Optional[str]
+    
+    class Config:
+        allow_population_by_field_name = True
+
+# --- Inward Allocation Models ---
+
+class AllocationSetModel(BaseModel):
+    inward_id: str
+    dia: str
+    colour: str
+    set_number: str
+    weight: float
+    pallet_number: str
+    rack_name: str
+    created_at: Optional[str] 

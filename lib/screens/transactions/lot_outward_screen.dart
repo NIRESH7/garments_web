@@ -3,6 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
 import '../../services/database_service.dart';
+import '../../services/api_service.dart';
 
 class LotOutwardScreen extends StatefulWidget {
   const LotOutwardScreen({super.key});
@@ -13,105 +14,189 @@ class LotOutwardScreen extends StatefulWidget {
 
 class _LotOutwardScreenState extends State<LotOutwardScreen> {
   final _db = DatabaseService();
+  final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
 
   // --- Header Data ---
-  final DateTime _outwardDate = DateTime.now();
-  late String _inTime;
-  String? _outTime;
-  String? _lotNumber, _setNo, _partyName;
-  String _dcNumber = '';
+  DateTime _outwardDateTime = DateTime.now();
+  String _dcNumber = 'Loading...';
+  String? _selectedLotName;
+  String? _selectedDia;
+  String? _selectedLotNo;
+  String? _selectedParty;
+  
+  String? _process;
+  String? _address;
+  
   final _vehicleController = TextEditingController();
+  String _inTime = DateFormat('hh:mm a').format(DateTime.now());
+  String? _outTime;
 
-  List<OutwardItem> _items = [];
-  List<String> _lotNumbers = [], _setNos = [], _parties = [];
+  List<String> _lotNames = [];
+  List<String> _dias = [];
+  List<String> _lotNos = [];
+  List<String> _parties = [];
+  
+  List<Map<String, dynamic>> _availableSets = [];
+  List<Map<String, dynamic>> _selectedSets = [];
+
+  bool _isLoading = true;
   bool _isSaved = false;
 
   @override
   void initState() {
     super.initState();
-    // Auto-generate DC Number and In-Time
-    _dcNumber = 'DC-${DateFormat('yyyyMMdd').format(DateTime.now())}-${DateTime.now().millisecond}';
-    _inTime = DateFormat('hh:mm a').format(DateTime.now());
-    _loadData();
+    _loadInitialData();
   }
 
-  Future<void> _loadData() async {
-    final db = await _db.database;
-    final List<Map<String, dynamic>> drops = await db.query('dropdowns');
-    // In a real app, you would fetch these from your 'lots' or 'inward' table
+  Future<void> _loadInitialData() async {
+    final master = await _api.getMasterData();
+    final dc = await _api.generateDcNumber();
+    
     setState(() {
-      _lotNumbers = drops.where((m) => m['category'] == 'Lot Number').map((m) => m['value'] as String).toList();
-      _setNos = ['Set-1', 'Set-2', 'Set-3', 'Set-4', 'Set-5'];
-      _parties = drops.where((m) => m['category'] == 'Party').map((m) => m['value'] as String).toList();
-
-      // Fallbacks if DB is empty
-      if (_lotNumbers.isEmpty) _lotNumbers = ['L-9901', 'L-9902'];
-      if (_parties.isEmpty) _parties = ['Client Alpha', 'Client Beta'];
+      _lotNames = master['lots'] ?? [];
+      _dias = master['dias'] ?? [];
+      _parties = master['parties'] ?? [];
+      _dcNumber = dc ?? 'ERR-GEN';
+      _isLoading = false;
     });
   }
 
-  void _onSetSelected(String? set) {
+  Future<void> _onDiaChanged(String? val) async {
     setState(() {
-      _setNo = set;
-      if (set != null) {
-        // Mocking available stock fetching for the selected set
-        _items = [
-          OutwardItem(colour: 'Red', availableWeight: 50.0, selectedWeight: 50.0),
-          OutwardItem(colour: 'Blue', availableWeight: 35.5, selectedWeight: 35.5),
-        ];
+      _selectedDia = val;
+      _selectedLotNo = null;
+      _lotNos = [];
+      _availableSets = [];
+      _selectedSets = [];
+    });
+    if (val != null) {
+      final lots = await _api.getLotsFifo(dia: val);
+      setState(() => _lotNos = lots);
+    }
+  }
+
+  Future<void> _onLotNoChanged(String? val) async {
+    setState(() {
+      _selectedLotNo = val;
+      _availableSets = [];
+      _selectedSets = [];
+    });
+    if (val != null && _selectedDia != null) {
+      final sets = await _api.getBalancedSets(val, _selectedDia!);
+      setState(() => _availableSets = sets);
+    }
+  }
+
+  Future<void> _onPartyChanged(String? val) async {
+    setState(() {
+      _selectedParty = val;
+      _process = null;
+      _address = null;
+    });
+    if (val != null) {
+      final details = await _api.getPartyDetails(val);
+      if (details != null) {
+        setState(() {
+          _process = details['process'];
+          _address = details['address'];
+        });
+      }
+    }
+  }
+
+  void _toggleSetSelection(Map<String, dynamic> set, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedSets.add(Map.from(set));
+      } else {
+        _selectedSets.removeWhere((s) => s['set_no'] == set['set_no'] && s['colour'] == set['colour']);
       }
     });
   }
 
+  void _removeSet(int index) {
+    setState(() {
+      _selectedSets.removeAt(index);
+    });
+  }
+
+  Future<void> _selectDateTime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _outwardDateTime,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date != null) {
+      if (!mounted) return;
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_outwardDateTime),
+      );
+      if (time != null) {
+        setState(() {
+          _outwardDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+        });
+      }
+    }
+  }
+
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || _lotNumber == null || _setNo == null || _partyName == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please complete all header fields')));
+    if (!_formKey.currentState!.validate() || 
+        _selectedLotName == null || 
+        _selectedDia == null || 
+        _selectedLotNo == null || 
+        _selectedParty == null ||
+        _selectedSets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please complete all fields and select at least one set')));
       return;
     }
 
-    // Logic: Record Out-Time on Save
     setState(() {
       _outTime = DateFormat('hh:mm a').format(DateTime.now());
-      _isSaved = true;
     });
 
-    final db = await _db.database;
-    final outwardId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    await db.insert('outwards', {
-      'id': outwardId,
-      'lot_number': _lotNumber,
-      'set_no': _setNo,
-      'party_name': _partyName,
+    final outwardData = {
       'dc_number': _dcNumber,
+      'outward_date_time': _outwardDateTime.toIso8601String(),
+      'lot_name': _selectedLotName,
+      'lot_number': _selectedLotNo,
+      'dia': _selectedDia,
+      'party_name': _selectedParty,
+      'process': _process,
+      'address': _address,
       'vehicle_no': _vehicleController.text,
       'in_time': _inTime,
       'out_time': _outTime,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+      'items': _selectedSets.map((s) => {
+        'colour': s['colour'],
+        'selected_weight': s['weight'],
+        'set_no': s['set_no']
+      }).toList(),
+    };
 
-    for (var item in _items) {
-      await db.insert('outward_items', {
-        'outward_id': outwardId,
-        'colour': item.colour,
-        'weight': item.selectedWeight,
-      });
+    final success = await _api.saveOutward(outwardData);
+    if (success) {
+      setState(() => _isSaved = true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Outward Registered: $_dcNumber')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save to backend')));
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Outward Registered: $_dcNumber')));
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Lot Outward / Dispatch', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('OUTWARD', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.printer),
-            onPressed: _isSaved ? () => print("Printing DC...") : null,
+            onPressed: _isSaved ? () {} : null,
           )
         ],
       ),
@@ -122,15 +207,13 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeaderCard(),
+              _buildDCSection(),
+              const SizedBox(height: 16),
+              _buildMainForm(),
               const SizedBox(height: 24),
-              if (_items.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.only(left: 4, bottom: 12),
-                  child: Text('Dispatch Item Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-                ..._items.asMap().entries.map((e) => _buildStockItemCard(e.value, e.key)),
-              ],
+              _buildSetSelectionSection(),
+              const SizedBox(height: 24),
+              _buildSelectedSetsGrid(),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
@@ -138,10 +221,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _isSaved ? null : _save,
                   icon: const Icon(LucideIcons.checkCircle),
-                  label: Text(_isSaved ? 'Dispatch Confirmed' : 'Confirm Outward & Save'),
+                  label: Text(_isSaved ? 'Dispatch Confirmed' : 'Save Outward'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isSaved ? Colors.grey : ColorPalette.success,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
@@ -152,7 +236,23 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     );
   }
 
-  Widget _buildHeaderCard() {
+  Widget _buildDCSection() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        decoration: BoxDecoration(
+          color: ColorPalette.primary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Text(
+          'DC NO: $_dcNumber',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: ColorPalette.primary),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainForm() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -162,82 +262,150 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           children: [
             Row(
               children: [
-                Expanded(child: _buildReadOnlyField('DC Number', _dcNumber)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildReadOnlyField('Outward Date', DateFormat('dd-MM-yyyy').format(_outwardDate))),
+                Expanded(child: _buildDropdown('LOT NAME', _lotNames, _selectedLotName, (v) => setState(() => _selectedLotName = v))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: _isSaved ? null : _selectDateTime,
+                    child: _buildReadOnlyField(
+                      'DATE & TIME', 
+                      DateFormat('dd-MM-yyyy hh:mm a').format(_outwardDateTime),
+                      icon: LucideIcons.calendar,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildDropdown('Lot Number', _lotNumbers, (v) => setState(() => _lotNumber = v))),
-                const SizedBox(width: 8),
-                Expanded(child: _buildDropdown('Set No', _setNos, _onSetSelected)),
+                Expanded(child: _buildDropdown('DIA', _dias, _selectedDia, _onDiaChanged)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildDropdown('LOT NO (FIFO)', _lotNos, _selectedLotNo, _onLotNoChanged)),
               ],
             ),
             const SizedBox(height: 16),
-            _buildDropdown('Dispatch to Party', _parties, (v) => setState(() => _partyName = v)),
+            _buildDropdown('PARTY NAME', _parties, _selectedParty, _onPartyChanged),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildReadOnlyField('PROCESS', _process ?? '-')),
+                const SizedBox(width: 12),
+                Expanded(child: _buildReadOnlyField('ADDRESS', _address ?? '-', maxLines: 1)),
+              ],
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(child: TextFormField(
                   controller: _vehicleController,
-                  decoration: const InputDecoration(labelText: 'Vehicle Number', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'VEHICLE NO', border: OutlineInputBorder(), prefixIcon: Icon(LucideIcons.truck, size: 20)),
                 )),
-                const SizedBox(width: 8),
-                Expanded(child: _buildReadOnlyField('In Time', _inTime)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildReadOnlyField('IN TIME', _inTime)),
               ],
             ),
-            if (_outTime != null) ...[
-              const SizedBox(height: 12),
-              _buildReadOnlyField('Out Time (Recorded)', _outTime!),
-            ]
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStockItemCard(OutwardItem item, int index) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: const CircleAvatar(backgroundColor: ColorPalette.primary, child: Icon(LucideIcons.package, size: 18, color: Colors.white)),
-        title: Text(item.colour, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('Available: ${item.availableWeight} Kg'),
-        trailing: SizedBox(
-          width: 100,
-          child: TextFormField(
-            initialValue: item.selectedWeight.toString(),
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.right,
-            decoration: const InputDecoration(suffixText: 'Kg', isDense: true),
-            onChanged: (v) => item.selectedWeight = double.tryParse(v) ?? 0,
-          ),
+  Widget _buildSetSelectionSection() {
+    if (_availableSets.isEmpty) return const SizedBox.shrink();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('SELECT SET NO (BALANCE ONLY)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: _availableSets.map((s) {
+            final isSelected = _selectedSets.any((sel) => sel['set_no'] == s['set_no'] && sel['colour'] == s['colour']);
+            return FilterChip(
+              label: Text('${s['set_no']} (${s['colour']})'),
+              selected: isSelected,
+              onSelected: (selected) => _toggleSetSelection(s, selected),
+              selectedColor: ColorPalette.primary.withOpacity(0.2),
+              checkmarkColor: ColorPalette.primary,
+            );
+          }).toList(),
         ),
+      ],
+    );
+  }
+
+  Widget _buildSelectedSetsGrid() {
+    if (_selectedSets.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('SELECTED SET DETAILS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _selectedSets.length,
+          itemBuilder: (context, index) {
+            final item = _selectedSets[index];
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                title: Text('${item['set_no']} - ${item['colour']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('Bal: ${item['weight']} kg'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      child: TextFormField(
+                        initialValue: item['weight'].toString(),
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.right,
+                        decoration: const InputDecoration(suffixText: 'kg', isDense: true),
+                        onChanged: (v) => item['weight'] = double.tryParse(v) ?? 0,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),
+                      onPressed: () => _removeSet(index),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown(String label, List<String> items, String? value, Function(String?) onChanged) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 13)))).toList(),
+      onChanged: _isSaved ? null : onChanged,
+      isExpanded: true,
+    );
+  }
+
+  Widget _buildReadOnlyField(String label, String value, {IconData? icon, int maxLines = 1}) {
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label, 
+        border: const OutlineInputBorder(), 
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        prefixIcon: icon != null ? Icon(icon, size: 20) : null,
+      ),
+      child: Text(
+        value, 
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), 
+        overflow: TextOverflow.ellipsis,
+        maxLines: maxLines,
       ),
     );
   }
-
-  Widget _buildReadOnlyField(String label, String value) {
-    return InputDecorator(
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.all(10)),
-      child: Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildDropdown(String label, List<String> items, Function(String?) onChanged) {
-    return DropdownButtonFormField<String>(
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
-      onChanged: onChanged,
-    );
-  }
-}
-
-class OutwardItem {
-  final String colour;
-  final double availableWeight;
-  double selectedWeight;
-  OutwardItem({required this.colour, required this.availableWeight, required this.selectedWeight});
 }

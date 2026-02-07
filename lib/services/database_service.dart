@@ -128,6 +128,39 @@ class MockDatabase {
   }
 
   // No-op execute
-  Future<void> execute(String sql) async {}
+  // Mock Transaction/Batch
+  MockBatch batch() {
+    return MockBatch(this);
+  }
+}
+
+class MockBatch {
+  final MockDatabase _db;
+  final List<Function> _operations = [];
+
+  MockBatch(this._db);
+
+  void insert(String table, Map<String, dynamic> values) {
+    _operations.add(() async {
+      await _db.insert(table, values);
+    });
+  }
+  
+  void update(String table, Map<String, dynamic> values, {String? where, List<Object?>? whereArgs}) {
+     // Mock update support if needed
+  }
+  
+  void delete(String table, {String? where, List<Object?>? whereArgs}) {
+     _operations.add(() async {
+        await _db.delete(table, where: where, whereArgs: whereArgs);
+     });
+  }
+
+  Future<void> commit({bool? noResult}) async {
+    for (var op in _operations) {
+      await op();
+    }
+    _operations.clear();
+  }
 }
 
