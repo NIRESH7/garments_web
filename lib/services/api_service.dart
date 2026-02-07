@@ -30,6 +30,21 @@ class ApiService {
     }
   }
 
+  // --- Colours by Lot ---
+  Future<List<String>> getColoursByLot(String lotName) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/items/colours?lot_name=$lotName'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return List<String>.from(data['colours']);
+      }
+      return [];
+    } catch (e) {
+      print('Error fetching colours mainly: $e');
+      return [];
+    }
+  }
+
   // --- Inward ---
   Future<bool> saveInward(Map<String, dynamic> inwardData) async {
     try {
@@ -132,6 +147,20 @@ class ApiService {
     } catch (e) {
       print('Error fetching party details: $e');
       return null;
+    }
+  }
+
+  Future<bool> saveParty(Map<String, dynamic> partyData) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/parties'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(partyData),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error saving party: $e');
+      return false;
     }
   }
 

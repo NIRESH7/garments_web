@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/database_service.dart';
+import '../../services/api_service.dart';
 
 class PartyMasterScreen extends StatefulWidget {
   const PartyMasterScreen({super.key});
@@ -43,11 +44,13 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
     });
   }
 
+  final _api = ApiService(); // Initialize ApiService
+
   Future<void> _save() async {
     if (_formKey.currentState!.validate()) {
       final db = await _db.database;
       
-      // Check for duplicate party name
+      // Check for duplicate party name LOCALLY
       final exists = await db.query(
         'parties',
         where: 'name = ?',
@@ -57,20 +60,25 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
       if (exists.isNotEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Party name already exists')),
+          const SnackBar(content: Text('Party name already exists locally')),
         );
         return;
       }
 
-      await db.insert('parties', {
+      final partyData = {
         'id': const Uuid().v4(),
         'name': _nameController.text,
         'address': _addressController.text,
         'mobile': _mobileController.text,
         'gst': _gstController.text,
         'rate': _rateController.text,
-        'process': _selectedProcess,
-      });
+        'process': _selectedProcess ?? '',
+      };
+
+      await db.insert('parties', partyData);
+      
+      // Sync to Backend
+      bool apiSuccess = await _api.saveParty(partyData);
       
       _nameController.clear();
       _addressController.clear();
@@ -83,9 +91,15 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
       });
       
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Party saved')));
+      
+      String msg = 'Party saved locally';
+      if (apiSuccess) {
+        msg += ' & Synced to Backend';
+      } else {
+        msg += ' (Backend Sync Failed)';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 

@@ -83,10 +83,24 @@ class ItemModel(BaseModel):
 
 class AllocationSetModel(BaseModel):
     inward_id: str
+    lot_number: str # Added for faster lookup
     dia: str
     colour: str
     set_number: str
     weight: float
     pallet_number: str
     rack_name: str
-    created_at: Optional[str] 
+    created_at: Optional[str]
+
+# --- Party Master Models ---
+
+class PartyModel(BaseModel):
+    id: str
+    name: str # Party Name
+    address: Optional[str]
+    mobile: Optional[str]
+    gst: Optional[str]
+    rate: Optional[str] # Keeping as string to match frontend
+    process: str # The default process
+    
+    created_at: datetime = Field(default_factory=datetime.now) 

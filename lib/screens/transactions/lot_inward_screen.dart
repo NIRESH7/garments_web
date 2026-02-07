@@ -91,6 +91,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
   }
 
+  Future<void> _onLotNameChanged(String? val) async {
+    setState(() {
+      _selectedLotName = val;
+      _colours = []; // Clear existing colours
+    });
+    
+    if (val != null) {
+      final fetchedColours = await _api.getColoursByLot(val);
+      setState(() {
+        _colours = fetchedColours;
+      });
+    } else {
+       // Reset or keep empty
+    }
+  }
+
   // --- Calculations (Requirement Strict) ---
   void _updateRowMath(InwardRow row) {
     setState(() {
@@ -223,7 +239,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _buildDropdown("Lot Name", _selectedLotName, _lotNames, (v) => setState(() => _selectedLotName = v))),
+                Expanded(child: _buildDropdown("Lot Name", _selectedLotName, _lotNames, _onLotNameChanged)),
                 const SizedBox(width: 8),
                 Expanded(child: _buildTextField("Lot No", _lotNumberController)),
               ],

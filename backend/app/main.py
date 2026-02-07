@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 from .database import db
-from .models import LotInwardModel, LotOutwardModel
+from .models import LotInwardModel, LotOutwardModel, PartyModel
 
 app = FastAPI(title="Garments ERP API")
 
@@ -34,7 +34,44 @@ def read_root():
 async def create_inward(data: LotInwardModel):
     new_inward = data.dict()
     result = await db.db["lot_inward"].insert_one(new_inward)
-    return {"id": str(result.inserted_id), "message": "Inward Saved Successfully"}
+    inward_id = str(result.inserted_id)
+    
+    # --- Auto Allocation Logic ---
+    # Convert sticker rows into individual allocation records
+    # This allows Lot Outward to find specific sets
+    
+    allocations = []
+    
+    # Determine default Rack/Pallet
+    # LotInwardModel has lists: racks: [r1, r2, r3], pallets: [p1, p2, p3]
+    default_rack = next((r for r in data.racks if r), "Pending")
+    default_pallet = next((p for p in data.pallets if p), "Pending")
+    
+    if data.sticker_dia and data.sticker_rows:
+        for row in data.sticker_rows:
+            colour = row.colour or "Unknown"
+            for idx, weight_str in enumerate(row.set_weights):
+                try:
+                    w = float(weight_str)
+                    if w > 0:
+                        allocations.append({
+                            "inward_id": inward_id,
+                            "lot_number": data.lot_number,
+                            "dia": data.sticker_dia,
+                            "colour": colour,
+                            "set_number": f"Set-{idx + 1}",
+                            "weight": w,
+                            "pallet_number": default_pallet,
+                            "rack_name": default_rack,
+                            "created_at": datetime.now().isoformat()
+                        })
+                except (ValueError, TypeError):
+                    continue
+                    
+    if allocations:
+        await db.db["inward_sets_allocation"].insert_many(allocations)
+        
+    return {"id": inward_id, "message": "Inward & Allocations Saved Successfully"}
 
 @app.get("/api/inward")
 async def get_inwards():
@@ -51,16 +88,44 @@ async def create_outward(data: LotOutwardModel):
     result = await db.db["lot_outward"].insert_one(new_outward)
     return {"id": str(result.inserted_id), "message": "Outward Saved Successfully"}
 
-# 3. Master Data (Mock)
+# 3. Master Data (Dynamic)
 @app.get("/api/master-data")
 async def get_master_data():
+    # Fetch distinct values from relevant collections
+    # optimised to run concurrently if needed, but sequential is fine for now
+    
+    lots = await db.db["lot_inward"].distinct("lot_number")
+    parties = await db.db["parties"].distinct("name")
+    
+    # For now, keeping some static if no better source, or fetch from dropdown collection if exists
+    # The requirement implies these are master data. 
+    # Let's assume there is a 'dropdowns' collection or we fetch distinct from usage.
+    # For a robust system, we should have a 'masters' collection. 
+    # But based on current file structure, we will fetch distinct usage for now 
+    # and keep defaults for things not yet in DB.
+    
+    # Actually, the user has a 'dropdowns' table in SQLite. 
+    # We should probably migrate that or just use distinct values from transactions + some defaults.
+    
+    dias = await db.db["lot_inward"].distinct("grid_rows.dia")
+    if not dias: dias = ["30", "32", "34", "36"] # Fallback
+    
+    colours = await db.db["items"].distinct("colour")
+    if not colours: colours = ["Red", "Blue", "Black", "White", "Green"] # Fallback
+    
+    racks = await db.db["inward_sets_allocation"].distinct("rack_name")
+    if not racks: racks = ["R-1", "R-2", "R-3"]
+    
+    pallets = await db.db["inward_sets_allocation"].distinct("pallet_number")
+    if not pallets: pallets = ["P-1", "P-2", "P-3"]
+
     return {
-        "lots": ["Lot Alpha", "Lot Beta", "Lot Gamma"],
-        "parties": ["Client A", "Client B", "Client C"],
-        "dias": ["30", "32", "34", "36"],
-        "colours": ["Red", "Blue", "Black", "White", "Green"],
-        "racks": ["R-1", "R-2", "R-3"],
-        "pallets": ["P-1", "P-2", "P-3"]
+        "lots": lots,
+        "parties": parties,
+        "dias": dias,
+        "colours": colours,
+        "racks": racks,
+        "pallets": pallets
     }
 
 # 4. Item Master
@@ -71,6 +136,12 @@ async def create_items(items: List[dict]):
     
     result = await db.db["items"].insert_many(items)
     return {"inserted_count": len(result.inserted_ids), "message": "Items Saved Successfully"}
+
+@app.get("/api/items/colours")
+async def get_colours_by_lot(lot_name: str):
+    # Fetch distinct colours for the given lot_name from items collection
+    colours = await db.db["items"].find({"lot_name": lot_name}).distinct("colour")
+    return {"colours": colours if colours else []}
 
 # 5. Inward Allocation
 @app.post("/api/inward/allocation")
@@ -135,16 +206,34 @@ async def get_lots_fifo(dia: str = None):
             seen.add(ln)
     return {"lots": lot_numbers}
 
-# 8. Party Details
+# 8. Party Management
+@app.post("/api/parties")
+async def create_party(party: PartyModel):
+    # Check for existing
+    existing = await db.db["parties"].find_one({"name": party.name})
+    if existing:
+         raise HTTPException(status_code=400, detail="Party name already exists")
+         
+    new_party = party.dict()
+    result = await db.db["parties"].insert_one(new_party)
+    return {"id": str(result.inserted_id), "message": "Party Saved Successfully"}
+
 @app.get("/api/parties/{name}")
 async def get_party_details(name: str):
-    # This is mock data, ideally fetch from a 'parties' collection
-    # The requirement says Process & Address automatic according to party name
-    return {
-        "name": name,
-        "process": "Dyeing & Finishing",
-        "address": "123 Textile Park, Erode, Tamil Nadu"
-    }
+    party = await db.db["parties"].find_one({"name": name})
+    if party:
+        return {
+            "name": party.get("name"),
+            "process": party.get("process"),
+            "address": party.get("address")
+        }
+    else:
+        # Fallback for now if not found (or return 404)
+        return {
+            "name": name,
+            "process": "", # Empty if not found
+            "address": ""
+        }
 
 # 9. Balanced Sets
 @app.get("/api/lots/{lot_number}/dias/{dia}/sets/balance")
@@ -242,20 +331,56 @@ async def generate_dc_print(data: dict):
     elements.append(Spacer(1, 0.3*inch))
     
     # Weights Table
+    # Requirement: Group by Colour, show multiple weights in columns (Weight 1, Weight 2)
+    # Header: S.NO, COLOUR NAME, WEIGHT 1, WEIGHT 2, TOTAL WEIGHT
     table_data = [["S.NO", "COLOUR NAME", "WEIGHT 1", "WEIGHT 2", "TOTAL WEIGHT"]]
     
     items = data.get("items", [])
-    for idx, item in enumerate(items, 1):
-        w1 = item.get("weight1", 0)
-        w2 = item.get("weight2", 0)
-        total = w1 + w2
-        table_data.append([
-            str(idx),
-            item.get("colour", ""),
-            str(w1),
-            str(w2),
-            str(total)
-        ])
+    grouped_items = {} 
+    
+    # Group by colour
+    for item in items:
+        colour = item.get("colour", "Unknown")
+        weight = item.get("selected_weight", 0)
+        if colour not in grouped_items:
+            grouped_items[colour] = []
+        grouped_items[colour].append(weight)
+        
+    idx = 1
+    for colour, weights in grouped_items.items():
+        # logic to handle more than 2 weights? Packet them in chunks of 2?
+        # For now, let's just take first two or list them. Requirement implies 2 columns.
+        # If > 2 weights, we might need multiple rows or comma separated. 
+        # Simpler approach: List up to 2 specific weights, sum the rest? 
+        # Or just fill W1, W2. If 3rd exists, add to W2 or ignore?
+        # Better: Create multiple rows if > 2 weights? 
+        # Let's just fill W1 and W2. If there are more, we add a new row for same colour?
+        # Actually, let's just show first 2. If list has 1, W2 is empty.
+        
+        # Iterate in chunks of 2 to support any number of weights
+        for i in range(0, len(weights), 2):
+            chunk = weights[i:i+2]
+            w1 = chunk[0]
+            w2 = chunk[1] if len(chunk) > 1 else 0
+            
+            # If it's a continuation row (i > 0), maybe don't show S.No/Colour again? 
+            # But straightforward is fine.
+            
+            total_chunk = sum(chunk)
+            
+            # If it's the first chunk, show Colour. Else empty string for clean look?
+            disp_colour = colour if i == 0 else ""
+            disp_sno = str(idx) if i == 0 else ""
+            
+            table_data.append([
+                disp_sno,
+                disp_colour,
+                str(w1),
+                str(w2) if w2 != 0 else "", # Empty if 0
+                str(total_chunk)
+            ])
+            
+        idx += 1
     
     weights_table = Table(table_data, colWidths=[0.7*inch, 2*inch, 1.5*inch, 1.5*inch, 1.5*inch])
     weights_table.setStyle(TableStyle([
