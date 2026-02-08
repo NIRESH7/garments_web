@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 
 class OverviewReportScreen extends StatefulWidget {
   const OverviewReportScreen({super.key});
@@ -11,8 +11,8 @@ class OverviewReportScreen extends StatefulWidget {
 }
 
 class _OverviewReportScreenState extends State<OverviewReportScreen> {
-  final _db = DatabaseService();
-  List<Map<String, dynamic>> _data = [];
+  final _apiService = MobileApiService();
+  List<dynamic> _data = [];
   bool _isLoading = true;
 
   @override
@@ -22,33 +22,30 @@ class _OverviewReportScreenState extends State<OverviewReportScreen> {
   }
 
   Future<void> _fetchData() async {
-    final db = await _db.database;
-    final res = await db.rawQuery('''
-      SELECT 
-        l.lot_number,
-        l.party_name,
-        SUM(ir.roll) as total_rolls,
-        SUM(ir.weight) as total_weight
-      FROM lots l
-      LEFT JOIN inwards i ON l.lot_number = i.lot_number
-      LEFT JOIN inward_rows ir ON i.id = ir.inward_id
-      GROUP BY l.lot_number
-    ''');
-
-    setState(() {
-      _data = res;
-      _isLoading = false;
-    });
+    try {
+      final res = await _apiService.getOverviewReport();
+      setState(() {
+        _data = res;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load overview report')),
+        );
+      }
+    }
   }
 
   double get _grandTotalWeight => _data.fold(
     0.0,
-    (sum, item) => sum + ((item['total_weight'] ?? 0) as num).toDouble(),
+    (sum, item) => sum + ((item['weight'] ?? 0) as num).toDouble(),
   );
-  int get _grandTotalRolls => _data.fold(
-    0,
-    (sum, item) => sum + ((item['total_rolls'] ?? 0) as num).toInt(),
-  );
+  int get _grandTotalRolls =>
+      _data.fold(0, (sum, item) => sum + ((item['rolls'] ?? 0) as num).toInt());
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +93,7 @@ class _OverviewReportScreenState extends State<OverviewReportScreen> {
     );
   }
 
-  Widget _buildLotCard(Map<String, dynamic> item) {
+  Widget _buildLotCard(dynamic item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(20),
@@ -133,7 +130,7 @@ class _OverviewReportScreenState extends State<OverviewReportScreen> {
                   ),
                 ),
                 Text(
-                  item['party_name'] ?? 'No Party',
+                  item['lot_name'] ?? 'No Party',
                   style: const TextStyle(
                     fontSize: 12,
                     color: ColorPalette.textSecondary,
@@ -146,11 +143,11 @@ class _OverviewReportScreenState extends State<OverviewReportScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${item['total_rolls'] ?? 0} Rolls',
+                '${item['rolls'] ?? 0} Rolls',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               Text(
-                '${((item['total_weight'] ?? 0) as num).toStringAsFixed(2)} Kg',
+                '${((item['weight'] ?? 0) as num).toStringAsFixed(2)} Kg',
                 style: const TextStyle(
                   color: ColorPalette.success,
                   fontWeight: FontWeight.bold,

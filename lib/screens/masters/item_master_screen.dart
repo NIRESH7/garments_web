@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
-import '../../services/database_service.dart';
-import '../../services/api_service.dart'; // Import ApiService
+import '../../services/mobile_api_service.dart';
 
 class ItemMasterScreen extends StatefulWidget {
   const ItemMasterScreen({super.key});
@@ -11,11 +9,10 @@ class ItemMasterScreen extends StatefulWidget {
 }
 
 class _ItemMasterScreenState extends State<ItemMasterScreen> {
-  final _db = DatabaseService();
-  final _api = ApiService(); // Initialize ApiService
+  final _api = MobileApiService();
   final _formKey = GlobalKey<FormState>();
 
-  String? _selectedGroupName; // Was Lot Name
+  String? _selectedGroupName;
   final List<String> _selectedItemNames = [];
   String? _selectedGsm;
   final List<String> _selectedColours = [];
@@ -24,6 +21,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   List<String> _itemNames = [];
   List<String> _gsmValues = [];
   List<String> _colours = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -32,52 +30,30 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   }
 
   Future<void> _loadDropdowns() async {
-    final db = await _db.database;
-    
-    // Load Group Names (formerly Lot Name)
-    final groups = await db.query(
-      'dropdowns',
-      where: 'category = ?',
-      whereArgs: ['Lot Name'], // Keeping category query 'Lot Name' if table data hasn't changed
-      orderBy: 'value ASC',
-    );
-    
-    // Load Item Names
-    final items = await db.query(
-      'dropdowns',
-      where: 'category = ?',
-      whereArgs: ['Item Name'],
-      orderBy: 'value ASC',
-    );
-
-    // Load GSMs
-    final gsms = await db.query(
-      'dropdowns',
-      where: 'category = ?',
-      whereArgs: ['GSM'],
-      orderBy: 'value ASC',
-    );
-
-    // Load Colours
-    final colours = await db.query(
-      'dropdowns',
-      where: 'category = ?',
-      whereArgs: ['Colour'],
-      orderBy: 'value ASC',
-    );
+    final categories = await _api.getCategories();
 
     setState(() {
-      _groupNames = groups.map((m) => m['value'] as String).toList();
-      _itemNames = items.map((m) => m['value'] as String).toList();
-      _gsmValues = gsms.map((m) => m['value'] as String).toList();
-      _colours = colours.map((m) => m['value'] as String).toList();
+      _groupNames = _getValues(categories, 'Lot Name');
+      _itemNames = _getValues(categories, 'Item Name');
+      _gsmValues = _getValues(categories, 'GSM');
+      _colours = _getValues(categories, 'Colour');
+      _isLoading = false;
     });
+  }
+
+  List<String> _getValues(List<dynamic> categories, String name) {
+    try {
+      final cat = categories.firstWhere((c) => c['name'] == name);
+      return List<String>.from(cat['values'] ?? []);
+    } catch (e) {
+      return [];
+    }
   }
 
   Future<void> _save() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      
+
       if (_selectedItemNames.isEmpty) {
         _showError('Please select at least one Item Name');
         return;
@@ -87,129 +63,114 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         return;
       }
 
-      final db = await _db.database;
-      final batch = db.batch();
-      
-      List<Map<String, dynamic>> itemsToSave = [];
+      final data = {
+        'groupName': _selectedGroupName,
+        'itemNames': _selectedItemNames,
+        'gsm': _selectedGsm,
+        'colours': _selectedColours,
+      };
 
-      // Cartesian product: Group -> Item -> Colour
-      for (var item in _selectedItemNames) {
-        for (var color in _selectedColours) {
-           var itemData = {
-            'id': const Uuid().v4(),
-            'lot_name': _selectedGroupName, 
-            'item_name': item,
-            'gsm': _selectedGsm,
-            'colour': color,
-            'item_group': '', 
-            'size': '',
-            'set_val': '',
-          };
-          
-          batch.insert('items', itemData);
-          itemsToSave.add(itemData);
-        }
-      }
+      final success = await _api.createItemGroup(data);
 
-      await batch.commit(noResult: true);
-      
-      // Save to Backend
-      bool apiSuccess = await _api.saveItems(itemsToSave);
-      
       if (!mounted) return;
-      
-      String msg = 'Saved ${_selectedItemNames.length * _selectedColours.length} item combinations.';
-      if (apiSuccess) {
-        msg += ' (Synced to Backend)';
-      } else {
-        msg += ' (Local Only - Backend Failed)';
-      }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
-      
-      setState(() {
-        _selectedGroupName = null;
-        _selectedItemNames.clear();
-        _selectedGsm = null;
-        _selectedColours.clear();
-      });
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item Group saved to Backend')),
+        );
+        setState(() {
+          _selectedGroupName = null;
+          _selectedItemNames.clear();
+          _selectedGsm = null;
+          _selectedColours.clear();
+        });
+      } else {
+        _showError('Failed to save Item Group');
+      }
     }
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Item Group Master')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-               DropdownButtonFormField<String>(
-                value: _selectedGroupName,
-                decoration: const InputDecoration(labelText: 'Group Name'), // Renamed from Lot Name
-                items: _groupNames
-                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedGroupName = val),
-                 validator: (val) => val == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: _selectedGroupName,
+                      decoration: const InputDecoration(
+                        labelText: 'Group Name',
+                      ),
+                      items: _groupNames
+                          .map(
+                            (i) => DropdownMenuItem(value: i, child: Text(i)),
+                          )
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => _selectedGroupName = val),
+                      validator: (val) => val == null ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
 
-              // Item Names Multi Select
-              _buildMultiSelectField(
-                label: 'Item Names',
-                items: _itemNames,
-                selectedItems: _selectedItemNames,
-                onSelectionChanged: (list) => setState(() {
-                  _selectedItemNames.clear();
-                  _selectedItemNames.addAll(list);
-                }),
-              ),
-              const SizedBox(height: 16),
+                    _buildMultiSelectField(
+                      label: 'Item Names',
+                      items: _itemNames,
+                      selectedItems: _selectedItemNames,
+                      onSelectionChanged: (list) => setState(() {
+                        _selectedItemNames.clear();
+                        _selectedItemNames.addAll(list);
+                      }),
+                    ),
+                    const SizedBox(height: 16),
 
-               DropdownButtonFormField<String>(
-                value: _selectedGsm,
-                decoration: const InputDecoration(labelText: 'GSM'),
-                items: _gsmValues
-                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedGsm = val),
-                 validator: (val) => val == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _selectedGsm,
+                      decoration: const InputDecoration(labelText: 'GSM'),
+                      items: _gsmValues
+                          .map(
+                            (i) => DropdownMenuItem(value: i, child: Text(i)),
+                          )
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedGsm = val),
+                      validator: (val) => val == null ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
 
-              // Colours Multi Select
-              _buildMultiSelectField(
-                label: 'Colours',
-                items: _colours,
-                selectedItems: _selectedColours,
-                onSelectionChanged: (list) => setState(() {
-                  _selectedColours.clear();
-                  _selectedColours.addAll(list);
-                }),
-              ),
-              
-              const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _save, 
-                  child: const Text('Save Group')
+                    _buildMultiSelectField(
+                      label: 'Colours',
+                      items: _colours,
+                      selectedItems: _selectedColours,
+                      onSelectionChanged: (list) => setState(() {
+                        _selectedColours.clear();
+                        _selectedColours.addAll(list);
+                      }),
+                    ),
+
+                    const SizedBox(height: 48),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _save,
+                        child: const Text('Save Group'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
@@ -223,7 +184,12 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
-          onTap: () => _showMultiSelectDialog(label, items, selectedItems, onSelectionChanged),
+          onTap: () => _showMultiSelectDialog(
+            label,
+            items,
+            selectedItems,
+            onSelectionChanged,
+          ),
           child: InputDecorator(
             decoration: InputDecoration(
               labelText: label,
@@ -235,13 +201,18 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                 : Wrap(
                     spacing: 6,
                     runSpacing: 6,
-                    children: selectedItems.map((e) => Chip(
-                      label: Text(e),
-                      onDeleted: () {
-                        final newList = List<String>.from(selectedItems)..remove(e);
-                        onSelectionChanged(newList);
-                      },
-                    )).toList(),
+                    children: selectedItems
+                        .map(
+                          (e) => Chip(
+                            label: Text(e),
+                            onDeleted: () {
+                              final newList = List<String>.from(selectedItems)
+                                ..remove(e);
+                              onSelectionChanged(newList);
+                            },
+                          ),
+                        )
+                        .toList(),
                   ),
           ),
         ),
@@ -257,16 +228,19 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   ) {
     final tempSelected = List<String>.from(selectedItems);
     String searchQuery = '';
-    
+
     showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
             final filteredItems = items
-                .where((item) => item.toLowerCase().contains(searchQuery.toLowerCase()))
+                .where(
+                  (item) =>
+                      item.toLowerCase().contains(searchQuery.toLowerCase()),
+                )
                 .toList();
-            
+
             return AlertDialog(
               title: Text('Select $label'),
               content: SizedBox(
@@ -279,7 +253,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                         hintText: 'Search...',
                         prefixIcon: Icon(Icons.search),
                       ),
-                      onChanged: (val) => setState(() => searchQuery = val), // Use internal SetState
+                      onChanged: (val) => setState(() => searchQuery = val),
                     ),
                     const SizedBox(height: 10),
                     Flexible(

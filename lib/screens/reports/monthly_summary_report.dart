@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 
 class MonthlySummaryReportScreen extends StatefulWidget {
   const MonthlySummaryReportScreen({super.key});
@@ -14,10 +13,10 @@ class MonthlySummaryReportScreen extends StatefulWidget {
 
 class _MonthlySummaryReportScreenState
     extends State<MonthlySummaryReportScreen> {
-  final _db = DatabaseService();
-  Map<String, dynamic>? _summary;
+  final _apiService = MobileApiService();
+  List<dynamic> _reports = [];
   bool _isLoading = true;
-  String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -26,46 +25,22 @@ class _MonthlySummaryReportScreenState
   }
 
   Future<void> _fetchSummary() async {
-    final db = await _db.database;
-    // Calculate total inward for the month
-    final inwardRes = await db.rawQuery('''
-      SELECT SUM(ir.roll) as rolls, SUM(ir.weight) as weight 
-      FROM inwards i JOIN inward_rows ir ON i.id = ir.inward_id 
-      WHERE i.created_at LIKE '$_selectedMonth%'
-    ''');
-
-    // Calculate total outward for the month
-    final outwardRes = await db.rawQuery('''
-      SELECT COUNT(*) as rolls, SUM(oi.weight) as weight 
-      FROM outwards o JOIN outward_items oi ON o.id = oi.outward_id 
-      WHERE o.created_at LIKE '$_selectedMonth%'
-    ''');
-
-    // For mock/simplification, opening stock as 0 or sum of previous months
-    final openingRes = await db.rawQuery('''
-      SELECT SUM(ir.roll) as in_rolls, SUM(ir.weight) as in_weight 
-      FROM inwards i JOIN inward_rows ir ON i.id = ir.inward_id 
-      WHERE i.created_at < '$_selectedMonth-01'
-    ''');
-    final openingOutRes = await db.rawQuery('''
-      SELECT COUNT(*) as out_rolls, SUM(oi.weight) as out_weight 
-      FROM outwards o JOIN outward_items oi ON o.id = oi.outward_id 
-      WHERE o.created_at < '$_selectedMonth-01'
-    ''');
-
-    setState(() {
-      _summary = {
-        'inward': inwardRes.first,
-        'outward': outwardRes.first,
-        'opening_rolls':
-            ((openingRes.first['in_rolls'] ?? 0) as num).toInt() -
-            ((openingOutRes.first['out_rolls'] ?? 0) as num).toInt(),
-        'opening_weight':
-            ((openingRes.first['in_weight'] ?? 0) as num).toDouble() -
-            ((openingOutRes.first['out_weight'] ?? 0) as num).toDouble(),
-      };
-      _isLoading = false;
-    });
+    try {
+      final res = await _apiService.getMonthlyReport();
+      setState(() {
+        _reports = res;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to load summary')));
+      }
+    }
   }
 
   @override
@@ -74,6 +49,8 @@ class _MonthlySummaryReportScreenState
       appBar: AppBar(title: const Text('Monthly Summary')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _reports.isEmpty
+          ? const Center(child: Text('No report data available'))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -82,33 +59,33 @@ class _MonthlySummaryReportScreenState
                   const SizedBox(height: 32),
                   _buildSummarySection(
                     'Opening Stock',
-                    _summary!['opening_rolls'],
-                    _summary!['opening_weight'],
+                    _reports[_selectedIndex]['opening_balance_rolls'] ?? 0,
+                    _reports[_selectedIndex]['opening_balance'] ?? 0,
                     Colors.blue,
                   ),
                   const SizedBox(height: 16),
                   _buildSummarySection(
                     'Total Inward',
-                    _summary!['inward']['rolls'],
-                    _summary!['inward']['weight'],
+                    _reports[_selectedIndex]['inward_rolls'] ?? 0,
+                    _reports[_selectedIndex]['inward_weight'] ?? 0,
                     ColorPalette.success,
                   ),
                   const SizedBox(height: 16),
                   _buildSummarySection(
                     'Total Outward',
-                    _summary!['outward']['rolls'],
-                    _summary!['outward']['weight'],
+                    _reports[_selectedIndex]['outward_rolls'] ?? 0,
+                    _reports[_selectedIndex]['outward_weight'] ?? 0,
                     ColorPalette.error,
                   ),
                   const Divider(height: 48),
                   _buildSummarySection(
                     'Closing Stock',
-                    (_summary!['opening_rolls'] +
-                            (_summary!['inward']['rolls'] ?? 0)) -
-                        (_summary!['outward']['rolls'] ?? 0),
-                    (_summary!['opening_weight'] +
-                            (_summary!['inward']['weight'] ?? 0)) -
-                        (_summary!['outward']['weight'] ?? 0),
+                    (_reports[_selectedIndex]['opening_balance_rolls'] ?? 0) +
+                        (_reports[_selectedIndex]['inward_rolls'] ?? 0) -
+                        (_reports[_selectedIndex]['outward_rolls'] ?? 0),
+                    (_reports[_selectedIndex]['opening_balance'] ?? 0.0) +
+                        (_reports[_selectedIndex]['inward_weight'] ?? 0.0) -
+                        (_reports[_selectedIndex]['outward_weight'] ?? 0.0),
                     ColorPalette.primary,
                     isBold: true,
                   ),
@@ -126,26 +103,34 @@ class _MonthlySummaryReportScreenState
         borderRadius: BorderRadius.circular(16),
         boxShadow: ColorPalette.softShadow,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            LucideIcons.calendar,
-            size: 18,
-            color: ColorPalette.primary,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _selectedMonth,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(width: 8),
-          const Icon(
-            LucideIcons.chevronDown,
-            size: 16,
-            color: ColorPalette.textMuted,
-          ),
-        ],
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: _selectedIndex,
+          onChanged: (val) => setState(() => _selectedIndex = val!),
+          items: List.generate(_reports.length, (index) {
+            return DropdownMenuItem(
+              value: index,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    LucideIcons.calendar,
+                    size: 18,
+                    color: ColorPalette.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _reports[index]['month'],
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ),
       ),
     );
   }

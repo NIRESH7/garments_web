@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 import 'item_assignment_screen.dart';
 
 class ItemAssignmentListScreen extends StatefulWidget {
@@ -13,8 +13,8 @@ class ItemAssignmentListScreen extends StatefulWidget {
 }
 
 class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
-  final _db = DatabaseService();
-  List<Map<String, dynamic>> _assignments = [];
+  final _api = MobileApiService();
+  List<dynamic> _assignments = [];
   bool _isLoading = true;
 
   @override
@@ -25,8 +25,7 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
 
   Future<void> _fetchAssignments() async {
     setState(() => _isLoading = true);
-    final db = await _db.database;
-    final List<Map<String, dynamic>> res = await db.query('item_assignments');
+    final res = await _api.getAssignments();
     setState(() {
       _assignments = res;
       _isLoading = false;
@@ -118,7 +117,7 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                item['item_name'] ?? 'N/A',
+                item['itemName'] ?? 'N/A',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -164,7 +163,7 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
                 ),
               ),
               Text(
-                '${item['dozen_weight']} Kg',
+                '${item['dozenWeight']} Kg',
                 style: const TextStyle(
                   color: ColorPalette.success,
                   fontWeight: FontWeight.bold,

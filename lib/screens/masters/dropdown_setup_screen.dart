@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 
 class DropdownSetupScreen extends StatefulWidget {
@@ -11,12 +10,12 @@ class DropdownSetupScreen extends StatefulWidget {
 }
 
 class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
-  final _db = DatabaseService();
+  final _api = MobileApiService();
   final _valueController = TextEditingController();
-  
-  String? _selectedCategory;
-  List<Map<String, dynamic>> _categories = [];
-  List<Map<String, dynamic>> _values = [];
+
+  String? _selectedCategoryId;
+  List<dynamic> _categories = [];
+  List<dynamic> _values = [];
   bool _isLoading = false;
 
   @override
@@ -26,58 +25,56 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   }
 
   Future<void> _loadCategories() async {
-    final db = await _db.database;
-    final res = await db.query('categories', orderBy: 'name ASC');
+    final res = await _api.getCategories();
     setState(() {
       _categories = res;
-      // If categories exist but none selected, select first
-      if (_categories.isNotEmpty && _selectedCategory == null) {
-        _selectedCategory = _categories.first['name'] as String;
+      if (_categories.isNotEmpty && _selectedCategoryId == null) {
+        _selectedCategoryId = _categories.first['_id'];
         _loadValues();
       }
     });
   }
 
   Future<void> _loadValues() async {
-    if (_selectedCategory == null) return;
+    if (_selectedCategoryId == null) return;
     setState(() => _isLoading = true);
-    final db = await _db.database;
-    final res = await db.query(
-      'dropdowns',
-      where: 'category = ?',
-      whereArgs: [_selectedCategory],
-      orderBy: 'value ASC',
+    final category = _categories.firstWhere(
+      (c) => c['_id'] == _selectedCategoryId,
     );
     setState(() {
-      _values = res;
+      _values = category['values'] ?? [];
       _isLoading = false;
     });
   }
 
   Future<void> _add() async {
-    if (_valueController.text.isEmpty || _selectedCategory == null) return;
+    if (_valueController.text.isEmpty || _selectedCategoryId == null) return;
     try {
-      final db = await _db.database;
-      await db.insert('dropdowns', {
-        'id': const Uuid().v4(),
-        'category': _selectedCategory,
-        'value': _valueController.text,
-      });
-      _valueController.clear();
-      await _loadValues();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Added successfully')),
+      final success = await _api.addCategoryValue(
+        _selectedCategoryId!,
+        _valueController.text,
       );
+      if (success) {
+        _valueController.clear();
+        await _loadCategories(); // Reload all to get updated values
+        await _loadValues();
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Added successfully')));
+      }
     } catch (e) {
       debugPrint(e.toString());
     }
   }
 
-  Future<void> _delete(String id) async {
-    final db = await _db.database;
-    await db.delete('dropdowns', where: 'id = ?', whereArgs: [id]);
-    await _loadValues();
+  Future<void> _delete(String value) async {
+    if (_selectedCategoryId == null) return;
+    final success = await _api.deleteCategoryValue(_selectedCategoryId!, value);
+    if (success) {
+      await _loadCategories();
+      await _loadValues();
+    }
   }
 
   @override
@@ -99,20 +96,20 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: _selectedCategory,
+                    value: _selectedCategoryId,
                     decoration: const InputDecoration(
                       labelText: 'Select Category',
                       hintText: 'Choose a category to manage',
                     ),
                     items: _categories.map((c) {
                       return DropdownMenuItem<String>(
-                        value: c['name'] as String,
+                        value: c['_id'] as String,
                         child: Text(c['name'] as String),
                       );
                     }).toList(),
                     onChanged: (val) {
                       setState(() {
-                        _selectedCategory = val;
+                        _selectedCategoryId = val;
                       });
                       _loadValues();
                     },
@@ -127,7 +124,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: _selectedCategory == null ? null : _add,
+                    onPressed: _selectedCategoryId == null ? null : _add,
                     child: const Text('Add Value'),
                   ),
                 ],
@@ -139,26 +136,26 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _values.isEmpty
-                    ? Center(
-                        child: Text(
-                          _selectedCategory == null
-                              ? 'Select a category first'
-                              : 'No values found for $_selectedCategory',
+                ? Center(
+                    child: Text(
+                      _selectedCategoryId == null
+                          ? 'Select a category first'
+                          : 'No values found',
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _values.length,
+                    itemBuilder: (context, index) {
+                      final value = _values[index];
+                      return ListTile(
+                        title: Text(value as String),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _delete(value),
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: _values.length,
-                        itemBuilder: (context, index) {
-                          final item = _values[index];
-                          return ListTile(
-                            title: Text(item['value'] as String),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _delete(item['id']),
-                            ),
-                          );
-                        },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

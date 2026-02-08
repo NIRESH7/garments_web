@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 
 class CategoriesMasterScreen extends StatefulWidget {
@@ -11,9 +10,9 @@ class CategoriesMasterScreen extends StatefulWidget {
 }
 
 class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
-  final _db = DatabaseService();
+  final _api = MobileApiService();
   final _controller = TextEditingController();
-  List<Map<String, dynamic>> _list = [];
+  List<dynamic> _list = [];
   bool _isLoading = true;
 
   @override
@@ -24,8 +23,7 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
-    final db = await _db.database;
-    final res = await db.query('categories', orderBy: 'name ASC');
+    final res = await _api.getCategories();
     setState(() {
       _list = res;
       _isLoading = false;
@@ -35,40 +33,34 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
   Future<void> _add() async {
     if (_controller.text.isEmpty) return;
     try {
-      final db = await _db.database;
-      // Check duplicate
-      final exists = await db.query(
-        'categories', 
-        where: 'name = ?',
-        whereArgs: [_controller.text],
-      );
-      if (exists.isNotEmpty) {
+      final success = await _api.createCategory(_controller.text);
+      if (success) {
+        _controller.clear();
+        await _load();
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Category Created')));
+      } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Category already exists')),
+          const SnackBar(content: Text('Failed to create category')),
         );
-        return;
       }
-
-      await db.insert('categories', {
-        'id': const Uuid().v4(),
-        'name': _controller.text,
-      });
-      _controller.clear();
-      await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Category Created')),
-      );
     } catch (e) {
       debugPrint(e.toString());
     }
   }
 
   Future<void> _delete(String id) async {
-    final db = await _db.database;
-    await db.delete('categories', where: 'id = ?', whereArgs: [id]);
-    await _load();
+    final success = await _api.deleteCategory(id);
+    if (success) {
+      await _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete category')),
+      );
+    }
   }
 
   @override
@@ -112,21 +104,21 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _list.isEmpty
-                    ? const Center(child: Text('No categories found.'))
-                    : ListView.builder(
-                        itemCount: _list.length,
-                        itemBuilder: (context, index) {
-                          final item = _list[index];
-                          return ListTile(
-                            leading: const Icon(Icons.category, color: Colors.blue),
-                            title: Text(item['name']),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _delete(item['id']),
-                            ),
-                          );
-                        },
-                      ),
+                ? const Center(child: Text('No categories found.'))
+                : ListView.builder(
+                    itemCount: _list.length,
+                    itemBuilder: (context, index) {
+                      final item = _list[index];
+                      return ListTile(
+                        leading: const Icon(Icons.category, color: Colors.blue),
+                        title: Text(item['name']),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _delete(item['_id']),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

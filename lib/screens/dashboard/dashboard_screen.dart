@@ -3,7 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 import '../masters/masters_dashboard.dart';
 import '../transactions/lot_inward_screen.dart';
 import '../transactions/lot_outward_screen.dart';
@@ -180,14 +180,16 @@ class _DynamicDataHomeTab extends StatefulWidget {
 }
 
 class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
-  final _db = DatabaseService();
-  List<Map<String, dynamic>> _recentInwards = [];
+  final _api = MobileApiService();
+  List<dynamic> _recentInwards = [];
   Map<String, dynamic> _stats = {
     'total_lots': 0,
-    'total_inward_weight': 0.0,
-    'total_outward_weight': 0.0,
+    'total_inward_weight': '0.00',
+    'total_outward_weight': '0.00',
     'total_assignments': 0,
   };
+  String _userName = 'User';
+  String _unreadCount = '0';
   bool _isLoading = true;
 
   @override
@@ -197,38 +199,20 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
   }
 
   Future<void> _fetchStats() async {
-    final db = await _db.database;
-
-    final lotsRes = await db.rawQuery('SELECT COUNT(*) as count FROM lots');
-    final inwardRes = await db.rawQuery(
-      'SELECT SUM(weight) as total FROM inward_rows',
-    );
-    final outwardRes = await db.rawQuery(
-      'SELECT SUM(weight) as total FROM outward_items',
-    );
-    final assignRes = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM item_assignments',
-    );
-
-    final recentIn = await db.rawQuery('''
-      SELECT i.lot_number, i.from_party, i.created_at, SUM(r.weight) as total_weight 
-      FROM inwards i
-      JOIN inward_rows r ON i.id = r.inward_id
-      GROUP BY i.id
-      ORDER BY i.created_at DESC
-      LIMIT 3
-    ''');
-
-    setState(() {
-      _stats = {
-        'total_lots': lotsRes.first['count'] ?? 0,
-        'total_inward_weight': inwardRes.first['total'] ?? 0.0,
-        'total_outward_weight': outwardRes.first['total'] ?? 0.0,
-        'total_assignments': assignRes.first['count'] ?? 0,
-      };
-      _recentInwards = recentIn;
-      _isLoading = false;
-    });
+    try {
+      final res = await _api.getHomeDashboard();
+      setState(() {
+        _stats = res['metrics'] ?? _stats;
+        _recentInwards = res['recentInwards'] ?? [];
+        _userName = res['user']?['name'] ?? 'User';
+        _unreadCount = (res['unreadNotificationsCount'] ?? 0).toString();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -302,9 +286,12 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const Text(
-                  'Hi, Sudha',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  'Hi, $_userName',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -326,9 +313,9 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: ColorPalette.softShadow,
                 ),
-                child: const Badge(
-                  label: Text('1'),
-                  child: Icon(
+                child: Badge(
+                  label: Text(_unreadCount),
+                  child: const Icon(
                     LucideIcons.bell,
                     size: 22,
                     color: ColorPalette.textSecondary,

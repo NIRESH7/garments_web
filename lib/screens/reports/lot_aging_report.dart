@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/database_service.dart';
+import '../../services/mobile_api_service.dart';
 
 class LotAgingReportScreen extends StatefulWidget {
   const LotAgingReportScreen({super.key});
@@ -11,8 +11,8 @@ class LotAgingReportScreen extends StatefulWidget {
 }
 
 class _LotAgingReportScreenState extends State<LotAgingReportScreen> {
-  final _db = DatabaseService();
-  List<Map<String, dynamic>> _data = [];
+  final _apiService = MobileApiService();
+  List<dynamic> _data = [];
   bool _isLoading = true;
 
   @override
@@ -22,26 +22,22 @@ class _LotAgingReportScreenState extends State<LotAgingReportScreen> {
   }
 
   Future<void> _fetchData() async {
-    final db = await _db.database;
-    final res = await db.rawQuery('''
-      SELECT 
-        l.lot_number,
-        l.party_name as lot_name,
-        i.created_at as inward_date,
-        ir.dia,
-        SUM(ir.roll) as rolls,
-        SUM(ir.weight) as weight
-      FROM lots l
-      JOIN inwards i ON l.lot_number = i.lot_number
-      JOIN inward_rows ir ON i.id = ir.inward_id
-      GROUP BY l.lot_number, ir.dia
-      ORDER BY i.created_at ASC
-    ''');
-
-    setState(() {
-      _data = res;
-      _isLoading = false;
-    });
+    try {
+      final res = await _apiService.getLotAgingReport();
+      setState(() {
+        _data = res;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load aging report')),
+        );
+      }
+    }
   }
 
   int _calculateAging(String? dateStr) {
@@ -49,7 +45,7 @@ class _LotAgingReportScreenState extends State<LotAgingReportScreen> {
     try {
       final date = DateTime.parse(dateStr);
       return DateTime.now().difference(date).inDays;
-    } catch (e) {
+    } catch (_) {
       return 0;
     }
   }
@@ -66,7 +62,7 @@ class _LotAgingReportScreenState extends State<LotAgingReportScreen> {
               itemBuilder: (context, index) {
                 final item = _data[index];
                 final aging = _calculateAging(item['inward_date']);
-                final isOld = aging > 30; // Highlight if older than 30 days
+                final isOld = aging > 30;
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -117,17 +113,14 @@ class _LotAgingReportScreenState extends State<LotAgingReportScreen> {
                       _buildDataRow(
                         LucideIcons.calendar,
                         'Inward Date',
-                        item['inward_date']?.split('T')[0] ?? 'N/A',
+                        item['inward_date'],
                       ),
-                      _buildDataRow(
-                        LucideIcons.circle,
-                        'Dia',
-                        item['dia'] ?? 'N/A',
-                      ),
+                      _buildDataRow(LucideIcons.circle, 'Dia', item['dia']),
                       _buildDataRow(
                         LucideIcons.package,
                         'Rolls / Weight',
-                        '${item['rolls']} Rolls / ${((item['weight'] ?? 0) as num).toStringAsFixed(2)} Kg',
+                        '${item['rolls']} Rolls / '
+                            '${(item['weight'] as num).toStringAsFixed(2)} Kg',
                       ),
                     ],
                   ),

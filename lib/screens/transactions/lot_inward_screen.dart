@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
-import '../../services/api_service.dart';
-
-// Implementation of Niresh (1).docx Requirements
-// Integrated with FastAPI Backend.
+import '../../services/mobile_api_service.dart';
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -14,10 +11,9 @@ class LotInwardScreen extends StatefulWidget {
 }
 
 class _LotInwardScreenState extends State<LotInwardScreen> {
-  final _api = ApiService();
+  final _api = MobileApiService();
   final _formKey = GlobalKey<FormState>();
 
-  // --- 1. Header Logic ---
   final DateTime _inwardDate = DateTime.now(); 
   late String _inTime; 
   String? _outTime; 
@@ -29,20 +25,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   final _vehicleController = TextEditingController();
   final _dcController = TextEditingController(); 
 
-  // --- 2. Main Grid State ---
   List<InwardRow> _rows = [InwardRow()];
-
-  // --- 3. Navigation & Sticker State ---
   int _currentPage = 0; 
   String? _selectedStickerDia; 
   
-  // Storage per requirements: 3 dropdowns for Rack, 3 for Pallet
   List<String?> _selectedRacks = [null, null, null];
   List<String?> _selectedPallets = [null, null, null];
   
   Map<String, List<StickerRow>> _stickerData = {};
 
-  // Master Data Mock/Load
   List<String> _dias = [];
   List<String> _colours = [];
   List<String> _lotNames = [];
@@ -51,7 +42,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   List<String> _palletNos = [];
   
   bool _isSaved = false;
-  bool _isLoading = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -62,39 +53,46 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   
   Future<void> _loadMasterData() async {
     setState(() => _isLoading = true);
-    final data = await _api.getMasterData();
+    final categories = await _api.getCategories();
+    final parties = await _api.getParties();
+    
     setState(() {
       _isLoading = false;
-      if (data.isNotEmpty) {
-        _lotNames = data['lots'] ?? [];
-        _parties = data['parties'] ?? [];
-        _dias = data['dias'] ?? [];
-        _colours = data['colours'] ?? [];
-        _rackNames = data['racks'] ?? [];
-        _palletNos = data['pallets'] ?? [];
-      } else {
-        // Fallback for demo if API fails/empty
-        _lotNames = ['Lot Alpha', 'Lot Beta'];
-        _parties = ['Client A', 'Client B'];
-        _dias = ['30', '32', '34', '36'];
-        _colours = ['Red', 'Blue', 'Black'];
-        _rackNames = ['R-1', 'R-2', 'R-3'];
-        _palletNos = ['P-1', 'P-2', 'P-3'];
-      }
+      _lotNames = _getValues(categories, 'Lot Name');
+      _dias = _getValues(categories, 'dia');
+      _colours = _getValues(categories, 'Colour');
+      _rackNames = _getValues(categories, 'Rack Name');
+      _palletNos = _getValues(categories, 'Pallet No');
+      _parties = parties.map((m) => m['name'] as String).toList();
     });
   }
 
-  void _onPartyChanged(String? val) {
+  List<String> _getValues(List<dynamic> categories, String name) {
+    try {
+      final cat = categories.firstWhere((c) => c['name'].toString().toLowerCase() == name.toLowerCase());
+      return List<String>.from(cat['values'] ?? []);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  void _onPartyChanged(String? val) async {
     setState(() {
       _selectedParty = val;
-      _process = "Auto-fetched Process"; 
     });
+    if (val != null) {
+      final details = await _api.getPartyDetails(val);
+      if (details != null) {
+        setState(() {
+          _process = details['process'] ?? "N/A";
+        });
+      }
+    }
   }
 
   Future<void> _onLotNameChanged(String? val) async {
     setState(() {
       _selectedLotName = val;
-      _colours = []; // Clear existing colours
     });
     
     if (val != null) {
@@ -102,24 +100,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       setState(() {
         _colours = fetchedColours;
       });
-    } else {
-       // Reset or keep empty
     }
   }
 
-  // --- Calculations (Requirement Strict) ---
   void _updateRowMath(InwardRow row) {
     setState(() {
-      // SET RULE: (ROLL / 11). If decimal >= .5, Round UP. If < .5, Round DOWN.
       if (row.rolls > 0) {
         row.sets = (row.rolls / 11).round();
       } else {
         row.sets = 0;
       }
-      
       row.recRoll = row.rolls; 
       row.difference = row.recWeight - row.deliveredWeight;
-      
       if (row.deliveredWeight > 0) {
         row.lossPercent = (row.difference / row.deliveredWeight) * 100;
       } else {
@@ -132,40 +124,37 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() {
-      _outTime = DateFormat('hh:mm a').format(DateTime.now()); // Out Time on save
+      _outTime = DateFormat('hh:mm a').format(DateTime.now()); 
       _isLoading = true;
     });
 
-    // Construct Payload
     final inwardData = {
-      "inward_date": DateFormat('yyyy-MM-dd').format(_inwardDate),
-      "in_time": _inTime,
-      "out_time": _outTime,
-      "lot_name": _selectedLotName,
-      "lot_number": _lotNumberController.text,
-      "party_name": _selectedParty,
+      "inwardDate": DateFormat('yyyy-MM-dd').format(_inwardDate),
+      "inTime": _inTime,
+      "outTime": _outTime,
+      "lotName": _selectedLotName,
+      "lotNo": _lotNumberController.text,
+      "fromParty": _selectedParty,
       "process": _process,
-      "vehicle_no": _vehicleController.text,
-      "dc_number": _dcController.text,
-      "sticker_dia": _selectedStickerDia,
-      "racks": _selectedRacks,
-      "pallets": _selectedPallets,
-      "grid_rows": _rows.map((r) => {
+      "vehicleNo": _vehicleController.text,
+      "partyDcNo": _dcController.text,
+      "diaEntries": _rows.map((r) => {
         "dia": r.dia ?? "",
-        "rolls": r.rolls,
-        "sets": r.sets,
-        "delivered_weight": r.deliveredWeight,
-        "rec_roll": r.recRoll,
-        "rec_weight": r.recWeight,
-        "difference": r.difference,
-        "loss_percent": r.lossPercent
+        "roll": r.rolls,
+        "set": r.sets,
+        "delWt": r.deliveredWeight,
+        "recRoll": r.recRoll,
+        "recWt": r.recWeight,
       }).toList(),
-      "sticker_rows": _selectedStickerDia != null && _stickerData.containsKey(_selectedStickerDia) 
-        ? _stickerData[_selectedStickerDia]!.map((r) => {
-            "colour": r.colour,
-            "set_weights": r.setWeights
-          }).toList() 
-        : []
+      "storageDetails": _stickerData.entries.map((e) => {
+        "dia": e.key,
+        "racks": _selectedRacks.where((r) => r != null).toList(),
+        "pallets": _selectedPallets.where((p) => p != null).toList(),
+        "rows": e.value.map((r) => {
+          "colour": r.colour,
+          "setWeights": r.setWeights
+        }).toList()
+      }).toList()
     };
 
     final success = await _api.saveInward(inwardData);
@@ -175,12 +164,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       if (success) _isSaved = true;
     });
 
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(success ? "Inward Saved to Backend!" : "Failed to Save (Ensure Backend is Running)"),
+        content: Text(success ? "Inward Saved to Backend!" : "Failed to Save"),
         backgroundColor: success ? Colors.green : Colors.red,
       )
     );
+    if (success) Navigator.pop(context);
   }
 
   @override
@@ -188,22 +180,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lot Inward Entry', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          if (_currentPage == 0)
-            IconButton(
-              icon: const Icon(Icons.print),
-              color: _isSaved ? Colors.blue : Colors.grey,
-              onPressed: _isSaved ? () {} : null, 
+      ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: _currentPage == 0 ? _buildMainPage() : _buildStickerPage(),
             ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: _currentPage == 0 ? _buildMainPage() : _buildStickerPage(),
-        ),
-      ),
+          ),
       bottomNavigationBar: _isLoading ? const LinearProgressIndicator() : null,
     );
   }
@@ -400,10 +386,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  // --- UI Helpers ---
-  Widget _buildReadOnly(String label, String val) => InputDecorator(decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.all(8)), child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold)));
-  Widget _buildTextField(String label, TextEditingController c) => TextFormField(controller: c, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()));
-  Widget _buildDropdown(String label, String? val, List<String> items, Function(String?) chg) => DropdownButtonFormField<String>(value: items.contains(val) ? val : null, items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(), onChanged: chg, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()));
+  Widget _buildReadOnly(String label, String val) => InputDecorator(decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.all(8)), child: Text(val, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)));
+  Widget _buildTextField(String label, TextEditingController c) => TextFormField(controller: c, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.all(8)));
+  Widget _buildDropdown(String label, String? val, List<String> items, Function(String?) chg) => DropdownButtonFormField<String>(value: items.contains(val) ? val : null, items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 13)))).toList(), onChanged: chg, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), contentPadding: const EdgeInsets.all(8)));
   Widget _buildSmallDropdown(String? val, List<String> items, Function(String?) chg) => DropdownButton<String>(value: items.contains(val) ? val : null, items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 12)))).toList(), onChanged: chg, underline: const SizedBox(), isExpanded: true, hint: const Text("-"));
   Widget _buildGridInput(num val, Function(String) chg) => TextFormField(initialValue: val == 0 ? "" : val.toString(), keyboardType: TextInputType.number, decoration: const InputDecoration(border: InputBorder.none, hintText: "0"), onChanged: chg);
   Widget _buildGridHeader() => Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("DIA-wise Entry", style: TextStyle(fontWeight: FontWeight.bold)), TextButton.icon(onPressed: () => setState(() => _rows.add(InwardRow())), icon: const Icon(Icons.add), label: const Text("Add Row"))]);

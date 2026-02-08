@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
+import '../../services/mobile_api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,11 +12,35 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _api = MobileApiService();
+  bool _isLoading = false;
 
-  void _login() {
-    Navigator.pushReplacementNamed(context, '/dashboard');
+  Future<void> _login() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final success = await _api.login(
+      _emailController.text,
+      _passwordController.text,
+    );
+    setState(() => _isLoading = false);
+
+    if (success) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid Email or Password')),
+      );
+    }
   }
 
   @override
@@ -81,10 +106,10 @@ class _LoginScreenState extends State<LoginScreen> {
               Column(
                 children: [
                   TextField(
-                    controller: _usernameController,
+                    controller: _emailController,
                     decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(LucideIcons.user, size: 20),
+                      labelText: 'Email Address',
+                      prefixIcon: Icon(LucideIcons.mail, size: 20),
                     ),
                   ).animate().fadeIn(delay: 800.ms).slideY(begin: 0.1),
 
@@ -117,7 +142,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 40),
 
-              ElevatedButton(onPressed: _login, child: const Text('Sign In'))
+              SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _login,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Sign In'),
+                    ),
+                  )
                   .animate()
                   .fadeIn(delay: 1200.ms)
                   .scale(begin: const Offset(0.95, 0.95)),
