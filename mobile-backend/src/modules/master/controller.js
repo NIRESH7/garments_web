@@ -115,13 +115,14 @@ const getParties = asyncHandler(async (req, res) => {
 // @route   POST /api/master/item-groups
 // @access  Private
 const createItemGroup = asyncHandler(async (req, res) => {
-    const { groupName, itemNames, gsm, colours } = req.body;
+    const { groupName, itemNames, gsm, colours, rate } = req.body;
 
     const itemGroup = await ItemGroup.create({
         groupName,
         itemNames,
         gsm,
         colours,
+        rate,
     });
 
     res.status(201).json(itemGroup);

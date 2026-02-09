@@ -1,6 +1,7 @@
 import '../core/network/dio_client.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';
+import 'package:dio/dio.dart';
 
 class MobileApiService {
   final DioClient _client = DioClient();
@@ -35,6 +36,18 @@ class MobileApiService {
   }
 
   // --- Inventory ---
+  Future<String?> uploadFile(String filePath) async {
+    try {
+      final formData = FormData.fromMap({
+        'image': await MultipartFile.fromFile(filePath),
+      });
+      final response = await _client.post('/upload', data: formData);
+      return response.data; // Returns the server path (e.g., /uploads/image-123.jpg)
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<bool> saveInward(Map<String, dynamic> data) async {
     try {
       final response = await _client.post(ApiConstants.inward, data: data);

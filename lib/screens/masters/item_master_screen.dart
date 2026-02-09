@@ -16,6 +16,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   final List<String> _selectedItemNames = [];
   String? _selectedGsm;
   final List<String> _selectedColours = [];
+  double _rate = 0;
 
   List<String> _groupNames = [];
   List<String> _itemNames = [];
@@ -71,6 +72,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         'itemNames': _selectedItemNames,
         'gsm': _selectedGsm,
         'colours': _selectedColours,
+        'rate': _rate,
       };
 
       final success = await _api.createItemGroup(data);
@@ -136,6 +138,22 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                         _selectedItemNames.clear();
                         _selectedItemNames.addAll(list);
                       }),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Rate',
+                        hintText: 'Enter Rate',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType:
+                          TextInputType.numberWithOptions(decimal: true),
+                      validator: (val) {
+                        if (val == null || val.isEmpty) return 'Required';
+                        if (double.tryParse(val) == null) return 'Invalid Number';
+                        return null;
+                      },
+                      onSaved: (val) => _rate = double.tryParse(val!) ?? 0,
                     ),
                     const SizedBox(height: 16),
 

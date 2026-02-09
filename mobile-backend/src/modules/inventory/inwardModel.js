@@ -21,6 +21,13 @@ const inwardSchema = mongoose.Schema(
         outTime: { type: String },
         lotName: { type: String, required: true },
         lotNo: { type: String, required: true },
+        // New Fields
+        qualityStatus: { type: String, default: 'OK' }, // OK or Not OK
+        qualityImage: { type: String },
+        complaintText: { type: String },
+        complaintImage: { type: String },
+        balanceImage: { type: String },
+
         fromParty: { type: String, required: true },
         process: { type: String },
         vehicleNo: { type: String },

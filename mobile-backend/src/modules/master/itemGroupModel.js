@@ -20,6 +20,10 @@ const itemGroupSchema = mongoose.Schema(
                 type: String,
             },
         ],
+        rate: {
+            type: Number,
+            default: 0,
+        },
     },
     {
         timestamps: true,

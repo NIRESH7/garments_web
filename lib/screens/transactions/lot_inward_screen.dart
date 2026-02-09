@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
 
@@ -28,6 +31,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   List<InwardRow> _rows = [InwardRow()];
   int _currentPage = 0;
   String? _selectedStickerDia;
+  // Balance Image removed as per user request
+  // XFile? _balanceImage;
+
+  // Quality & Complaint
+  String _qualityStatus = "OK"; // OK, Not OK
+  XFile? _qualityImage;
+  final _complaintController = TextEditingController();
+  XFile? _complaintImage;
 
   List<String?> _selectedRacks = [null, null, null];
   List<String?> _selectedPallets = [null, null, null];
@@ -127,10 +138,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   void _updateRowMath(InwardRow row) {
     setState(() {
-      if (row.rolls > 0) {
-        row.sets = (row.rolls / 11).ceil();
-      } else {
-        row.sets = 0;
+      // row.sets is no longer auto-calculated here if user overrides, 
+      // but we can set a default if it's 0. For now, let's leave it manual or loose coupling.
+      if (row.rolls > 0 && row.sets == 0) {
+         row.sets = (row.rolls / 11).ceil();
       }
       row.recRoll = row.rolls;
       row.difference = row.recWeight - row.deliveredWeight;
@@ -140,6 +151,34 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         row.lossPercent = 0;
       }
     });
+  }
+
+  Future<void> _pickImage(Function(XFile?) onPicked) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        onPicked(image);
+      });
+    }
+  }
+
+  Future<void> _shareToWhatsApp(Map<String, dynamic> data) async {
+      String msg = "*Lot Inward Entry*\n";
+      msg += "Date: ${data['inwardDate']}\n";
+      msg += "Lot: ${data['lotName']} / ${data['lotNo']}\n";
+      msg += "Party: ${data['fromParty']}\n";
+      msg += "Quality: ${data['qualityStatus']}\n";
+      if(data['complaintText'] != null && data['complaintText'].isNotEmpty) {
+          msg += "Complaint: ${data['complaintText']}\n";
+      }
+      
+      final url = Uri.parse("whatsapp://send?text=${Uri.encodeComponent(msg)}");
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        _showError("Could not launch WhatsApp");
+      }
   }
 
   Future<void> _save() async {
@@ -188,6 +227,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           .toList(),
     };
 
+    // Upload Images First
+    // Upload Images First
+    // String? balanceImgPath;
+    String? qualityImgPath;
+    String? complaintImgPath;
+
+    // if (_balanceImage != null) balanceImgPath = await _api.uploadFile(_balanceImage!.path);
+    if (_qualityImage != null) qualityImgPath = await _api.uploadFile(_qualityImage!.path);
+    if (_complaintImage != null) complaintImgPath = await _api.uploadFile(_complaintImage!.path);
+
+    // inwardData["balanceImage"] = balanceImgPath;
+    inwardData["qualityStatus"] = _qualityStatus;
+    inwardData["qualityImage"] = qualityImgPath;
+    inwardData["complaintText"] = _complaintController.text;
+    inwardData["complaintImage"] = complaintImgPath;
+
     final success = await _api.saveInward(inwardData);
 
     setState(() {
@@ -198,13 +253,31 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Inward Saved Successfully!"),
-          backgroundColor: Colors.green,
-        ),
+      // Prompt to Share
+      showDialog(
+          context: context, 
+          builder: (ctx) => AlertDialog(
+              title: const Text("Saved Successfully"),
+              content: const Text("Do you want to share details on WhatsApp?"),
+              actions: [
+                  TextButton(
+                      onPressed: () { 
+                          Navigator.pop(ctx); 
+                          Navigator.pop(context); 
+                      }, 
+                      child: const Text("No")
+                  ),
+                  TextButton(
+                      onPressed: () {
+                          Navigator.pop(ctx);
+                          _shareToWhatsApp(inwardData);
+                          Navigator.pop(context);
+                      }, 
+                      child: const Text("Share")
+                  ),
+              ],
+          )
       );
-      Navigator.pop(context);
     } else {
       _showError("Failed to Save. Check if all required fields are filled.");
     }
@@ -247,6 +320,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     return Column(
       children: [
         _buildHeader(),
+        const SizedBox(height: 16),
+        // _buildImageSection("Balance/Challan Image", _balanceImage, (f) => _balanceImage = f),
+        // const SizedBox(height: 16),
+        _buildQualitySection(),
+        const SizedBox(height: 16),
+        _buildComplaintSection(),
         const SizedBox(height: 16),
         _buildGridHeader(),
         _buildDataTable(),
@@ -362,10 +441,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 }),
               ),
               DataCell(
-                Text(
-                  row.sets.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                _buildGridInput(row.sets, (v) {
+                   row.sets = int.tryParse(v) ?? 0;
+                 }),
               ),
               DataCell(
                 _buildGridInput(row.deliveredWeight, (v) {
@@ -452,6 +530,21 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               ),
             ),
         ],
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 45,
+          child: ElevatedButton.icon(
+            onPressed: _save,
+            icon: const Icon(Icons.save),
+            label: const Text("Save Entry"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -690,6 +783,89 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       ),
     ],
   );
+
+  Widget _buildImageSection(String label, XFile? file, Function(XFile?) onSet) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            if (file != null)
+                Text("Selected", style: const TextStyle(color: Colors.green))
+            else 
+                const Text("No Image"),
+            IconButton(
+                icon: const Icon(Icons.camera_alt),
+                onPressed: () => _pickImage(onSet),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQualitySection() {
+      return Card(
+          child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                      const Text("Quality Check", style: TextStyle(fontWeight: FontWeight.bold)),
+                      Row(
+                          children: [
+                              Expanded(
+                                child: RadioListTile(
+                                    title: const Text("OK", style: TextStyle(fontSize: 12)),
+                                    value: "OK", 
+                                    groupValue: _qualityStatus, 
+                                    onChanged: (v) => setState(() => _qualityStatus = v.toString())
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile(
+                                    title: const Text("Not OK", style: TextStyle(fontSize: 12)),
+                                    value: "Not OK", 
+                                    groupValue: _qualityStatus, 
+                                    onChanged: (v) => setState(() => _qualityStatus = v.toString())
+                                ),
+                              ),
+                          ],
+                      ),
+                      _buildImageSection("Quality Image", _qualityImage, (f) => _qualityImage = f),
+                  ],
+              ),
+          ),
+      );
+  }
+
+  Widget _buildComplaintSection() {
+      return Card(
+          child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                      const Text("Complaint (if any)", style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                          controller: _complaintController,
+                          decoration: const InputDecoration(
+                              labelText: "Complaint Remarks",
+                              border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildImageSection("Complaint Image", _complaintImage, (f) => _complaintImage = f),
+                  ],
+              ),
+          ),
+      );
+  }
 }
 
 class InwardRow {

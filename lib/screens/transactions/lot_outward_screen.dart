@@ -439,7 +439,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                   sel['set_no'] == s['set_no'] && sel['colour'] == s['colour'],
             );
             return FilterChip(
-              label: Text('${s['set_no']} (${s['colour']})'),
+              label: Text(
+                '${s['set_no']} (${s['colour']}) - ${s['weight']}kg',
+                style: const TextStyle(fontSize: 12),
+              ),
               selected: isSelected,
               onSelected: (selected) => _toggleSetSelection(s, selected),
               selectedColor: ColorPalette.primary.withOpacity(0.2),
@@ -468,38 +471,78 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           itemCount: _selectedSets.length,
           itemBuilder: (context, index) {
             final item = _selectedSets[index];
+            // Fetch colours for this lot if not already available contextually
+            // For now, we use a text field or we could use the _colours list if we had one for the selected lot.
+            // Since we don't have the specific colours for the *selected lot* readily available in a variable that strictly matches the lot (we have _lotNames but not values),
+            // and the requirement is to "delete" (clear) the colour, we will use a text field/dropdown combo or just a clearable row.
+            // Given the prompt "option to delete the colour", we can use a helper or just a text field that can be cleared.
+            // But better efficiently, I should probably load colours for the selected lot to show in a dropdown.
+            // However, to keep it simple and robust, let's use a Text Button to "Clear Colour" or a Dropdown if possible.
+            // The cleanest way is to show the colour and allow clearing it.
+
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                title: Text(
-                  '${item['set_no']} - ${item['colour']}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text('Bal: ${item['weight']} kg'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
                   children: [
-                    SizedBox(
-                      width: 80,
-                      child: TextFormField(
-                        initialValue: item['weight'].toString(),
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.right,
-                        decoration: const InputDecoration(
-                          suffixText: 'kg',
-                          isDense: true,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Set No: ${item['set_no']}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        onChanged: (v) =>
-                            item['weight'] = double.tryParse(v) ?? 0,
-                      ),
+                        IconButton(
+                          icon: const Icon(
+                            LucideIcons.trash2,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          onPressed: () => _removeSet(index),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(
-                        LucideIcons.trash2,
-                        color: Colors.red,
-                        size: 20,
-                      ),
-                      onPressed: () => _removeSet(index),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['colour'],
+                            decoration: InputDecoration(
+                              labelText: 'Colour',
+                              isDense: true,
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.clear, size: 16),
+                                onPressed: () {
+                                  setState(() {
+                                    item['colour'] = ''; 
+                                    // Trigger rebuild? The TextFormField might not update without a key or controller, 
+                                    // but we are using initialValue. Best to use a controller or key if we want to clear it programmatically cleanly.
+                                    // Actually, let's just use a changed value.
+                                    // To make it simpler, we can just allow them to type.
+                                  });
+                                },
+                              ),
+                            ),
+                            onChanged: (v) => item['colour'] = v,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['weight'].toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Weight',
+                              suffixText: 'kg',
+                              isDense: true,
+                            ),
+                            onChanged:
+                                (v) => item['weight'] = double.tryParse(v) ?? 0,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

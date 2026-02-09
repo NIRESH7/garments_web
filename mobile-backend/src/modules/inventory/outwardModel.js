@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const outwardItemSchema = mongoose.Schema({
-    colour: { type: String, required: true },
+    colour: { type: String, required: false },
     selected_weight: { type: Number, required: true },
     set_no: { type: String, required: true },
 });
