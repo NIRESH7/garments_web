@@ -34,16 +34,19 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
     setState(() {
       _groupNames = _getValues(categories, 'Lot Name');
-      _itemNames = _getValues(categories, 'Item Name');
+      _itemNames = _getValues(categories, 'Item');
       _gsmValues = _getValues(categories, 'GSM');
-      _colours = _getValues(categories, 'Colour');
+      _colours = _getValues(categories, 'Colours');
       _isLoading = false;
     });
   }
 
   List<String> _getValues(List<dynamic> categories, String name) {
     try {
-      final cat = categories.firstWhere((c) => c['name'] == name);
+      final cat = categories.firstWhere(
+        (c) =>
+            c['name'].toString().toLowerCase() == name.toString().toLowerCase(),
+      );
       return List<String>.from(cat['values'] ?? []);
     } catch (e) {
       return [];

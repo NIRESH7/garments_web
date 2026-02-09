@@ -40,10 +40,9 @@ async function generateAttendanceSQL(userMessage, conversationHistory = '') {
 
   // Try models in order: gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash, gemini-2.5-pro
   const modelsToTry = [
-    process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-    'gemini-1.5-pro',
     'gemini-2.0-flash',
-    'gemini-2.5-pro'
+    'gemini-2.0-pro',
+    'gemini-2.5-flash'
   ];
 
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -106,7 +105,7 @@ Return ONLY the SQL, no explanations.`;
 
       const result = await model.generateContent(prompt);
       const sqlText = result.response.text().trim();
-      
+
       // Extract SQL from markdown code blocks if present
       const codeBlock = sqlText.match(/```(?:sql)?\s*([\s\S]*?)```/i);
       let cleanSQL = (codeBlock ? codeBlock[1] : sqlText)
@@ -115,24 +114,24 @@ Return ONLY the SQL, no explanations.`;
 
       // Split multiple SQL statements
       const sqlStatements = cleanSQL.split(';').filter(s => s.trim().length > 0);
-      
+
       // Replace placeholders with actual values from the message
       const processedSQL = sqlStatements.map(stmt => {
         let processed = stmt.trim();
-        
+
         // Extract student IDs from message (e.g., "1023, 1027, 1031" or "student 103")
         const studentIdMatches = userMessage.match(/\b(\d{3,})\b/g);
         if (studentIdMatches && processed.includes('?')) {
           // For multiple students, we'll handle in execution
           processed = processed.replace(/\?/g, studentIdMatches[0]);
         }
-        
+
         // Extract class number (e.g., "class 5", "class 7")
         const classMatch = userMessage.match(/class\s+(\d+)/i);
         if (classMatch && processed.includes('?')) {
           processed = processed.replace(/\?/g, `'${classMatch[1]}'`);
         }
-        
+
         return processed.endsWith(';') ? processed : `${processed};`;
       }).join('\n');
 
@@ -164,7 +163,7 @@ export async function handleAttendanceRequest(userMessage, conversationHistory =
     'mark', 'present', 'absent', 'attendance', 'update attendance',
     'mark student', 'mark class', 'set attendance', 'set class'
   ];
-  
+
   const lowerMessage = userMessage.toLowerCase();
   const isAttendanceRequest = attendanceKeywords.some(keyword => lowerMessage.includes(keyword));
 
@@ -176,29 +175,29 @@ export async function handleAttendanceRequest(userMessage, conversationHistory =
     // Check if this is "all students" request (skip name lookup)
     const allStudentsPattern = /(?:mark|set)\s+(?:all\s+)?students?\s+(?:in|from|of)\s+class/i;
     const isAllStudentsRequest = allStudentsPattern.test(userMessage);
-    
+
     // Check if student name is mentioned (e.g., "Rahul from class 5") - but NOT "all students"
     let studentInfo = null;
     if (!isAllStudentsRequest) {
       const nameMatch = userMessage.match(/(?:mark|set)\s+([A-Za-z\s]+?)\s+(?:from|in|of)\s+class/i);
       const directNameMatch = userMessage.match(/^mark\s+([A-Za-z\s]+?)\s+(?:as|present|absent)/i);
-      
+
       if (nameMatch || directNameMatch) {
         const studentName = (nameMatch ? nameMatch[1] : directNameMatch[1]).trim();
-        
+
         // Skip if it's "all" or "all students"
         if (studentName.toLowerCase().includes('all')) {
           // This will be handled as class-level update
         } else {
           const classMatch = userMessage.match(/class\s+(\d+)/i);
           const className = classMatch ? classMatch[1] : null;
-          
+
           if (className) {
             studentInfo = await findStudentByNameAndClass(studentName, className);
           } else {
             studentInfo = await findStudentByName(studentName);
           }
-          
+
           if (!studentInfo || studentInfo.length === 0) {
             return {
               type: 'error',
@@ -206,7 +205,7 @@ export async function handleAttendanceRequest(userMessage, conversationHistory =
               sql: null
             };
           }
-          
+
           if (studentInfo.length > 1) {
             const options = studentInfo.map(s => `${s.student_name} (ID: ${s.student_id}, Class: ${s.class})`).join('\n');
             return {
@@ -215,7 +214,7 @@ export async function handleAttendanceRequest(userMessage, conversationHistory =
               sql: null
             };
           }
-          
+
           // Replace name with student_id in message for SQL generation
           userMessage = userMessage.replace(new RegExp(studentName, 'gi'), `student ${studentInfo[0].student_id}`);
         }
@@ -233,8 +232,8 @@ export async function handleAttendanceRequest(userMessage, conversationHistory =
     const sql = await generateAttendanceSQL(userMessage, conversationHistory);
 
     // Check if this is a risky operation (deleting/overwriting past attendance)
-    const isRisky = sql.toLowerCase().includes('delete') || 
-                   (sql.toLowerCase().includes('truncate') || sql.toLowerCase().includes('drop'));
+    const isRisky = sql.toLowerCase().includes('delete') ||
+      (sql.toLowerCase().includes('truncate') || sql.toLowerCase().includes('drop'));
 
     if (isRisky) {
       return {
@@ -254,12 +253,12 @@ export async function handleAttendanceRequest(userMessage, conversationHistory =
 
     // Build success message with updated data
     let resultMessage = '✅ Attendance updated successfully.\n\n';
-    
+
     // Extract information to show results
-    const studentIdMatch = sql.match(/student_id\s*=\s*(\d+)/i) || sql.match(/student_id,\s*(\d+)/i) || 
-                          (studentInfo && studentInfo[0] ? studentInfo[0].student_id : null);
+    const studentIdMatch = sql.match(/student_id\s*=\s*(\d+)/i) || sql.match(/student_id,\s*(\d+)/i) ||
+      (studentInfo && studentInfo[0] ? studentInfo[0].student_id : null);
     const classMatch = sql.match(/class\s*=\s*['"]?(\d+)['"]?/i) || userMessage.match(/class\s+(\d+)/i);
-    
+
     if (studentIds.length > 0) {
       // Multiple students
       const placeholders = studentIds.map(() => '?').join(',');

@@ -117,7 +117,7 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                item['itemName'] ?? 'N/A',
+                item['fabricItem'] ?? 'N/A',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,

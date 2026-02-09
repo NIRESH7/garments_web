@@ -52,8 +52,12 @@ async function generateLeaveSQL(userMessage, conversationHistory = '') {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-2.5-pro'];
-  
+  const models = [
+    'gemini-2.0-flash',
+    'gemini-2.0-pro',
+    'gemini-2.5-flash'
+  ];
+
   let lastError = null;
 
   for (const modelName of models) {
@@ -142,10 +146,10 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
     'leave type', 'leave days', 'update leave type', 'change leave type',
     'set leave type', 'update leave days', 'change leave days'
   ];
-  
+
   const lowerMessage = userMessage.toLowerCase();
   const isLeaveRequest = leaveKeywords.some(keyword => lowerMessage.includes(keyword)) &&
-                         (lowerMessage.includes('update') || lowerMessage.includes('change') || lowerMessage.includes('set') || lowerMessage.includes('modify'));
+    (lowerMessage.includes('update') || lowerMessage.includes('change') || lowerMessage.includes('set') || lowerMessage.includes('modify'));
 
   if (!isLeaveRequest) {
     return null; // Not a leave update request
@@ -155,7 +159,7 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
     // Extract student ID or name
     const studentIdMatch = userMessage.match(/student\s+(?:id\s+)?(\d+)/i);
     const studentNameMatch = userMessage.match(/(?:student|for)\s+([A-Za-z\s]+?)(?:\s+(?:in|from|of)\s+class|\s+as|\s+to|$)/i);
-    
+
     let studentId = null;
     let studentInfo = null;
 
@@ -165,13 +169,13 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
       const studentName = studentNameMatch[1].trim();
       const classMatch = userMessage.match(/class\s+(\d+)/i);
       const className = classMatch ? classMatch[1] : null;
-      
+
       if (className) {
         studentInfo = await findStudentByNameAndClass(studentName, className);
       } else {
         studentInfo = await findStudentByName(studentName);
       }
-      
+
       if (!studentInfo || studentInfo.length === 0) {
         return {
           type: 'error',
@@ -179,7 +183,7 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
           sql: null
         };
       }
-      
+
       if (studentInfo.length > 1) {
         const options = studentInfo.map(s => `${s.student_name} (ID: ${s.student_id}, Class: ${s.class})`).join('\n');
         return {
@@ -188,7 +192,7 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
           sql: null
         };
       }
-      
+
       studentId = studentInfo[0].student_id;
       // Replace name with student_id in message for SQL generation
       userMessage = userMessage.replace(new RegExp(studentName, 'gi'), `student ${studentId}`);
@@ -214,7 +218,7 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
 
     // Check if leave record exists
     const existingRecord = await checkLeaveRecordExists(studentId);
-    
+
     // Generate SQL using Gemini
     let generatedSQL;
     try {
@@ -230,10 +234,10 @@ export async function handleLeaveRequest(userMessage, conversationHistory = '') 
     // Execute the SQL
     try {
       await query(generatedSQL);
-      
+
       // Fetch updated record
       const updatedRecord = await checkLeaveRecordExists(studentId);
-      
+
       if (updatedRecord) {
         const formatted = formatResults([updatedRecord]);
         return {

@@ -29,13 +29,13 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
     final categories = await _api.getCategories();
 
     setState(() {
-      _items = _getValues(
-        categories,
-        'Item Group',
-      ); // Adjusted based on previous usage
-      _sizes = _getValues(categories, 'size');
-      _dias = _getValues(categories, 'dia');
-      _efficiencies = _getValues(categories, 'efficiency');
+      _items = _getValues(categories, 'Item');
+      _sizes = _getValues(categories, 'Size');
+      _dias = _getValues(categories, 'Dia');
+      _efficiencies = _getValues(categories, 'Efficiency');
+      if (_efficiencies.isEmpty) {
+        _efficiencies = _getValues(categories, 'Efficency');
+      }
       _isLoading = false;
     });
   }
@@ -63,11 +63,14 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       return;
     }
 
+    final efficiencyValue =
+        double.tryParse(_selectedEfficiency!.replaceAll('%', '').trim()) ?? 0.0;
+
     final data = {
-      'itemName': _selectedItem,
+      'fabricItem': _selectedItem,
       'size': _selectedSize,
       'dia': _selectedDia,
-      'efficiency': _selectedEfficiency,
+      'efficiency': efficiencyValue,
       'dozenWeight': double.tryParse(_dozenWeightController.text) ?? 0.0,
     };
 

@@ -160,19 +160,33 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() ||
-        _selectedLotName == null ||
-        _selectedDia == null ||
-        _selectedLotNo == null ||
-        _selectedParty == null ||
-        _selectedSets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please complete all fields and select at least one set',
-          ),
-        ),
+    if (_selectedLotName == null) {
+      _showError('Please select Lot Name');
+      return;
+    }
+    if (_selectedDia == null) {
+      _showError('Please select DIA');
+      return;
+    }
+    if (_selectedLotNo == null) {
+      _showError('Please select Lot No (FIFO)');
+      return;
+    }
+    if (_selectedParty == null) {
+      _showError('Please select Party Name');
+      return;
+    }
+    if (_availableSets.isEmpty) {
+      _showError(
+        'No available sets found for this Lot/DIA. Did you record Sticker Details during Inward?',
       );
+      return;
+    }
+    if (_selectedSets.isEmpty) {
+      _showError('Please select at least one set');
+      return;
+    }
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
@@ -212,10 +226,14 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       ).showSnackBar(SnackBar(content: Text('Outward Registered: $_dcNumber')));
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save to backend')),
-      );
+      _showError('Failed to save to backend');
     }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   @override
@@ -391,6 +409,18 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   }
 
   Widget _buildSetSelectionSection() {
+    if (_availableSets.isEmpty && _selectedLotNo != null) {
+      return Card(
+        color: Colors.orange.shade50,
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            '⚠️ No sets available for this Lot Number. Please ensure you completed the "Sticker & Storage Details" (Next Page) during Inward Entry.',
+            style: TextStyle(color: Colors.orange, fontSize: 13),
+          ),
+        ),
+      );
+    }
     if (_availableSets.isEmpty) return const SizedBox.shrink();
 
     return Column(
