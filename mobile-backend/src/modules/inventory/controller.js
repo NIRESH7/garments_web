@@ -16,10 +16,16 @@ const createInward = asyncHandler(async (req, res) => {
         lotNo,
         fromParty,
         process,
+        rate,
         vehicleNo,
         partyDcNo,
         diaEntries,
         storageDetails,
+        qualityStatus,
+        qualityImage,
+        complaintText,
+        complaintImage,
+        balanceImage,
     } = req.body;
 
     const inward = await Inward.create({
@@ -31,10 +37,16 @@ const createInward = asyncHandler(async (req, res) => {
         lotNo,
         fromParty,
         process,
+        rate,
         vehicleNo,
         partyDcNo,
         diaEntries,
         storageDetails,
+        qualityStatus,
+        qualityImage,
+        complaintText,
+        complaintImage,
+        balanceImage,
     });
 
     res.status(201).json(inward);

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
@@ -27,6 +28,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   String _process = "";
   final _vehicleController = TextEditingController();
   final _dcController = TextEditingController();
+  final _rateController = TextEditingController();
 
   List<InwardRow> _rows = [InwardRow()];
   int _currentPage = 0;
@@ -53,7 +55,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   List<String> _rackNames = [];
   List<String> _palletNos = [];
 
-  bool _isSaved = false;
   bool _isLoading = true;
 
   @override
@@ -112,8 +113,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (val != null) {
       final details = await _api.getPartyDetails(val);
       if (details != null) {
+        final double partyRate = (details['rate'] is num)
+            ? (details['rate'] as num).toDouble()
+            : 0.0;
         setState(() {
           _process = details['process'] ?? "N/A";
+          _rateController.text = partyRate.toString();
+          for (var row in _rows) {
+            row.rate = partyRate;
+          }
         });
       }
     }
@@ -138,10 +146,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   void _updateRowMath(InwardRow row) {
     setState(() {
-      // row.sets is no longer auto-calculated here if user overrides, 
+      // row.sets is no longer auto-calculated here if user overrides,
       // but we can set a default if it's 0. For now, let's leave it manual or loose coupling.
       if (row.rolls > 0 && row.sets == 0) {
-         row.sets = (row.rolls / 11).ceil();
+        row.sets = (row.rolls / 11).ceil();
       }
       row.recRoll = row.rolls;
       row.difference = row.recWeight - row.deliveredWeight;
@@ -155,30 +163,78 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Future<void> _pickImage(Function(XFile?) onPicked) async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        onPicked(image);
-      });
-    }
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                );
+                if (image != null) setState(() => onPicked(image));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.camera,
+                );
+                if (image != null) setState(() => onPicked(image));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLargeImage(XFile file) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              alignment: Alignment.topRight,
+              children: [
+                Image.file(File(file.path)),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _shareToWhatsApp(Map<String, dynamic> data) async {
-      String msg = "*Lot Inward Entry*\n";
-      msg += "Date: ${data['inwardDate']}\n";
-      msg += "Lot: ${data['lotName']} / ${data['lotNo']}\n";
-      msg += "Party: ${data['fromParty']}\n";
-      msg += "Quality: ${data['qualityStatus']}\n";
-      if(data['complaintText'] != null && data['complaintText'].isNotEmpty) {
-          msg += "Complaint: ${data['complaintText']}\n";
-      }
-      
-      final url = Uri.parse("whatsapp://send?text=${Uri.encodeComponent(msg)}");
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url);
-      } else {
-        _showError("Could not launch WhatsApp");
-      }
+    String msg = "*Lot Inward Entry*\n";
+    msg += "Date: ${data['inwardDate']}\n";
+    msg += "Lot: ${data['lotName']} / ${data['lotNo']}\n";
+    msg += "Party: ${data['fromParty']}\n";
+    msg += "Quality: ${data['qualityStatus']}\n";
+    if (data['complaintText'] != null && data['complaintText'].isNotEmpty) {
+      msg += "Complaint: ${data['complaintText']}\n";
+    }
+
+    final url = Uri.parse("whatsapp://send?text=${Uri.encodeComponent(msg)}");
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      _showError("Could not launch WhatsApp");
+    }
   }
 
   Future<void> _save() async {
@@ -197,6 +253,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       "lotNo": _lotNumberController.text,
       "fromParty": _selectedParty,
       "process": _process,
+      "rate": double.tryParse(_rateController.text) ?? 0,
       "vehicleNo": _vehicleController.text,
       "partyDcNo": _dcController.text,
       "diaEntries": _rows
@@ -209,6 +266,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               "delWt": r.deliveredWeight,
               "recRoll": r.recRoll,
               "recWt": r.recWeight,
+              "rate": r.rate,
             },
           )
           .toList(),
@@ -234,8 +292,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     String? complaintImgPath;
 
     // if (_balanceImage != null) balanceImgPath = await _api.uploadFile(_balanceImage!.path);
-    if (_qualityImage != null) qualityImgPath = await _api.uploadFile(_qualityImage!.path);
-    if (_complaintImage != null) complaintImgPath = await _api.uploadFile(_complaintImage!.path);
+    if (_qualityImage != null)
+      qualityImgPath = await _api.uploadFile(_qualityImage!.path);
+    if (_complaintImage != null)
+      complaintImgPath = await _api.uploadFile(_complaintImage!.path);
 
     // inwardData["balanceImage"] = balanceImgPath;
     inwardData["qualityStatus"] = _qualityStatus;
@@ -247,7 +307,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     setState(() {
       _isLoading = false;
-      if (success) _isSaved = true;
+      if (success) {
+        // No-op for now unless we need to track local save state
+      }
     });
 
     if (!mounted) return;
@@ -255,28 +317,28 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (success) {
       // Prompt to Share
       showDialog(
-          context: context, 
-          builder: (ctx) => AlertDialog(
-              title: const Text("Saved Successfully"),
-              content: const Text("Do you want to share details on WhatsApp?"),
-              actions: [
-                  TextButton(
-                      onPressed: () { 
-                          Navigator.pop(ctx); 
-                          Navigator.pop(context); 
-                      }, 
-                      child: const Text("No")
-                  ),
-                  TextButton(
-                      onPressed: () {
-                          Navigator.pop(ctx);
-                          _shareToWhatsApp(inwardData);
-                          Navigator.pop(context);
-                      }, 
-                      child: const Text("Share")
-                  ),
-              ],
-          )
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Saved Successfully"),
+          content: const Text("Do you want to share details on WhatsApp?"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              },
+              child: const Text("No"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _shareToWhatsApp(inwardData);
+                Navigator.pop(context);
+              },
+              child: const Text("Share"),
+            ),
+          ],
+        ),
       );
     } else {
       _showError("Failed to Save. Check if all required fields are filled.");
@@ -349,7 +411,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     DateFormat('dd-MM-yyyy').format(_inwardDate),
                   ),
                 ),
-                const SizedBox(width: 8),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(child: _buildReadOnly("In Time", _inTime)),
                 const SizedBox(width: 8),
                 Expanded(
@@ -370,7 +436,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _buildTextField("Lot No", _lotNumberController),
+                  child: TextFormField(
+                    controller: _lotNumberController,
+                    decoration: const InputDecoration(
+                      labelText: "Lot No",
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(8),
+                    ),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
+                  ),
                 ),
               ],
             ),
@@ -378,15 +453,52 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _buildDropdown(
-                    "From Party",
-                    _selectedParty,
-                    _parties,
-                    _onPartyChanged,
+                  child: DropdownButtonFormField<String>(
+                    value: _parties.contains(_selectedParty)
+                        ? _selectedParty
+                        : null,
+                    isExpanded: true,
+                    items: _parties
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p,
+                            child: Text(
+                              p,
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _onPartyChanged,
+                    decoration: const InputDecoration(
+                      labelText: "From Party",
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(8),
+                    ),
+                    validator: (v) => v == null ? 'Required' : null,
                   ),
                 ),
-                const SizedBox(width: 8),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(child: _buildReadOnly("Process", _process)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _rateController,
+                    decoration: const InputDecoration(
+                      labelText: "Rate",
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(8),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -418,6 +530,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           DataColumn(label: Text("DELIV. WT")),
           DataColumn(label: Text("REC. ROLL")),
           DataColumn(label: Text("REC. WT")),
+          DataColumn(label: Text("RATE")),
           DataColumn(label: Text("DIFF")),
           DataColumn(label: Text("LOSS %")),
           DataColumn(label: Text("")),
@@ -442,8 +555,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               ),
               DataCell(
                 _buildGridInput(row.sets, (v) {
-                   row.sets = int.tryParse(v) ?? 0;
-                 }),
+                  row.sets = int.tryParse(v) ?? 0;
+                }),
               ),
               DataCell(
                 _buildGridInput(row.deliveredWeight, (v) {
@@ -456,6 +569,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 _buildGridInput(row.recWeight, (v) {
                   row.recWeight = double.tryParse(v) ?? 0;
                   _updateRowMath(row);
+                }),
+              ),
+              DataCell(
+                _buildGridInput(row.rate, (v) {
+                  row.rate = double.tryParse(v) ?? 0;
                 }),
               ),
               DataCell(Text(row.difference.toStringAsFixed(2))),
@@ -747,7 +865,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         style: TextStyle(fontWeight: FontWeight.bold),
       ),
       TextButton.icon(
-        onPressed: () => setState(() => _rows.add(InwardRow())),
+        onPressed: () async {
+          double defaultRate = 0;
+          if (_selectedParty != null) {
+            final details = await _api.getPartyDetails(_selectedParty!);
+            if (details != null) {
+              defaultRate = (details['rate'] is num)
+                  ? (details['rate'] as num).toDouble()
+                  : 0.0;
+            }
+          }
+          setState(() => _rows.add(InwardRow()..rate = defaultRate));
+        },
         icon: const Icon(Icons.add),
         label: const Text("Add Row"),
       ),
@@ -786,21 +915,50 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Widget _buildImageSection(String label, XFile? file, Function(XFile?) onSet) {
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _pickImage(onSet),
+                  icon: const Icon(Icons.camera_alt, size: 18),
+                  label: Text(file == null ? "Add Image" : "Change"),
+                ),
+              ],
             ),
             if (file != null)
-                Text("Selected", style: const TextStyle(color: Colors.green))
-            else 
-                const Text("No Image"),
-            IconButton(
-                icon: const Icon(Icons.camera_alt),
-                onPressed: () => _pickImage(onSet),
-            ),
+              GestureDetector(
+                onTap: () => _showLargeImage(file),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  height: 120,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    image: DecorationImage(
+                      image: FileImage(File(file.path)),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.zoom_in, color: Colors.white70, size: 30),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -808,63 +966,79 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildQualitySection() {
-      return Card(
-          child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      const Text("Quality Check", style: TextStyle(fontWeight: FontWeight.bold)),
-                      Row(
-                          children: [
-                              Expanded(
-                                child: RadioListTile(
-                                    title: const Text("OK", style: TextStyle(fontSize: 12)),
-                                    value: "OK", 
-                                    groupValue: _qualityStatus, 
-                                    onChanged: (v) => setState(() => _qualityStatus = v.toString())
-                                ),
-                              ),
-                              Expanded(
-                                child: RadioListTile(
-                                    title: const Text("Not OK", style: TextStyle(fontSize: 12)),
-                                    value: "Not OK", 
-                                    groupValue: _qualityStatus, 
-                                    onChanged: (v) => setState(() => _qualityStatus = v.toString())
-                                ),
-                              ),
-                          ],
-                      ),
-                      _buildImageSection("Quality Image", _qualityImage, (f) => _qualityImage = f),
-                  ],
-              ),
-          ),
-      );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Quality Check",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: RadioListTile(
+                    title: const Text("OK", style: TextStyle(fontSize: 12)),
+                    value: "OK",
+                    groupValue: _qualityStatus,
+                    onChanged: (v) =>
+                        setState(() => _qualityStatus = v.toString()),
+                  ),
+                ),
+                Expanded(
+                  child: RadioListTile(
+                    title: const Text("Not OK", style: TextStyle(fontSize: 12)),
+                    value: "Not OK",
+                    groupValue: _qualityStatus,
+                    onChanged: (v) =>
+                        setState(() => _qualityStatus = v.toString()),
+                  ),
+                ),
+              ],
+            ),
+            _buildImageSection(
+              "Quality Image",
+              _qualityImage,
+              (f) => _qualityImage = f,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildComplaintSection() {
-      return Card(
-          child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      const Text("Complaint (if any)", style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                          controller: _complaintController,
-                          decoration: const InputDecoration(
-                              labelText: "Complaint Remarks",
-                              border: OutlineInputBorder(),
-                          ),
-                          maxLines: 2,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildImageSection("Complaint Image", _complaintImage, (f) => _complaintImage = f),
-                  ],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Complaint (if any)",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _complaintController,
+              decoration: const InputDecoration(
+                labelText: "Complaint Remarks",
+                border: OutlineInputBorder(),
               ),
-          ),
-      );
+              maxLines: 2,
+            ),
+            const SizedBox(height: 8),
+            _buildImageSection(
+              "Complaint Image",
+              _complaintImage,
+              (f) => _complaintImage = f,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -875,6 +1049,7 @@ class InwardRow {
   double deliveredWeight = 0;
   int recRoll = 0;
   double recWeight = 0;
+  double rate = 0;
   double difference = 0;
   double lossPercent = 0;
 }

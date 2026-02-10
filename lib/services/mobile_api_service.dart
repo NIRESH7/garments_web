@@ -42,7 +42,8 @@ class MobileApiService {
         'image': await MultipartFile.fromFile(filePath),
       });
       final response = await _client.post('/upload', data: formData);
-      return response.data; // Returns the server path (e.g., /uploads/image-123.jpg)
+      return response
+          .data; // Returns the server path (e.g., /uploads/image-123.jpg)
     } catch (e) {
       return null;
     }
@@ -63,6 +64,24 @@ class MobileApiService {
       return response.statusCode == 201;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<List<dynamic>> getInwards() async {
+    try {
+      final response = await _client.get(ApiConstants.inward);
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getOutwards() async {
+    try {
+      final response = await _client.get(ApiConstants.outward);
+      return response.data;
+    } catch (e) {
+      return [];
     }
   }
 

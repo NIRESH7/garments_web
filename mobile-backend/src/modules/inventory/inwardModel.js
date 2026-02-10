@@ -7,6 +7,7 @@ const diaEntrySchema = mongoose.Schema({
     delivWt: { type: Number, default: 0 },
     recRoll: { type: Number, default: 0 },
     recWt: { type: Number, default: 0 },
+    rate: { type: Number, required: true },
 });
 
 const inwardSchema = mongoose.Schema(
@@ -30,6 +31,7 @@ const inwardSchema = mongoose.Schema(
 
         fromParty: { type: String, required: true },
         process: { type: String },
+        rate: { type: Number },
         vehicleNo: { type: String },
         partyDcNo: { type: String },
         diaEntries: [diaEntrySchema],

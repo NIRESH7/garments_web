@@ -132,6 +132,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
                       controller: _rateController,
                       decoration: const InputDecoration(labelText: 'Rate'),
                       keyboardType: TextInputType.number,
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 32),
                     SizedBox(
