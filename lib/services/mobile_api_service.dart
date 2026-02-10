@@ -155,8 +155,10 @@ class MobileApiService {
     try {
       final response = await _client.post(ApiConstants.parties, data: data);
       return response.statusCode == 201;
+    } on DioException catch (e) {
+      throw e.response?.data['message'] ?? 'Failed to create Party';
     } catch (e) {
-      return false;
+      throw e.toString();
     }
   }
 
@@ -226,8 +228,10 @@ class MobileApiService {
     try {
       final response = await _client.post(ApiConstants.itemGroups, data: data);
       return response.statusCode == 201;
+    } on DioException catch (e) {
+      throw e.response?.data['message'] ?? 'Failed to create Item Group';
     } catch (e) {
-      return false;
+      throw e.toString();
     }
   }
 

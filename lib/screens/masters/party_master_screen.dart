@@ -52,24 +52,27 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
         'process': _selectedProcess ?? '',
       };
 
-      final success = await _api.createParty(partyData);
+      try {
+        final success = await _api.createParty(partyData);
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (success) {
-        _nameController.clear();
-        _addressController.clear();
-        _mobileController.clear();
-        _gstController.clear();
-        _rateController.clear();
-        setState(() => _selectedProcess = null);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Party saved to Backend')));
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to save party')));
+        if (success) {
+          _nameController.clear();
+          _addressController.clear();
+          _mobileController.clear();
+          _gstController.clear();
+          _rateController.clear();
+          setState(() => _selectedProcess = null);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Party saved to Backend')),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
       }
     }
   }

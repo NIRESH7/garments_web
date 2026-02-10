@@ -93,22 +93,25 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         'rate': _rate,
       };
 
-      final success = await _api.createItemGroup(data);
+      try {
+        final success = await _api.createItemGroup(data);
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item Group saved to Backend')),
-        );
-        setState(() {
-          _selectedGroupName = null;
-          _selectedItemNames.clear();
-          _selectedGsm = null;
-          _selectedColours.clear();
-        });
-      } else {
-        _showError('Failed to save Item Group');
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item Group saved to Backend')),
+          );
+          setState(() {
+            _selectedGroupName = null;
+            _selectedItemNames.clear();
+            _selectedGsm = null;
+            _selectedColours.clear();
+          });
+        }
+      } catch (e) {
+        if (!mounted) return;
+        _showError(e.toString());
       }
     }
   }

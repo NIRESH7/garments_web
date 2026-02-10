@@ -2,8 +2,8 @@ class ApiConstants {
 
 
   static const String baseUrl =
-      'https://garments-backend-9gsw.onrender.com/api'; // Update to your production IP
-  static const String serverUrl = 'https://garments-backend-9gsw.onrender.com';
+      'http://127.0.0.1:5001/api'; // Update to your production IP
+  static const String serverUrl = 'http://127.0.0.1:5001';
 
   // Auth
   static const String login = '/auth/login';

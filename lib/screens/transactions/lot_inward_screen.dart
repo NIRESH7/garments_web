@@ -74,8 +74,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       _lotNames = _getValues(categories, ['Lot Name', 'lot name']);
       _dias = _getValues(categories, ['Dia', 'dia']);
       _masterColours = _getValues(categories, [
-        'Colour',
         'Colours',
+        'Colour',
         'colour',
         'color',
       ]);

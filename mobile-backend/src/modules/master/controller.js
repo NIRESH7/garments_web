@@ -89,8 +89,18 @@ const deleteCategoryValue = asyncHandler(async (req, res) => {
 const createParty = asyncHandler(async (req, res) => {
     const { name, address, mobileNumber, process, gstIn, rate } = req.body;
 
+    // Case-insensitive check
+    const partyExists = await Party.findOne({
+        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') }
+    });
+
+    if (partyExists) {
+        res.status(400);
+        throw new Error('Party Name already exists');
+    }
+
     const party = await Party.create({
-        name,
+        name: name.trim(),
         address,
         mobileNumber,
         process,
@@ -117,8 +127,18 @@ const getParties = asyncHandler(async (req, res) => {
 const createItemGroup = asyncHandler(async (req, res) => {
     const { groupName, itemNames, gsm, colours, rate } = req.body;
 
+    // Case-insensitive check
+    const groupExists = await ItemGroup.findOne({
+        groupName: { $regex: new RegExp(`^${groupName.trim()}$`, 'i') }
+    });
+
+    if (groupExists) {
+        res.status(400);
+        throw new Error('Item Group Name already exists');
+    }
+
     const itemGroup = await ItemGroup.create({
-        groupName,
+        groupName: groupName.trim(),
         itemNames,
         gsm,
         colours,

@@ -15,7 +15,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
   // Static list of categories requested by the user
   final List<String> _staticCategoryNames = [
-    'Colour',
+    'Colours',
     'Dia',
     'Item',
     'Item Name',
@@ -23,8 +23,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     'GSM',
     'Dyeing',
     'Process',
-    'Rack',
-    'Pallet',
+    'Rack Name',
+    'Pallet No',
   ];
 
   String? _selectedCategoryId;
