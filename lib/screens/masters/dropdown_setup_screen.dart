@@ -13,6 +13,20 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   final _api = MobileApiService();
   final _valueController = TextEditingController();
 
+  // Static list of categories requested by the user
+  final List<String> _staticCategoryNames = [
+    'Colour',
+    'Dia',
+    'Item',
+    'Item Name',
+    'Lot Name',
+    'GSM',
+    'Dyeing',
+    'Process',
+    'Rack',
+    'Pallet',
+  ];
+
   String? _selectedCategoryId;
   List<dynamic> _categories = [];
   List<dynamic> _values = [];
@@ -25,33 +39,98 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   }
 
   Future<void> _loadCategories() async {
-    final res = await _api.getCategories();
-    setState(() {
-      _categories = res;
-      if (_categories.isNotEmpty && _selectedCategoryId == null) {
-        _selectedCategoryId = _categories.first['_id'];
-        _loadValues();
+    setState(() => _isLoading = true);
+    try {
+      final res = await _api.getCategories();
+
+      // Map server categories to our static list
+      final List<Map<String, dynamic>> filteredCategories = [];
+
+      for (var name in _staticCategoryNames) {
+        // Find existing category on server (case-insensitive match)
+        final serverCat = res.firstWhere(
+          (c) => (c['name'] as String).toLowerCase() == name.toLowerCase(),
+          orElse: () => null,
+        );
+
+        if (serverCat != null) {
+          filteredCategories.add(serverCat);
+        } else {
+          // If category doesn't exist on server, we might need to create it later
+          // or just show it as empty for now. For now, let's create a placeholder
+          // so the user can see the option in the dropdown.
+          filteredCategories.add({
+            '_id': 'new_$name',
+            'name': name,
+            'values': [],
+          });
+        }
       }
-    });
+
+      setState(() {
+        _categories = filteredCategories;
+        if (_categories.isNotEmpty && _selectedCategoryId == null) {
+          _selectedCategoryId = _categories.first['_id'];
+          _loadValues();
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadValues() async {
     if (_selectedCategoryId == null) return;
+    if (_selectedCategoryId!.startsWith('new_')) {
+      setState(() => _values = []);
+      return;
+    }
+
     setState(() => _isLoading = true);
-    final category = _categories.firstWhere(
-      (c) => c['_id'] == _selectedCategoryId,
-    );
-    setState(() {
-      _values = category['values'] ?? [];
-      _isLoading = false;
-    });
+    try {
+      final category = _categories.firstWhere(
+        (c) => c['_id'] == _selectedCategoryId,
+      );
+      setState(() {
+        _values = category['values'] ?? [];
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _add() async {
     if (_valueController.text.isEmpty || _selectedCategoryId == null) return;
     try {
+      String categoryId = _selectedCategoryId!;
+
+      // If it's a placeholder category, create it first
+      if (categoryId.startsWith('new_')) {
+        final categoryName = _categories.firstWhere(
+          (c) => c['_id'] == _selectedCategoryId,
+        )['name'];
+
+        final success = await _api.createCategory(categoryName);
+        if (success) {
+          // Reload categories to get the real ID
+          final res = await _api.getCategories();
+          final newCat = res.firstWhere(
+            (c) =>
+                (c['name'] as String).toLowerCase() ==
+                categoryName.toLowerCase(),
+          );
+          categoryId = newCat['_id'];
+          setState(() => _selectedCategoryId = categoryId);
+          await _loadCategories(); // Refresh local list
+        } else {
+          return;
+        }
+      }
+
       final success = await _api.addCategoryValue(
-        _selectedCategoryId!,
+        categoryId,
         _valueController.text,
       );
       if (success) {
@@ -95,19 +174,19 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  DropdownButtonFormField<String>(
-                    value: _selectedCategoryId,
-                    decoration: const InputDecoration(
-                      labelText: 'Select Category',
-                      hintText: 'Choose a category to manage',
-                    ),
-                    items: _categories.map((c) {
-                      return DropdownMenuItem<String>(
+                  DropdownMenu<String>(
+                    initialSelection: _selectedCategoryId,
+                    width:
+                        MediaQuery.of(context).size.width -
+                        96, // Matches container padding
+                    label: const Text('Select Category'),
+                    dropdownMenuEntries: _categories.map((c) {
+                      return DropdownMenuEntry<String>(
                         value: c['_id'] as String,
-                        child: Text(c['name'] as String),
+                        label: c['name'] as String,
                       );
                     }).toList(),
-                    onChanged: (val) {
+                    onSelected: (val) {
                       setState(() {
                         _selectedCategoryId = val;
                       });

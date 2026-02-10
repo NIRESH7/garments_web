@@ -71,28 +71,30 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     setState(() {
       _isLoading = false;
-      _lotNames = _getValues(categories, 'Lot Name');
-      _dias = _getValues(categories, 'Dia');
-      if (_dias.isEmpty) _dias = _getValues(categories, 'dia');
-      _masterColours = _getValues(categories, 'Colours');
-      if (_masterColours.isEmpty)
-        _masterColours = _getValues(categories, 'Colour');
+      _lotNames = _getValues(categories, ['Lot Name', 'lot name']);
+      _dias = _getValues(categories, ['Dia', 'dia']);
+      _masterColours = _getValues(categories, [
+        'Colour',
+        'Colours',
+        'colour',
+        'color',
+      ]);
       _colours = List<String>.from(_masterColours);
-      _rackNames = _getValues(categories, 'Rack Name');
-      if (_rackNames.isEmpty) _rackNames = _getValues(categories, 'Rack');
-      if (_rackNames.isEmpty) _rackNames = _getValues(categories, 'Racks');
-      _palletNos = _getValues(categories, 'Pallet No');
-      if (_palletNos.isEmpty) _palletNos = _getValues(categories, 'Pallet');
-      if (_palletNos.isEmpty) _palletNos = _getValues(categories, 'Pallets');
+      _rackNames = _getValues(categories, ['Rack Name', 'Rack', 'Racks']);
+      _palletNos = _getValues(categories, ['Pallet No', 'Pallet', 'Pallets']);
       _parties = parties.map((m) => m['name'] as String).toList();
     });
   }
 
-  List<String> _getValues(List<dynamic> categories, String name) {
+  List<String> _getValues(List<dynamic> categories, dynamic nameOrNames) {
     try {
+      final List<String> names = nameOrNames is List<String>
+          ? nameOrNames
+          : [nameOrNames.toString()];
       final cat = categories.firstWhere(
-        (c) =>
-            c['name'].toString().toLowerCase() == name.toString().toLowerCase(),
+        (c) => names.any(
+          (n) => c['name'].toString().toLowerCase() == n.toLowerCase(),
+        ),
       );
       return List<String>.from(cat['values'] ?? []);
     } catch (e) {

@@ -12,8 +12,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _emailController = TextEditingController(text: "garments@gmail.com");
+  final _passwordController = TextEditingController(text: "Admin@123");
   final _api = MobileApiService();
   bool _isLoading = false;
 

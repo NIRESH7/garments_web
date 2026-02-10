@@ -34,19 +34,37 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     final categories = await _api.getCategories();
 
     setState(() {
-      _groupNames = _getValues(categories, 'Lot Name');
-      _itemNames = _getValues(categories, 'Item');
-      _gsmValues = _getValues(categories, 'GSM');
-      _colours = _getValues(categories, 'Colours');
+      _groupNames = _getValues(categories, [
+        'Lot Name',
+        'Group Name',
+        'lot name',
+      ]);
+      _itemNames = _getValues(categories, [
+        'Item',
+        'Item Name',
+        'item name',
+        'Items',
+      ]);
+      _gsmValues = _getValues(categories, ['GSM', 'gsm']);
+      _colours = _getValues(categories, [
+        'Colour',
+        'Colours',
+        'colour',
+        'color',
+      ]);
       _isLoading = false;
     });
   }
 
-  List<String> _getValues(List<dynamic> categories, String name) {
+  List<String> _getValues(List<dynamic> categories, dynamic nameOrNames) {
     try {
+      final List<String> names = nameOrNames is List<String>
+          ? nameOrNames
+          : [nameOrNames.toString()];
       final cat = categories.firstWhere(
-        (c) =>
-            c['name'].toString().toLowerCase() == name.toString().toLowerCase(),
+        (c) => names.any(
+          (n) => c['name'].toString().toLowerCase() == n.toLowerCase(),
+        ),
       );
       return List<String>.from(cat['values'] ?? []);
     } catch (e) {
@@ -146,11 +164,13 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                         hintText: 'Enter Rate',
                         border: OutlineInputBorder(),
                       ),
-                      keyboardType:
-                          TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       validator: (val) {
                         if (val == null || val.isEmpty) return 'Required';
-                        if (double.tryParse(val) == null) return 'Invalid Number';
+                        if (double.tryParse(val) == null)
+                          return 'Invalid Number';
                         return null;
                       },
                       onSaved: (val) => _rate = double.tryParse(val!) ?? 0,

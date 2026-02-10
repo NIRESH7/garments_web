@@ -5,6 +5,7 @@ import 'overview_report.dart';
 import 'lot_aging_report.dart';
 import 'inward_outward_report.dart';
 import 'monthly_summary_report.dart';
+import 'format_reports_screen.dart';
 
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
@@ -64,6 +65,19 @@ class ReportsDashboard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => const MonthlySummaryReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Client Format Reports',
+            subtitle: 'Standardized Excel format views',
+            icon: LucideIcons.fileSpreadsheet,
+            color: Colors.teal,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const FormatReportsScreen(),
               ),
             ),
           ),

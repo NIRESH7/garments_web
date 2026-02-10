@@ -29,7 +29,7 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
     final parties = await _api.getParties();
     final categories = await _api.getCategories();
     final processCategory = categories.firstWhere(
-      (c) => c['name'] == 'Process',
+      (c) => c['name'].toString().toLowerCase() == 'process',
       orElse: () => {'values': []},
     );
 

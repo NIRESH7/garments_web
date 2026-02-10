@@ -6,22 +6,30 @@ import generateToken from '../../utils/generateToken.js';
 // @route   POST /api/auth/login
 // @access  Public
 const authUser = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    try {
+        const { email, password } = req.body;
+        console.log('Login attempt with email:', email);
+        const user = await User.findOne({ email });
+        console.log('User found:', user);
 
-    const user = await User.findOne({ email });
-
-    if (user && (await user.matchPassword(password))) {
-        res.json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            isAdmin: user.isAdmin,
-            isVerified: user.isVerified,
-            token: generateToken(user._id),
-        });
-    } else {
-        res.status(401);
-        throw new Error('Invalid email or password');
+        if (user && (await user.matchPassword(password))) {
+            res.json({
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                isAdmin: user.isAdmin,
+                isVerified: user.isVerified,
+                token: generateToken(user._id),
+            });
+        } else {
+            console.log('Password mismatch or user not found');
+            res.status(401);
+            throw new Error('Invalid email or password');
+        }
+    } catch (error) {
+        console.error('Error in authUser:', error);
+        res.status(500);
+        throw error;
     }
 });
 
