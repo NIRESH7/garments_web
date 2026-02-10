@@ -28,8 +28,22 @@ const createInward = asyncHandler(async (req, res) => {
         balanceImage,
     } = req.body;
 
+    // Generate Inward No if not provided
+    let finalInwardNo = req.body.inwardNo;
+    if (!finalInwardNo) {
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const count = await Inward.countDocuments({
+            createdAt: {
+                $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+                $lt: new Date(new Date().setHours(23, 59, 59, 999))
+            }
+        });
+        finalInwardNo = `INW-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
+    }
+
     const inward = await Inward.create({
         user: req.user._id,
+        inwardNo: finalInwardNo,
         inwardDate,
         inTime,
         outTime,
@@ -56,7 +70,18 @@ const createInward = asyncHandler(async (req, res) => {
 // @route   GET /api/inventory/inward
 // @access  Private
 const getInwards = asyncHandler(async (req, res) => {
-    const inwards = await Inward.find({}).sort({ createdAt: -1 });
+    const { startDate, endDate, fromParty, lotName } = req.query;
+
+    let query = {};
+    if (startDate || endDate) {
+        query.inwardDate = {};
+        if (startDate) query.inwardDate.$gte = startDate;
+        if (endDate) query.inwardDate.$lte = endDate;
+    }
+    if (fromParty) query.fromParty = { $regex: new RegExp(fromParty, 'i') };
+    if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
+
+    const inwards = await Inward.find(query).sort({ inwardDate: -1 });
     res.json(inwards);
 });
 
@@ -171,7 +196,19 @@ const createOutward = asyncHandler(async (req, res) => {
 // @route   GET /api/inventory/outward
 // @access  Private
 const getOutwards = asyncHandler(async (req, res) => {
-    const outwards = await Outward.find({}).sort({ createdAt: -1 });
+    const { startDate, endDate, lotName, lotNo, dia } = req.query;
+
+    let query = {};
+    if (startDate || endDate) {
+        query.dateTime = {}; // Note: dateTime is the field name in Outward model
+        if (startDate) query.dateTime.$gte = startDate;
+        if (endDate) query.dateTime.$lte = endDate;
+    }
+    if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
+    if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
+    if (dia) query.dia = { $regex: new RegExp(dia, 'i') };
+
+    const outwards = await Outward.find(query).sort({ dateTime: -1 });
     res.json(outwards);
 });
 
@@ -179,18 +216,90 @@ const getOutwards = asyncHandler(async (req, res) => {
 // @route   GET /api/inventory/reports/aging
 // @access  Private
 const getLotAgingReport = asyncHandler(async (req, res) => {
-    const inwards = await Inward.find({}).sort({ inwardDate: 1 });
+    const { lotNo, lotName, colour, dia } = req.query;
 
-    const report = inwards.flatMap((inward) => {
-        return inward.diaEntries.map((diaEntry) => ({
-            lot_number: inward.lotNo,
-            lot_name: inward.lotName,
-            inward_date: inward.inwardDate,
-            dia: diaEntry.dia,
-            rolls: diaEntry.roll,
-            weight: diaEntry.recWt,
-        }));
+    let query = {};
+    if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
+    if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
+    // Note: Colour and Dia filters need to be applied after expanding diaEntries/storageDetails or by pre-filtering
+    // For simplicity with this structure, we'll filter after expansion or build a complex query.
+    // Let's filter after mapping for flexibility with the nested arrays.
+
+    const inwards = await Inward.find(query).sort({ inwardDate: 1 });
+
+    let report = [];
+
+    inwards.forEach((inward) => {
+        // We need to map diaEntries to storageDetails if possible to get colour
+        // Or if storageDetails exist, use them.
+        // The requirement is to show Colour. Colour is in storageDetails -> rows -> colour.
+
+        // Strategy: Iterate over storageDetails if available, as they contain the broken-down rolls/weights per colour.
+        // If storageDetails is empty (old data or not entered), fallback to diaEntries (colour will be "N/A").
+
+        if (inward.storageDetails && inward.storageDetails.length > 0) {
+            inward.storageDetails.forEach(sd => {
+                sd.rows.forEach(row => {
+                    // Each row has a colour and setWeights
+                    // We need total weight/rolls for this colour/dia combination
+                    // But wait, storageDetails tracks sets, not necessarily strict rolls count matching diaEntries one-to-one in a simple way 
+                    // unless we sum them up.
+                    // The user wants "Rolls" and "Wt". 
+                    // In storageDetails, we have 'setWeights'. Number of weights = number of sets (which might be rolls if 1 roll = 1 set, but usually multiple rolls).
+                    // Actually `diaEntries` has the authoritative `recRoll` and `recWt`.
+                    // `storageDetails` is for sticker mapping.
+                    // If we want accurate inventory "Stock" aging, we should use the remaining balance. 
+                    // But the report seems to be "Aging Details" of *Inwards*, i.e. when it came in.
+                    // The requirement says "filter option with lotno,lotname,colour,dia".
+
+                    // Let's explicitly try to link them. 
+                    // If we strictly want "Inward" aging, we list what came in.
+                    // If we split by colour, we must know how many rolls/weight per colour.
+                    // `storageDetails` has `setWeights` (list of weights). count(setWeights) approx rolls (or sets).
+                    // Let's assume 1 set ~ 1 roll/bundle for this report or just count the entries.
+
+                    const setWeights = row.setWeights.map(w => parseFloat(w) || 0);
+                    const totalWt = setWeights.reduce((a, b) => a + b, 0);
+                    const totalRolls = setWeights.length; // Approximate if sets=rolls
+
+                    if (totalWt > 0) {
+                        report.push({
+                            lot_number: inward.lotNo,
+                            lot_name: inward.lotName,
+                            inward_date: inward.inwardDate,
+                            dia: sd.dia,
+                            colour: row.colour, // THE NEW FIELD
+                            rolls: totalRolls,
+                            weight: totalWt,
+                            age: Math.ceil((new Date() - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
+                        });
+                    }
+                });
+            });
+        } else {
+            // Fallback for non-sticker entries
+            inward.diaEntries.forEach(entry => {
+                report.push({
+                    lot_number: inward.lotNo,
+                    lot_name: inward.lotName,
+                    inward_date: inward.inwardDate,
+                    dia: entry.dia,
+                    colour: 'N/A',
+                    rolls: entry.recRoll,
+                    weight: entry.recWt,
+                    age: Math.ceil((new Date() - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
+                });
+            });
+        }
     });
+
+    // Apply filters that couldn't be done in DB query easily
+    if (colour) {
+        report = report.filter(r => r.colour && r.colour.toLowerCase().includes(colour.toLowerCase()));
+    }
+    if (dia) {
+        report = report.filter(r => r.dia && r.dia.toLowerCase().includes(dia.toLowerCase()));
+    }
 
     res.json(report);
 });

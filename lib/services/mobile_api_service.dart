@@ -67,18 +67,46 @@ class MobileApiService {
     }
   }
 
-  Future<List<dynamic>> getInwards() async {
+  Future<List<dynamic>> getInwards({
+    String? startDate,
+    String? endDate,
+    String? fromParty,
+    String? lotName,
+  }) async {
     try {
-      final response = await _client.get(ApiConstants.inward);
+      final response = await _client.get(
+        ApiConstants.inward,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (fromParty != null) 'fromParty': fromParty,
+          if (lotName != null) 'lotName': lotName,
+        },
+      );
       return response.data;
     } catch (e) {
       return [];
     }
   }
 
-  Future<List<dynamic>> getOutwards() async {
+  Future<List<dynamic>> getOutwards({
+    String? startDate,
+    String? endDate,
+    String? lotName,
+    String? lotNo,
+    String? dia,
+  }) async {
     try {
-      final response = await _client.get(ApiConstants.outward);
+      final response = await _client.get(
+        ApiConstants.outward,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (lotName != null) 'lotName': lotName,
+          if (lotNo != null) 'lotNo': lotNo,
+          if (dia != null) 'dia': dia,
+        },
+      );
       return response.data;
     } catch (e) {
       return [];
@@ -86,18 +114,46 @@ class MobileApiService {
   }
 
   // --- Reports ---
-  Future<List<dynamic>> getLotAgingReport() async {
+  Future<List<dynamic>> getLotAgingReport({
+    String? lotNo,
+    String? lotName,
+    String? colour,
+    String? dia,
+  }) async {
     try {
-      final response = await _client.get(ApiConstants.agingReport);
+      final response = await _client.get(
+        ApiConstants.agingReport,
+        queryParameters: {
+          if (lotNo != null) 'lotNo': lotNo,
+          if (lotName != null) 'lotName': lotName,
+          if (colour != null) 'colour': colour,
+          if (dia != null) 'dia': dia,
+        },
+      );
       return response.data;
     } catch (e) {
       return [];
     }
   }
 
-  Future<List<dynamic>> getOverviewReport() async {
+  Future<List<dynamic>> getOverviewReport({
+    String? startDate,
+    String? endDate,
+    String? lotNo,
+    String? lotName,
+    String? status,
+  }) async {
     try {
-      final response = await _client.get(ApiConstants.overviewReport);
+      final response = await _client.get(
+        ApiConstants.overviewReport,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (lotNo != null) 'lotNo': lotNo,
+          if (lotName != null) 'lotName': lotName,
+          if (status != null && status != 'All') 'status': status,
+        },
+      );
       return response.data;
     } catch (e) {
       return [];
@@ -113,9 +169,18 @@ class MobileApiService {
     }
   }
 
-  Future<List<dynamic>> getMonthlyReport() async {
+  Future<List<dynamic>> getMonthlyReport({
+    String? startDate,
+    String? endDate,
+  }) async {
     try {
-      final response = await _client.get(ApiConstants.monthlyReport);
+      final response = await _client.get(
+        ApiConstants.monthlyReport,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+        },
+      );
       return response.data;
     } catch (e) {
       return [];

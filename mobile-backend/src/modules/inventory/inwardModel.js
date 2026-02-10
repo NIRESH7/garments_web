@@ -22,7 +22,7 @@ const inwardSchema = mongoose.Schema(
         outTime: { type: String },
         lotName: { type: String, required: true },
         lotNo: { type: String, required: true },
-        // New Fields
+        inwardNo: { type: String }, // Auto-generated ID e.g. INW-20231027-001
         qualityStatus: { type: String, default: 'OK' }, // OK or Not OK
         qualityImage: { type: String },
         complaintText: { type: String },

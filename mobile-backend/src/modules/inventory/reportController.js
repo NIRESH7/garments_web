@@ -5,34 +5,67 @@ import Outward from './outwardModel.js';
 // @desc    Get Overview Report (Stock Overview)
 // @route   GET /api/inventory/reports/overview
 const getOverviewReport = asyncHandler(async (req, res) => {
-    const inwards = await Inward.find({});
+    const { startDate, endDate, lotNo, lotName, status } = req.query;
+
+    const inwards = await Inward.find({}).sort({ inwardDate: 1 });
     const outwards = await Outward.find({});
 
-    const stockMap = {};
+    let stockMap = {};
 
     inwards.forEach(i => {
+        // Filter by Inward Date if provided
+        if (startDate && new Date(i.inwardDate) < new Date(startDate)) return;
+        if (endDate && new Date(i.inwardDate) > new Date(endDate)) return;
+
+        // Filter by Lot No/Name (Partial Match) during iteration or after
+        // Doing it here saves processing
+        if (lotNo && !new RegExp(lotNo, 'i').test(i.lotNo)) return;
+        if (lotName && !new RegExp(lotName, 'i').test(i.lotName)) return;
+
         if (!stockMap[i.lotNo]) {
             stockMap[i.lotNo] = {
                 lot_number: i.lotNo,
                 lot_name: i.lotName,
                 party_name: i.fromParty,
-                rolls: 0,
-                weight: 0,
+                rec_rolls: 0,
+                rec_weight: 0,
+                deliv_rolls: 0,
+                deliv_weight: 0,
             };
         }
-        stockMap[i.lotNo].rolls += i.diaEntries.reduce((acc, curr) => acc + curr.recRoll, 0);
-        stockMap[i.lotNo].weight += i.diaEntries.reduce((acc, curr) => acc + curr.recWt, 0);
+        stockMap[i.lotNo].rec_rolls += i.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
+        stockMap[i.lotNo].rec_weight += i.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
     });
 
     outwards.forEach(o => {
+        // Only process outwards for lots that passed the inward filters
         if (stockMap[o.lotNo]) {
-            stockMap[o.lotNo].rolls -= o.items ? o.items.length : 0;
-            stockMap[o.lotNo].weight -= o.items ? o.items.reduce((acc, curr) => acc + curr.selected_weight, 0) : 0;
+            stockMap[o.lotNo].deliv_rolls += o.items ? o.items.length : 0;
+            stockMap[o.lotNo].deliv_weight += o.items ? o.items.reduce((acc, curr) => acc + (curr.selected_weight || 0), 0) : 0;
+        } else {
+            // Handle case where outward exists but inward doesn't (shouldn't happen ideally)
+            // For now we ignore or create a negative entry if required, but usually strict reference implies inward exists
         }
     });
 
-    // Convert to array and filter out zero stock if needed
-    const report = Object.values(stockMap).filter(s => s.weight > 0);
+    // Calculate balances and status
+    let report = Object.values(stockMap).map(s => {
+        const bal_rolls = s.rec_rolls - s.deliv_rolls;
+        const bal_weight = s.rec_weight - s.deliv_weight;
+        const statusVal = bal_weight > 0.1 ? 'Pending' : 'Completed';
+        return {
+            ...s,
+            balance_rolls: bal_rolls,
+            balance_weight: bal_weight,
+            status: statusVal
+        };
+    });
+
+    // Filter by Status
+    if (status && status !== 'All') {
+        report = report.filter(r => r.status.toLowerCase() === status.toLowerCase());
+    }
+
     res.json(report);
 });
 
@@ -72,6 +105,17 @@ const getInwardOutwardReport = asyncHandler(async (req, res) => {
 // @desc    Get Monthly Summary Report
 // @route   GET /api/inventory/reports/monthly
 const getMonthlySummaryReport = asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+
+    let inwardQuery = {};
+    let outwardQuery = {};
+
+    // For monthly report, we typically want the full history to calculate opening balance correctly.
+    // If startDate is provided, we still need previous data to calc opening balance.
+    // However, the report is "Closing Stock" which usually shows a snapshot or trend.
+    // The previous implementation calculates month-by-month from the beginning.
+    // To support "Filter by Date", we should still calculate everything but only RETURN the months within the range.
+
     const inwards = await Inward.find({}).sort({ inwardDate: 1 });
     const outwards = await Outward.find({}).sort({ dateTime: 1 });
 
@@ -92,11 +136,11 @@ const getMonthlySummaryReport = asyncHandler(async (req, res) => {
 
     if (allRecords.length === 0) return res.json([]);
 
-    const startDate = new Date(allRecords[0].date);
-    const endDate = new Date();
+    const calculationStartDate = new Date(allRecords[0].date);
+    const calculationEndDate = new Date();
 
-    let curr = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while (curr <= endDate) {
+    let curr = new Date(calculationStartDate.getFullYear(), calculationStartDate.getMonth(), 1);
+    while (curr <= calculationEndDate) {
         const monthKey = getMonthKey(curr);
         monthSummaries[monthKey] = {
             month: monthKey,
@@ -129,7 +173,21 @@ const getMonthlySummaryReport = asyncHandler(async (req, res) => {
         curr.setMonth(curr.getMonth() + 1);
     }
 
-    res.json(Object.values(monthSummaries).reverse());
+    const result = Object.values(monthSummaries).reverse();
+
+    if (startDate || endDate) {
+        const start = startDate ? new Date(startDate) : new Date('1970-01-01');
+        const end = endDate ? new Date(endDate) : new Date();
+
+        const filtered = result.filter(r => {
+            const mDate = new Date(r.month + '-01'); // YYYY-MM -> Date
+            // Check if month matches range (simple check)
+            return mDate >= start && mDate <= end;
+        });
+        res.json(filtered);
+    } else {
+        res.json(result);
+    }
 });
 
 export {
