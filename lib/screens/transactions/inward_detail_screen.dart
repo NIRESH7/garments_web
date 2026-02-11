@@ -49,6 +49,7 @@ class InwardDetailScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
+            _buildInfoRow('Inward No', inward['inwardNo'] ?? 'N/A'),
             _buildInfoRow('Lot Name', inward['lotName'] ?? 'N/A'),
             _buildInfoRow('Lot No', inward['lotNo'] ?? 'N/A'),
             _buildInfoRow(
@@ -169,6 +170,8 @@ class InwardDetailScreen extends StatelessWidget {
 
   Widget _buildDiaEntriesCard() {
     final entries = inward['diaEntries'] as List<dynamic>? ?? [];
+    final storageDetails =
+        inward['storageDetails'] as List<dynamic>? ?? const [];
     return Card(
       elevation: 2,
       child: Padding(
@@ -184,14 +187,30 @@ class InwardDetailScreen extends StatelessWidget {
             if (entries.isEmpty)
               const Text('No DIA entries found')
             else
-              ...entries.map((entry) => _buildDiaEntryRow(entry)),
+              ...entries.map((entry) {
+                final dia = (entry as Map<String, dynamic>)['dia']?.toString();
+                Map<String, dynamic>? storageForDia;
+                if (dia != null && dia.isNotEmpty) {
+                  for (final s in storageDetails) {
+                    final sMap = s as Map<String, dynamic>;
+                    if (sMap['dia']?.toString() == dia) {
+                      storageForDia = sMap;
+                      break;
+                    }
+                  }
+                }
+                return _buildDiaEntryRow(entry, storageForDia);
+              }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDiaEntryRow(Map<String, dynamic> entry) {
+  Widget _buildDiaEntryRow(
+    Map<String, dynamic> entry,
+    Map<String, dynamic>? storage,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -256,6 +275,74 @@ class InwardDetailScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (storage != null) ...[
+            const SizedBox(height: 8),
+            const Divider(),
+            const Text(
+              'Storage Details',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Builder(
+              builder: (_) {
+                final racks = (storage['racks'] as List<dynamic>? ?? [])
+                    .where((r) => r != null && r.toString().trim().isNotEmpty)
+                    .map((r) => r.toString())
+                    .toList();
+                final pallets = (storage['pallets'] as List<dynamic>? ?? [])
+                    .where((p) => p != null && p.toString().trim().isNotEmpty)
+                    .map((p) => p.toString())
+                    .toList();
+                final rows = storage['rows'] as List<dynamic>? ?? [];
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (racks.isNotEmpty)
+                      _buildSmallInfo('Racks', racks.join(', ')),
+                    if (pallets.isNotEmpty)
+                      _buildSmallInfo('Pallets', pallets.join(', ')),
+                    if (rows.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Sticker Sets',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      ...rows.map((r) {
+                        final rMap = r as Map<String, dynamic>;
+                        final colour = rMap['colour']?.toString() ?? '-';
+                        final weights =
+                            (rMap['setWeights'] as List<dynamic>? ?? [])
+                                .where(
+                                  (w) =>
+                                      w != null &&
+                                      w.toString().trim().isNotEmpty,
+                                )
+                                .map((w) => w.toString())
+                                .toList();
+                        final weightsText =
+                            weights.isEmpty ? '-' : weights.join(', ');
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: _buildSmallInfo(
+                            'Colour $colour',
+                            weightsText,
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ],
         ],
       ),
     );

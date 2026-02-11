@@ -136,6 +136,21 @@ const getBalancedSets = asyncHandler(async (req, res) => {
     res.json(balancedSets);
 });
 
+// @desc    Generate Inward Number (for UI display)
+// @route   GET /api/inventory/inward/generate-no
+// @access  Private
+const generateInwardNumber = asyncHandler(async (req, res) => {
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const count = await Inward.countDocuments({
+        createdAt: {
+            $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            $lt: new Date(new Date().setHours(23, 59, 59, 999)),
+        },
+    });
+    const inwardNo = `INW-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
+    res.json({ inwardNo });
+});
+
 // --- OUTWARD HANDLERS ---
 
 // @desc    Generate DC Number
@@ -309,6 +324,7 @@ export {
     getInwards,
     getLotsFifo,
     getBalancedSets,
+    generateInwardNumber,
     generateDcNumber,
     createOutward,
     getOutwards,

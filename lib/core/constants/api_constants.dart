@@ -1,6 +1,4 @@
 class ApiConstants {
-
-
   static const String baseUrl =
       'http://127.0.0.1:5001/api'; // Update to your production IP
   static const String serverUrl = 'http://127.0.0.1:5001';
@@ -34,4 +32,8 @@ class ApiConstants {
 
   // User
   static const String profile = '/users/profile';
+
+  // AI Color Prediction
+  static const String colorPredict = '/color-predict';
+  static const String colorPredictFromImage = '/color-predict/from-image';
 }

@@ -20,7 +20,7 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false,
 }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 app.use(morgan('dev'));
 
 // Routes
@@ -41,6 +41,7 @@ import supportRoutes from './modules/support/routes.js';
 import masterRoutes from './modules/master/routes.js';
 import inventoryRoutes from './modules/inventory/routes.js';
 import productionRoutes from './modules/production/routes.js';
+import colorPredictRoutes from './modules/color-predict/routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -57,6 +58,7 @@ import path from 'path';
 app.use('/api/master', masterRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/production', productionRoutes);
+app.use('/api/color-predict', colorPredictRoutes);
 app.use('/api/upload', uploadRoutes);
 
 const __dirname = path.resolve();

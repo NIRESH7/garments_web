@@ -5,6 +5,7 @@ import {
     getInwards,
     getLotsFifo,
     getBalancedSets,
+    generateInwardNumber,
     generateDcNumber,
     createOutward,
     getOutwards,
@@ -24,6 +25,7 @@ router.route('/inward')
 
 router.get('/inward/fifo', protect, getLotsFifo);
 router.get('/inward/balanced-sets', protect, getBalancedSets);
+router.get('/inward/generate-no', protect, generateInwardNumber);
 
 // Outward
 router.route('/outward')

@@ -328,6 +328,15 @@ class MobileApiService {
     }
   }
 
+  Future<String?> generateInwardNumber() async {
+    try {
+      final response = await _client.get('${ApiConstants.inward}/generate-no');
+      return response.data['inwardNo'];
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<List<String>> getLotsFifo({required String dia}) async {
     try {
       final response = await _client.get(
@@ -377,6 +386,63 @@ class MobileApiService {
       return [];
     } catch (e) {
       return [];
+    }
+  }
+
+  // --- AI Color Prediction ---
+  Future<Map<String, dynamic>?> predictColor({
+    required String fabricType,
+    required double fabricGSM,
+    required String dyeType,
+    required double dyePercentage,
+    required List<String> dyeNames,
+    required double saltPercentage,
+    required double sodaAshPercentage,
+    required double aceticAcidPercentage,
+    List<String> otherChemicals = const [],
+  }) async {
+    try {
+      final response = await _client.post(
+        ApiConstants.colorPredict,
+        data: {
+          'fabricType': fabricType,
+          'fabricGSM': fabricGSM,
+          'dyeType': dyeType,
+          'dyePercentage': dyePercentage,
+          'dyeNames': dyeNames,
+          'saltPercentage': saltPercentage,
+          'sodaAshPercentage': sodaAshPercentage,
+          'aceticAcidPercentage': aceticAcidPercentage,
+          'otherChemicals': otherChemicals,
+        },
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return Map<String, dynamic>.from(response.data);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // --- AI Image Color Detection ---
+  Future<Map<String, dynamic>?> detectColorFromImage(
+    String imageBase64, {
+    List<String> existingColors = const [],
+  }) async {
+    try {
+      final response = await _client.post(
+        ApiConstants.colorPredictFromImage,
+        data: {'imageBase64': imageBase64, 'existingColors': existingColors},
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return Map<String, dynamic>.from(response.data);
+      }
+      print('Color detect: status=${response.statusCode}');
+      return null;
+    } catch (e) {
+      print('Color detect error: $e');
+      return null;
     }
   }
 }

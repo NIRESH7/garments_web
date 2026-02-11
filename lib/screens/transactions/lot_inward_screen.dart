@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -24,6 +25,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   String? _selectedLotName;
   final _lotNumberController = TextEditingController();
+  final _inwardNoController = TextEditingController();
   String? _selectedParty;
   String _process = "";
   final _vehicleController = TextEditingController();
@@ -42,10 +44,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   final _complaintController = TextEditingController();
   XFile? _complaintImage;
 
-  List<String?> _selectedRacks = [null, null, null];
-  List<String?> _selectedPallets = [null, null, null];
+  /// Per–DIA storage & sticker details
+  Map<String, StickerDiaData> _stickerData = {};
 
-  Map<String, List<StickerRow>> _stickerData = {};
+  /// DIAs for which storage details have been completed
+  final Set<String> _completedStickerDias = {};
 
   List<String> _dias = [];
   List<String> _colours = [];
@@ -68,6 +71,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     setState(() => _isLoading = true);
     final categories = await _api.getCategories();
     final parties = await _api.getParties();
+    final inwardNo = await _api.generateInwardNumber();
 
     setState(() {
       _isLoading = false;
@@ -83,6 +87,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       _rackNames = _getValues(categories, ['Rack Name', 'Rack', 'Racks']);
       _palletNos = _getValues(categories, ['Pallet No', 'Pallet', 'Pallets']);
       _parties = parties.map((m) => m['name'] as String).toList();
+      if (inwardNo != null) {
+        _inwardNoController.text = inwardNo;
+      }
     });
   }
 
@@ -198,6 +205,193 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
+  Future<void> _pickColorFromImage(StickerRow row) async {
+    final ImagePicker picker = ImagePicker();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Detect Colour from Image',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library,
+                color: ColorPalette.primary,
+              ),
+              title: const Text('Pick from Gallery'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 50,
+                  maxWidth: 800,
+                );
+                if (image != null) _detectAndSetColor(image, row);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.camera_alt,
+                color: ColorPalette.primary,
+              ),
+              title: const Text('Take a Photo'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 50,
+                  maxWidth: 800,
+                );
+                if (image != null) _detectAndSetColor(image, row);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _detectAndSetColor(XFile image, StickerRow row) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Detecting colour...',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'AI is analyzing the image',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Read and encode image
+      final bytes = await File(image.path).readAsBytes();
+      final base64Str = base64Encode(bytes);
+
+      // Call API with existing colors so AI prefers matching them
+      final result = await _api.detectColorFromImage(
+        base64Str,
+        existingColors: _colours,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // dismiss loading
+
+      if (result != null && result['colorName'] != null) {
+        final colorName = result['colorName'] as String;
+
+        // Try to find exact match in existing list (case-insensitive)
+        final matchedExisting = _colours.firstWhere(
+          (c) => c.toLowerCase() == colorName.toLowerCase(),
+          orElse: () => '',
+        );
+
+        final bool exists = matchedExisting.isNotEmpty;
+        // Use the exact string from the list for dropdown matching
+        final String finalColor = exists ? matchedExisting : colorName;
+
+        if (!exists) {
+          // Add to master colours via API
+          try {
+            final categories = await _api.getCategories();
+            var coloursCat = categories.firstWhere(
+              (c) => (c['name'] as String).toLowerCase() == 'colours',
+              orElse: () => null,
+            );
+
+            if (coloursCat != null) {
+              final categoryId = coloursCat['_id'] as String;
+              await _api.addCategoryValue(categoryId, colorName);
+            }
+          } catch (_) {}
+
+          // Update local list
+          setState(() {
+            _colours.add(colorName);
+            _masterColours.add(colorName);
+          });
+        }
+
+        // Set the colour on the row (using exact matched string)
+        setState(() => row.colour = finalColor);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: _hexToColor(
+                      result['hexColor'] as String? ?? '#888888',
+                    ),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    exists
+                        ? 'Matched: $finalColor'
+                        : 'New colour added: $finalColor',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: exists
+                ? ColorPalette.primary
+                : const Color(0xFF10B981),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      } else {
+        _showError('Could not detect colour. Try again with a clearer image.');
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // dismiss loading
+        _showError('Error detecting colour: ${e.toString()}');
+      }
+    }
+  }
+
+  Color _hexToColor(String hex) {
+    hex = hex.replaceAll('#', '');
+    if (hex.length == 6) hex = 'FF$hex';
+    return Color(int.parse(hex, radix: 16));
+  }
+
   void _showLargeImage(XFile file) {
     showDialog(
       context: context,
@@ -251,6 +445,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       "inwardDate": DateFormat('yyyy-MM-dd').format(_inwardDate),
       "inTime": _inTime,
       "outTime": _outTime,
+      "inwardNo": _inwardNoController.text.trim().isEmpty
+          ? null
+          : _inwardNoController.text.trim(),
       "lotName": _selectedLotName,
       "lotNo": _lotNumberController.text,
       "fromParty": _selectedParty,
@@ -276,9 +473,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           .map(
             (e) => {
               "dia": e.key,
-              "racks": _selectedRacks.where((r) => r != null).toList(),
-              "pallets": _selectedPallets.where((p) => p != null).toList(),
-              "rows": e.value
+              "racks": e.value.racks.where((r) => r != null).toList(),
+              "pallets": e.value.pallets.where((p) => p != null).toList(),
+              "rows": e.value.rows
                   .where((r) => r.colour != null)
                   .map((r) => {"colour": r.colour, "setWeights": r.setWeights})
                   .toList(),
@@ -348,12 +545,51 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   void _navigateToStickerPage() {
-    final hasValidDia = _rows.any((r) => r.dia != null && r.dia!.isNotEmpty);
-    if (!hasValidDia) {
-      _showError('Please select a DIA in the table first');
+    // DIAs that have at least one roll entered
+    final diasWithRolls = _getDiasWithRolls().toList();
+
+    if (diasWithRolls.isEmpty) {
+      _showError('Please enter at least one DIA with ROLLS first');
       return;
     }
-    setState(() => _currentPage = 1);
+
+    // Pick the first DIA that does not yet have completed storage details
+    final pendingDias = diasWithRolls
+        .where((d) => !_completedStickerDias.contains(d))
+        .toList();
+
+    if (pendingDias.isEmpty) {
+      _showError('Storage details have been entered for all DIAs');
+      return;
+    }
+
+    final nextDia = pendingDias.first;
+
+    setState(() {
+      _selectedStickerDia = nextDia;
+      _stickerData.putIfAbsent(nextDia, () => StickerDiaData());
+      _currentPage = 1;
+    });
+  }
+
+  /// All DIAs from the main grid that have rolls entered
+  Set<String> _getDiasWithRolls() {
+    return _rows
+        .where(
+          (r) =>
+              r.dia != null &&
+              r.dia!.trim().isNotEmpty &&
+              r.rolls > 0, // rolls imply this DIA is active
+        )
+        .map((r) => r.dia!.trim())
+        .toSet();
+  }
+
+  /// Whether every DIA with rolls has completed storage details
+  bool get _allDiasHaveStorage {
+    final diasWithRolls = _getDiasWithRolls();
+    if (diasWithRolls.isEmpty) return false;
+    return diasWithRolls.every(_completedStickerDias.contains);
   }
 
   @override
@@ -405,6 +641,21 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _inwardNoController,
+                    decoration: const InputDecoration(
+                      labelText: "Inward No",
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -594,11 +845,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildStickerPage() {
-    final enteredDias = _rows
-        .where((r) => r.dia != null)
-        .map((r) => r.dia!.trim())
-        .toSet()
-        .toList();
+    final enteredDias = _getDiasWithRolls().toList();
     int setsCount = 0;
     if (_selectedStickerDia != null) {
       for (var r in _rows) {
@@ -628,7 +875,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           "Select DIA for Stickers",
           _selectedStickerDia,
           enteredDias,
-          (v) => setState(() => _selectedStickerDia = v),
+          (v) => setState(() {
+            _selectedStickerDia = v;
+            if (v != null) {
+              _stickerData.putIfAbsent(v, () => StickerDiaData());
+            }
+          }),
         ),
         const SizedBox(height: 16),
         if (_selectedStickerDia != null) ...[
@@ -655,9 +907,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           width: double.infinity,
           height: 45,
           child: ElevatedButton.icon(
-            onPressed: _save,
+            onPressed: _saveStorageForCurrentDia,
             icon: const Icon(Icons.save),
-            label: const Text("Save Entry"),
+            label: const Text("Save Storage for DIA"),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
@@ -670,6 +922,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildStorageDropdowns() {
+    if (_selectedStickerDia == null) return const SizedBox.shrink();
+    final diaData =
+        _stickerData[_selectedStickerDia!] ?? StickerDiaData(); // safety
+    _stickerData[_selectedStickerDia!] = diaData;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -695,9 +952,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: _buildSmallDropdown(
-                    _selectedRacks[i],
+                    diaData.racks[i],
                     _rackNames,
-                    (v) => setState(() => _selectedRacks[i] = v),
+                    (v) => setState(() => diaData.racks[i] = v),
                     hint: "Rack ${i + 1}",
                   ),
                 ),
@@ -712,9 +969,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: _buildSmallDropdown(
-                    _selectedPallets[i],
+                    diaData.pallets[i],
                     _palletNos,
-                    (v) => setState(() => _selectedPallets[i] = v),
+                    (v) => setState(() => diaData.pallets[i] = v),
                     hint: "Pallet ${i + 1}",
                   ),
                 ),
@@ -727,9 +984,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildDynamicSetTable(int sets) {
-    if (!_stickerData.containsKey(_selectedStickerDia!))
-      _stickerData[_selectedStickerDia!] = [StickerRow()];
-    final rows = _stickerData[_selectedStickerDia!]!;
+    final dia = _selectedStickerDia!;
+    final diaData =
+        _stickerData[dia] ?? StickerDiaData(); // ensure entry exists
+    if (!_stickerData.containsKey(dia)) {
+      _stickerData[dia] = diaData;
+    }
+    final rows = diaData.rows;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -751,10 +1012,33 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             cells: [
               DataCell(Text("${idx + 1}")),
               DataCell(
-                _buildSmallDropdown(
-                  r.colour,
-                  _colours,
-                  (v) => setState(() => r.colour = v),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      child: _buildSmallDropdown(
+                        r.colour,
+                        _colours,
+                        (v) => setState(() => r.colour = v),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _pickColorFromImage(r),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: ColorPalette.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          size: 18,
+                          color: ColorPalette.primary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               ...List.generate(sets, (i) {
@@ -899,21 +1183,84 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         ),
       ),
       const SizedBox(height: 12),
-      SizedBox(
-        width: double.infinity,
-        height: 45,
-        child: ElevatedButton.icon(
-          onPressed: _save,
-          icon: const Icon(Icons.save),
-          label: const Text("Save Entry"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
+      if (_allDiasHaveStorage)
+        SizedBox(
+          width: double.infinity,
+          height: 45,
+          child: ElevatedButton.icon(
+            onPressed: _save,
+            icon: const Icon(Icons.save),
+            label: const Text("Save Entry"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        )
+      else
+        const Text(
+          "Complete storage details for all DIAs before final save.",
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.red,
+            fontWeight: FontWeight.w500,
           ),
         ),
-      ),
     ],
   );
+
+  /// Save storage details for the currently selected DIA and return to main page.
+  void _saveStorageForCurrentDia() {
+    if (_selectedStickerDia == null) {
+      _showError('Please select a DIA for stickers');
+      return;
+    }
+
+    final dia = _selectedStickerDia!.trim();
+
+    // Recalculate sets count for this DIA from the main grid
+    int setsCount = 0;
+    for (var r in _rows) {
+      if (r.dia?.trim() == dia) {
+        setsCount += r.sets;
+      }
+    }
+
+    if (setsCount <= 0) {
+      _showError(
+        'No sets calculated. Please enter ROLLS/SETS on the first page for this DIA.',
+      );
+      return;
+    }
+
+    final diaData = _stickerData[dia] ?? StickerDiaData();
+
+    final hasRackOrPallet =
+        diaData.racks.any((r) => r != null && r.isNotEmpty) ||
+        diaData.pallets.any((p) => p != null && p.isNotEmpty);
+
+    if (!hasRackOrPallet) {
+      _showError('Please select at least one Rack or Pallet.');
+      return;
+    }
+
+    // At least one colour row with any set weight entered
+    final hasAnyRow = diaData.rows.any(
+      (r) => r.colour != null && r.setWeights.any((w) => w.trim().isNotEmpty),
+    );
+
+    if (!hasAnyRow) {
+      _showError('Please enter at least one sticker row for this DIA.');
+      return;
+    }
+
+    setState(() {
+      _stickerData[dia] = diaData;
+      _completedStickerDias.add(dia);
+      _selectedStickerDia = null;
+      _currentPage = 0; // back to main page
+    });
+  }
 
   Widget _buildImageSection(String label, XFile? file, Function(XFile?) onSet) {
     return Card(
@@ -1059,4 +1406,10 @@ class InwardRow {
 class StickerRow {
   String? colour;
   List<String> setWeights = [];
+}
+
+class StickerDiaData {
+  List<String?> racks = [null, null, null];
+  List<String?> pallets = [null, null, null];
+  List<StickerRow> rows = [StickerRow()];
 }

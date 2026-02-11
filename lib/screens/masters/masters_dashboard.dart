@@ -5,6 +5,7 @@ import 'categories_master_screen.dart';
 import 'dropdown_setup_screen.dart';
 import 'item_master_screen.dart';
 import 'party_master_screen.dart';
+import 'color_prediction_screen.dart';
 
 class MastersDashboard extends StatelessWidget {
   const MastersDashboard({super.key});
@@ -62,8 +63,18 @@ class MastersDashboard extends StatelessWidget {
             icon: LucideIcons.layoutGrid,
             onTap: () => Navigator.push(
               context,
+              MaterialPageRoute(builder: (context) => const ItemMasterScreen()),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _MenuTile(
+            title: 'Color Prediction',
+            subtitle: 'Predict garment dye color from recipe',
+            icon: LucideIcons.palette,
+            onTap: () => Navigator.push(
+              context,
               MaterialPageRoute(
-                builder: (context) => const ItemMasterScreen(),
+                builder: (context) => const ColorPredictionScreen(),
               ),
             ),
           ),

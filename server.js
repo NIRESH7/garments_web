@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import chatRouter from './routes/chat.js';
 import uploadRouter from './routes/upload.js';
+import colorPredictRouter from './routes/colorPredict.js';
 import connectMongo from './config/mongo.js';
 
 dotenv.config();
@@ -22,6 +23,7 @@ const publicDir = path.resolve('public');
 app.use(express.static(publicDir));
 
 app.use('/api/chat', chatRouter);
+app.use('/api/color-predict', colorPredictRouter);
 // app.use('/api/upload', uploadRouter);
 
 app.get('*', (_req, res) => {
