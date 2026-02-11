@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class ItemMasterScreen extends StatefulWidget {
   const ItemMasterScreen({super.key});
 
@@ -135,19 +137,14 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButtonFormField<String>(
+                    CustomDropdownField(
+                      label: 'Group Name',
                       value: _selectedGroupName,
-                      decoration: const InputDecoration(
-                        labelText: 'Group Name',
-                      ),
-                      items: _groupNames
-                          .map(
-                            (i) => DropdownMenuItem(value: i, child: Text(i)),
-                          )
-                          .toList(),
+                      items: _groupNames,
                       onChanged: (val) =>
                           setState(() => _selectedGroupName = val),
-                      validator: (val) => val == null ? 'Required' : null,
+                      validator: (val) =>
+                          val == null || val.isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -180,16 +177,13 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    DropdownButtonFormField<String>(
+                    CustomDropdownField(
+                      label: 'GSM',
                       value: _selectedGsm,
-                      decoration: const InputDecoration(labelText: 'GSM'),
-                      items: _gsmValues
-                          .map(
-                            (i) => DropdownMenuItem(value: i, child: Text(i)),
-                          )
-                          .toList(),
+                      items: _gsmValues,
                       onChanged: (val) => setState(() => _selectedGsm = val),
-                      validator: (val) => val == null ? 'Required' : null,
+                      validator: (val) =>
+                          val == null || val.isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
 

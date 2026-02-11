@@ -3,6 +3,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class ItemAssignmentScreen extends StatefulWidget {
   const ItemAssignmentScreen({super.key});
 
@@ -110,54 +112,40 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                     ),
                     child: Column(
                       children: [
-                        _buildFieldLabel('Fabric Item'),
                         _buildDropdown(
                           _items,
                           _selectedItem,
                           (v) => setState(() => _selectedItem = v),
-                          'Select Item',
+                          'Fabric Item',
                         ),
                         const SizedBox(height: 20),
                         Row(
                           children: [
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildFieldLabel('Size'),
-                                  _buildDropdown(
-                                    _sizes,
-                                    _selectedSize,
-                                    (v) => setState(() => _selectedSize = v),
-                                    'Select Size',
-                                  ),
-                                ],
+                              child: _buildDropdown(
+                                _sizes,
+                                _selectedSize,
+                                (v) => setState(() => _selectedSize = v),
+                                'Size',
                               ),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildFieldLabel('Dia'),
-                                  _buildDropdown(
-                                    _dias,
-                                    _selectedDia,
-                                    (v) => setState(() => _selectedDia = v),
-                                    'Select Dia',
-                                  ),
-                                ],
+                              child: _buildDropdown(
+                                _dias,
+                                _selectedDia,
+                                (v) => setState(() => _selectedDia = v),
+                                'Dia',
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 20),
-                        _buildFieldLabel('Efficiency (%)'),
                         _buildDropdown(
                           _efficiencies,
                           _selectedEfficiency,
                           (v) => setState(() => _selectedEfficiency = v),
-                          'Select %',
+                          'Efficiency (%)',
                         ),
                         const SizedBox(height: 20),
                         _buildFieldLabel('Dozen Weight (Kg)'),
@@ -222,23 +210,15 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
     List<String> items,
     String? value,
     Function(String?) onChanged,
-    String hint,
-  ) {
-    return DropdownButtonFormField<String>(
+    String label, {
+    String hint = "Select",
+  }) {
+    return CustomDropdownField(
+      label: label,
+      items: items,
       value: value,
-      decoration: const InputDecoration(
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
-      hint: Text(hint, style: const TextStyle(fontSize: 14)),
-      items: items
-          .map(
-            (i) => DropdownMenuItem(
-              value: i,
-              child: Text(i, style: const TextStyle(fontSize: 14)),
-            ),
-          )
-          .toList(),
       onChanged: onChanged,
+      hint: hint,
     );
   }
 }

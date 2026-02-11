@@ -4,6 +4,8 @@ import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 import 'package:intl/intl.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class FormatReportsScreen extends StatefulWidget {
   const FormatReportsScreen({super.key});
 
@@ -169,7 +171,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Let's assume filtering the *source* list (which we already do via Aging Report API) is enough,
         // unless we want to filter the *summary view* locally.
         // Let's reload Aging Data with filters and then re-summarize.
-         _agingData = await _apiService.getLotAgingReport(
+        _agingData = await _apiService.getLotAgingReport(
           lotName: filters['lotName'],
           // Date filter is not standard for "Current Stock" usually, but let's see.
           // If user wants to see "Stock that came in on Date X", we can add date filter to aging API if needed.
@@ -212,12 +214,19 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     }
   }
 
-
-
   // --- 1. AGING REPORT --- (Headers: Date, Lot No, Name, Dia, Colour, Rolls, Weight, Days)
   Widget _buildAgingReport() {
     return _buildReportTable(
-      headers: ['Date', 'Lot No', 'Name', 'Dia', 'Colour', 'Rolls', 'Wt', 'Days'],
+      headers: [
+        'Date',
+        'Lot No',
+        'Name',
+        'Dia',
+        'Colour',
+        'Rolls',
+        'Wt',
+        'Days',
+      ],
       rows: _agingData.map((item) {
         final aging = _calculateAging(item['inward_date']);
         return <String>[
@@ -238,16 +247,17 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   Widget _buildAgingSummaryReport() {
     // Apply local date filter if needed for Summary
     final filters = _filters[1] ?? {};
-    final dateFilter = filters['date']; // Assuming single date or we can do range
-    
+    final dateFilter =
+        filters['date']; // Assuming single date or we can do range
+
     // Group by Lot No
     final Map<String, dynamic> summary = {};
     for (var item in _agingData) {
-       // Local Date Filter
-       if (dateFilter != null && dateFilter.isNotEmpty) {
-           // Simple string match or compare
-           if (!_formatDate(item['inward_date']).contains(dateFilter)) continue;
-       }
+      // Local Date Filter
+      if (dateFilter != null && dateFilter.isNotEmpty) {
+        // Simple string match or compare
+        if (!_formatDate(item['inward_date']).contains(dateFilter)) continue;
+      }
 
       final lot = item['lot_number'] ?? 'N/A';
       if (!summary.containsKey(lot)) {
@@ -294,15 +304,34 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     }
 
     return _buildReportTable(
-      headers: ['Date', 'Inward No', 'Party', 'Party DC', 'Lot No', 'Lot Name', 'Roll', 'Wt', 'Val'],
+      headers: [
+        'Date',
+        'Inward No',
+        'Party',
+        'Party DC',
+        'Lot No',
+        'Lot Name',
+        'Roll',
+        'Wt',
+        'Val',
+      ],
       rows: rows,
     );
   }
-  
+
   // --- 4. OUTWARD REPORT --- (Headers: Party, Lot Name, Date, DC No, Lot No, Process, Rolls, Wt)
   Widget _buildOutwardReport() {
     return _buildReportTable(
-      headers: ['Party', 'Lot Name', 'Date', 'DC No', 'Lot No', 'Process', 'Rolls', 'Wt'],
+      headers: [
+        'Party',
+        'Lot Name',
+        'Date',
+        'DC No',
+        'Lot No',
+        'Process',
+        'Rolls',
+        'Wt',
+      ],
       rows: _outwardData.map((out) {
         final items = out['items'] as List? ?? [];
         final weight = items.fold(
@@ -322,7 +351,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       }).toList(),
     );
   }
-  
+
   // --- 5. CLOSING STOCK --- (Headers: Lot No, Lot Name, In Roll, In Wt, Out Roll, Out Wt, Bal Roll, Bal Wt, Status)
   Widget _buildClosingReport() {
     return _buildReportTable(
@@ -335,7 +364,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Out Wt',
         'Bal Roll',
         'Bal Wt',
-        'Status'
+        'Status',
       ],
       rows: _closingData.map((item) {
         return <String>[
@@ -486,16 +515,34 @@ class _FilterDialogState extends State<_FilterDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if ([2, 3, 4].contains(widget.tabIndex)) ...[
-                _buildDateRangePicker('startDate', 'Start Date', _startDateController),
+                _buildDateRangePicker(
+                  'startDate',
+                  'Start Date',
+                  _startDateController,
+                ),
                 const SizedBox(height: 8),
-                _buildDateRangePicker('endDate', 'End Date', _endDateController),
+                _buildDateRangePicker(
+                  'endDate',
+                  'End Date',
+                  _endDateController,
+                ),
                 const SizedBox(height: 8),
               ],
               if (widget.tabIndex == 1) // Aging Summary
                 _buildDatePicker('date', 'Date (Inward)', _dateController),
-              if ([0, 1, 2, 3, 4].contains(widget.tabIndex)) // Lot Name (All Reports)
+              if ([
+                0,
+                1,
+                2,
+                3,
+                4,
+              ].contains(widget.tabIndex)) // Lot Name (All Reports)
                 _buildTextField('lotName', 'Lot Name'),
-              if ([0, 3, 4].contains(widget.tabIndex)) // Lot No (Aging, Outward, Closing)
+              if ([
+                0,
+                3,
+                4,
+              ].contains(widget.tabIndex)) // Lot No (Aging, Outward, Closing)
                 _buildTextField('lotNo', 'Lot No'),
               if (widget.tabIndex == 2) // Party (Inward)
                 _buildTextField('party', 'Party Name'),
@@ -504,7 +551,11 @@ class _FilterDialogState extends State<_FilterDialog> {
               if (widget.tabIndex == 0) // Colour (Aging)
                 _buildTextField('colour', 'Colour'),
               if (widget.tabIndex == 4) // Status (Closing)
-                 _buildDropdown('status', 'Status', ['All', 'Pending', 'Completed']),
+                _buildDropdown('status', 'Status', [
+                  'All',
+                  'Pending',
+                  'Completed',
+                ]),
             ],
           ),
         ),
@@ -533,16 +584,24 @@ class _FilterDialogState extends State<_FilterDialog> {
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
         ),
         onChanged: (val) => _filters[key] = val,
       ),
     );
   }
 
-  Widget _buildDateRangePicker(String key, String label, TextEditingController controller) {
+  Widget _buildDateRangePicker(
+    String key,
+    String label,
+    TextEditingController controller,
+  ) {
     return TextFormField(
-      controller: controller, // Use controller instead of initialValue for date pickers
+      controller:
+          controller, // Use controller instead of initialValue for date pickers
       readOnly: true,
       decoration: InputDecoration(
         labelText: label,
@@ -560,15 +619,19 @@ class _FilterDialogState extends State<_FilterDialog> {
         if (date != null) {
           final formatted = DateFormat('yyyy-MM-dd').format(date);
           setState(() {
-             _filters[key] = formatted;
-             controller.text = formatted;
+            _filters[key] = formatted;
+            controller.text = formatted;
           });
         }
       },
     );
   }
 
-    Widget _buildDatePicker(String key, String label, TextEditingController controller) {
+  Widget _buildDatePicker(
+    String key,
+    String label,
+    TextEditingController controller,
+  ) {
     return TextFormField(
       controller: controller,
       readOnly: true,
@@ -586,7 +649,7 @@ class _FilterDialogState extends State<_FilterDialog> {
           lastDate: DateTime(2030),
         );
         if (date != null) {
-           final formatted = DateFormat('dd/MM/yy').format(date);
+          final formatted = DateFormat('dd/MM/yy').format(date);
           setState(() {
             _filters[key] = formatted;
             controller.text = formatted;
@@ -595,26 +658,15 @@ class _FilterDialogState extends State<_FilterDialog> {
       },
     );
   }
+
   Widget _buildDropdown(String key, String label, List<String> items) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: DropdownButtonFormField<String>(
-        value: _filters[key],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-        items: items
-            .map((item) => DropdownMenuItem(
-                  value: item,
-                  child: Text(item),
-                ))
-            .toList(),
-        onChanged: (val) {
-          if (val != null) _filters[key] = val;
-        },
-      ),
+    return CustomDropdownField(
+      label: label,
+      value: _filters[key],
+      items: items,
+      onChanged: (val) {
+        if (val != null) setState(() => _filters[key] = val);
+      },
     );
   }
 }

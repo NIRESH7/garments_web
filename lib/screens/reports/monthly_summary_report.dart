@@ -3,6 +3,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class MonthlySummaryReportScreen extends StatefulWidget {
   const MonthlySummaryReportScreen({super.key});
 
@@ -96,42 +98,19 @@ class _MonthlySummaryReportScreenState
   }
 
   Widget _buildMonthSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: ColorPalette.softShadow,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: _selectedIndex,
-          onChanged: (val) => setState(() => _selectedIndex = val!),
-          items: List.generate(_reports.length, (index) {
-            return DropdownMenuItem(
-              value: index,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    LucideIcons.calendar,
-                    size: 18,
-                    color: ColorPalette.primary,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    _reports[index]['month'],
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ),
-      ),
+    return CustomDropdownField(
+      label: 'Select Month',
+      value: _reports.isNotEmpty ? _reports[_selectedIndex]['month'] : null,
+      items: _reports.map((r) => r['month'] as String).toList(),
+      onChanged: (val) {
+        if (val != null) {
+          final index = _reports.indexWhere((r) => r['month'] == val);
+          if (index != -1) {
+            setState(() => _selectedIndex = index);
+          }
+        }
+      },
+      prefixIcon: LucideIcons.calendar,
     );
   }
 

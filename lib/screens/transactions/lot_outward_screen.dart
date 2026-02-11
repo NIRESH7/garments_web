@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class LotOutwardScreen extends StatefulWidget {
   const LotOutwardScreen({super.key});
 
@@ -516,8 +518,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                                 icon: const Icon(Icons.clear, size: 16),
                                 onPressed: () {
                                   setState(() {
-                                    item['colour'] = ''; 
-                                    // Trigger rebuild? The TextFormField might not update without a key or controller, 
+                                    item['colour'] = '';
+                                    // Trigger rebuild? The TextFormField might not update without a key or controller,
                                     // but we are using initialValue. Best to use a controller or key if we want to clear it programmatically cleanly.
                                     // Actually, let's just use a changed value.
                                     // To make it simpler, we can just allow them to type.
@@ -538,8 +540,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                               suffixText: 'kg',
                               isDense: true,
                             ),
-                            onChanged:
-                                (v) => item['weight'] = double.tryParse(v) ?? 0,
+                            onChanged: (v) =>
+                                item['weight'] = double.tryParse(v) ?? 0,
                           ),
                         ),
                       ],
@@ -560,23 +562,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     String? value,
     Function(String?) onChanged,
   ) {
-    return DropdownButtonFormField<String>(
+    return CustomDropdownField(
+      label: label,
+      items: items,
       value: (value != null && items.contains(value)) ? value : null,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      items: items
-          .map(
-            (i) => DropdownMenuItem(
-              value: i,
-              child: Text(i, style: const TextStyle(fontSize: 13)),
-            ),
-          )
-          .toList(),
-      onChanged: _isSaved ? null : onChanged,
-      isExpanded: true,
+      onChanged: _isSaved ? (v) {} : onChanged,
     );
   }
 

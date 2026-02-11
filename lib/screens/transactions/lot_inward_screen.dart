@@ -7,6 +7,7 @@ import '../../services/mobile_api_service.dart';
 
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../widgets/custom_dropdown_field.dart';
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -145,7 +146,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       final fetchedColours = await _api.getColoursByLot(val);
       setState(() {
         if (fetchedColours.isNotEmpty) {
-          _colours = fetchedColours;
+          // Combine lot-specific colors with master colors
+          final List<String> combined = List<String>.from(
+            fetchedColours.map((c) => c.toString()),
+          );
+          for (var mc in _masterColours) {
+            if (!combined.contains(mc)) {
+              combined.add(mc);
+            }
+          }
+          _colours = combined;
         } else {
           _colours = List<String>.from(_masterColours);
         }
@@ -163,7 +173,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       row.recRoll = row.rolls;
       row.difference = row.recWeight - row.deliveredWeight;
       if (row.deliveredWeight > 0) {
-        row.lossPercent = (row.difference / row.deliveredWeight) * 100;
+        // Loss is positive when we receive less than delivered
+        row.lossPercent =
+            ((row.deliveredWeight - row.recWeight) / row.deliveredWeight) * 100;
       } else {
         row.lossPercent = 0;
       }
@@ -545,7 +557,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   void _navigateToStickerPage() {
-    // DIAs that have at least one roll entered
     final diasWithRolls = _getDiasWithRolls().toList();
 
     if (diasWithRolls.isEmpty) {
@@ -553,17 +564,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       return;
     }
 
-    // Pick the first DIA that does not yet have completed storage details
     final pendingDias = diasWithRolls
         .where((d) => !_completedStickerDias.contains(d))
         .toList();
 
-    if (pendingDias.isEmpty) {
-      _showError('Storage details have been entered for all DIAs');
-      return;
-    }
-
-    final nextDia = pendingDias.first;
+    // If no pending, allow navigating to the first one for editing
+    final nextDia = pendingDias.isNotEmpty
+        ? pendingDias.first
+        : diasWithRolls.first;
 
     setState(() {
       _selectedStickerDia = nextDia;
@@ -585,34 +593,49 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         .toSet();
   }
 
-  /// Whether every DIA with rolls has completed storage details
-  bool get _allDiasHaveStorage {
-    final diasWithRolls = _getDiasWithRolls();
-    if (diasWithRolls.isEmpty) return false;
-    return diasWithRolls.every(_completedStickerDias.contains);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Lot Inward Entry',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    return PopScope(
+      canPop: _currentPage == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _currentPage != 0) {
+          setState(() => _currentPage = 0);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (_currentPage != 0) {
+                setState(() => _currentPage = 0);
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+          title: Text(
+            _currentPage == 0
+                ? 'Lot Inward Entry'
+                : 'Sticker & Storage Details',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
-                child: _currentPage == 0
-                    ? _buildMainPage()
-                    : _buildStickerPage(),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12),
+                  child: _currentPage == 0
+                      ? _buildMainPage()
+                      : _buildStickerPage(),
+                ),
               ),
-            ),
-      bottomNavigationBar: _isLoading ? const LinearProgressIndicator() : null,
+        bottomNavigationBar: _isLoading
+            ? const LinearProgressIndicator()
+            : null,
+      ),
     );
   }
 
@@ -691,6 +714,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _lotNumberController,
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: "Lot No",
                       border: OutlineInputBorder(),
@@ -706,30 +730,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: CustomDropdownField(
+                    label: "From Party",
                     value: _parties.contains(_selectedParty)
                         ? _selectedParty
                         : null,
-                    isExpanded: true,
-                    items: _parties
-                        .map(
-                          (p) => DropdownMenuItem(
-                            value: p,
-                            child: Text(
-                              p,
-                              style: const TextStyle(fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    items: _parties,
                     onChanged: _onPartyChanged,
-                    decoration: const InputDecoration(
-                      labelText: "From Party",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.all(8),
-                    ),
-                    validator: (v) => v == null ? 'Required' : null,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
                   ),
                 ),
               ],
@@ -742,6 +751,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _rateController,
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: "Rate",
                       border: OutlineInputBorder(),
@@ -771,75 +781,273 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildDataTable() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 12,
-        border: TableBorder.all(color: Colors.grey.shade300),
-        columns: const [
-          DataColumn(label: Text("DIA")),
-          DataColumn(label: Text("ROLL")),
-          DataColumn(label: Text("SETS")),
-          DataColumn(label: Text("DELIV. WT")),
-          DataColumn(label: Text("REC. ROLL")),
-          DataColumn(label: Text("REC. WT")),
-          DataColumn(label: Text("RATE")),
-          DataColumn(label: Text("DIFF")),
-          DataColumn(label: Text("LOSS %")),
-          DataColumn(label: Text("")),
-        ],
-        rows: _rows.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final row = entry.value;
-          return DataRow(
-            cells: [
-              DataCell(
-                _buildSmallDropdown(
-                  row.dia,
-                  _dias,
-                  (v) => setState(() => row.dia = v),
+    return Column(
+      children: _rows.asMap().entries.map((entry) {
+        final idx = entry.key;
+        final row = entry.value;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Header with number and delete
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: ColorPalette.primary.withOpacity(0.06),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(14),
+                    topRight: Radius.circular(14),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: ColorPalette.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${idx + 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      row.dia != null ? 'DIA: ${row.dia}' : 'DIA Entry',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_rows.length > 1)
+                      InkWell(
+                        onTap: () => setState(() => _rows.removeAt(idx)),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              DataCell(
-                _buildGridInput(row.rolls, (v) {
-                  row.rolls = int.tryParse(v) ?? 0;
-                  _updateRowMath(row);
-                }),
-              ),
-              DataCell(
-                _buildGridInput(row.sets, (v) {
-                  row.sets = int.tryParse(v) ?? 0;
-                }),
-              ),
-              DataCell(
-                _buildGridInput(row.deliveredWeight, (v) {
-                  row.deliveredWeight = double.tryParse(v) ?? 0;
-                  _updateRowMath(row);
-                }),
-              ),
-              DataCell(Text(row.recRoll.toString())),
-              DataCell(
-                _buildGridInput(row.recWeight, (v) {
-                  row.recWeight = double.tryParse(v) ?? 0;
-                  _updateRowMath(row);
-                }),
-              ),
-              DataCell(
-                _buildGridInput(row.rate, (v) {
-                  row.rate = double.tryParse(v) ?? 0;
-                }),
-              ),
-              DataCell(Text(row.difference.toStringAsFixed(2))),
-              DataCell(Text("${row.lossPercent.toStringAsFixed(2)}%")),
-              DataCell(
-                IconButton(
-                  icon: const Icon(Icons.remove_circle, color: Colors.red),
-                  onPressed: () => setState(() => _rows.removeAt(idx)),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    // Row 1: DIA, Roll, Sets
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildCardField(
+                            'DIA',
+                            child: _buildSmallDropdown(
+                              row.dia,
+                              _dias,
+                              (v) => setState(() => row.dia = v),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildCardInput('Roll', row.rolls, (v) {
+                            row.rolls = int.tryParse(v) ?? 0;
+                            _updateRowMath(row);
+                          }),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildCardInput('Sets', row.sets, (v) {
+                            row.sets = int.tryParse(v) ?? 0;
+                          }),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Row 2: Deliv. Wt, Rec. Wt, Rate
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildCardInput(
+                            'Deliv. Wt',
+                            row.deliveredWeight,
+                            (v) {
+                              row.deliveredWeight = double.tryParse(v) ?? 0;
+                              _updateRowMath(row);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildCardInput('Rec. Wt', row.recWeight, (v) {
+                            row.recWeight = double.tryParse(v) ?? 0;
+                            _updateRowMath(row);
+                          }),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildCardInput('Rate', row.rate, (v) {
+                            row.rate = double.tryParse(v) ?? 0;
+                          }),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Row 3: Calculated values as info chips
+                    Row(
+                      children: [
+                        _buildInfoChip(
+                          'Rec Roll',
+                          '${row.recRoll}',
+                          Colors.blue,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildInfoChip(
+                          'Diff',
+                          row.difference.toStringAsFixed(2),
+                          row.difference != 0 ? Colors.orange : Colors.grey,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildInfoChip(
+                          'Loss',
+                          '${row.lossPercent.toStringAsFixed(1)}%',
+                          row.lossPercent > 0 ? Colors.red : Colors.green,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
-          );
-        }).toList(),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildCardField(String label, {required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildCardInput(String label, num val, Function(String) chg) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: TextFormField(
+            initialValue: val == 0 ? '' : val.toString(),
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.next,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            decoration: const InputDecoration(
+              hintText: '0',
+              hintStyle: TextStyle(color: Colors.grey),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 10,
+              ),
+              border: InputBorder.none,
+              isDense: true,
+            ),
+            onChanged: chg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -858,19 +1066,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => setState(() => _currentPage = 0),
-            ),
-            const Text(
-              "Sticker & Storage Details",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
         _buildDropdown(
           "Select DIA for Stickers",
           _selectedStickerDia,
@@ -992,78 +1188,250 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
     final rows = diaData.rows;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        border: TableBorder.all(color: Colors.grey.shade300),
-        columns: [
-          const DataColumn(label: Text("S.No")),
-          const DataColumn(label: Text("Colour")),
-          ...List.generate(
-            sets,
-            (i) => DataColumn(label: Text("Set-${i + 1}")),
-          ),
-          const DataColumn(label: Text("")),
-        ],
-        rows: rows.asMap().entries.map((e) {
+    return Column(
+      children: [
+        ...rows.asMap().entries.map((e) {
           final idx = e.key;
           final r = e.value;
-          return DataRow(
-            cells: [
-              DataCell(Text("${idx + 1}")),
-              DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 100,
-                      child: _buildSmallDropdown(
-                        r.colour,
-                        _colours,
-                        (v) => setState(() => r.colour = v),
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () => _pickColorFromImage(r),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: ColorPalette.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          size: 18,
-                          color: ColorPalette.primary,
-                        ),
-                      ),
-                    ),
-                  ],
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-              ),
-              ...List.generate(sets, (i) {
-                if (r.setWeights.length <= i) r.setWeights.add("");
-                return DataCell(
-                  SizedBox(
-                    width: 60,
-                    child: TextFormField(
-                      initialValue: r.setWeights[i],
-                      onChanged: (v) => r.setWeights[i] = v,
-                      decoration: const InputDecoration(isDense: true),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ColorPalette.primary.withOpacity(0.06),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(14),
+                      topRight: Radius.circular(14),
                     ),
                   ),
-                );
-              }),
-              DataCell(
-                IconButton(
-                  icon: const Icon(Icons.add, color: Colors.green),
-                  onPressed: () => setState(() => rows.add(StickerRow())),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: ColorPalette.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${idx + 1}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Colour & Set Weights',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (rows.length > 1)
+                        InkWell(
+                          onTap: () => setState(() => rows.removeAt(idx)),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Colour selector with camera
+                      Text(
+                        'COLOUR',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildSmallDropdown(
+                              r.colour,
+                              _colours,
+                              (v) => setState(() => r.colour = v),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () => _pickColorFromImage(r),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    ColorPalette.primary.withOpacity(0.15),
+                                    ColorPalette.primary.withOpacity(0.08),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: ColorPalette.primary.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(
+                                    Icons.camera_alt,
+                                    size: 16,
+                                    color: ColorPalette.primary,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'AI',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: ColorPalette.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Set weights in grid
+                      Text(
+                        'SET WEIGHTS',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(sets, (i) {
+                          if (r.setWeights.length <= i) r.setWeights.add('');
+                          return SizedBox(
+                            width: (MediaQuery.of(context).size.width - 80) / 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Set ${i + 1}',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey.shade500,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: TextFormField(
+                                    initialValue: r.setWeights[i],
+                                    onChanged: (v) => r.setWeights[i] = v,
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.next,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      hintText: '0',
+                                      hintStyle: TextStyle(color: Colors.grey),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 10,
+                                      ),
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
-        }).toList(),
-      ),
+        }),
+        // Add row button
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          child: OutlinedButton.icon(
+            onPressed: () => setState(() => rows.add(StickerRow())),
+            icon: const Icon(Icons.add_circle_outline, size: 18),
+            label: const Text('Add Colour Row'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: ColorPalette.primary,
+              side: BorderSide(color: ColorPalette.primary.withOpacity(0.3)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1081,6 +1449,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Widget _buildTextField(String label, TextEditingController c) =>
       TextFormField(
         controller: c,
+        textInputAction: TextInputAction.next,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -1092,65 +1461,34 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     String? val,
     List<String> items,
     Function(String?) chg,
-  ) => DropdownButtonFormField<String>(
-    value: items.contains(val) ? val : null,
-    items: items
-        .map(
-          (i) => DropdownMenuItem(
-            value: i,
-            child: Text(i, style: const TextStyle(fontSize: 13)),
-          ),
-        )
-        .toList(),
+  ) => CustomDropdownField(
+    label: label,
+    value: val,
+    items: items,
     onChanged: chg,
-    decoration: InputDecoration(
-      labelText: label,
-      border: const OutlineInputBorder(),
-      contentPadding: const EdgeInsets.all(8),
-    ),
+    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
   );
+
   Widget _buildSmallDropdown(
     String? val,
     List<String> items,
     Function(String?) chg, {
     String hint = "-",
-  }) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.grey.shade300),
-    ),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: items.contains(val) ? val : null,
-        items: items
-            .map(
-              (i) => DropdownMenuItem(
-                value: i,
-                child: Text(i, style: const TextStyle(fontSize: 11)),
-              ),
-            )
-            .toList(),
-        onChanged: chg,
-        isExpanded: true,
-        hint: Text(hint, style: const TextStyle(fontSize: 11)),
-      ),
-    ),
-  );
-  Widget _buildGridInput(num val, Function(String) chg) => TextFormField(
-    initialValue: val == 0 ? "" : val.toString(),
-    keyboardType: TextInputType.number,
-    decoration: const InputDecoration(border: InputBorder.none, hintText: "0"),
+  }) => CustomDropdownField(
+    label: "", // No label for small dropdown in grid
+    value: val,
+    items: items,
     onChanged: chg,
+    hint: hint,
   );
   Widget _buildGridHeader() => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
       const Text(
         "DIA-wise Entry",
-        style: TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
       ),
-      TextButton.icon(
+      OutlinedButton.icon(
         onPressed: () async {
           double defaultRate = 0;
           if (_selectedParty != null) {
@@ -1163,51 +1501,73 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           }
           setState(() => _rows.add(InwardRow()..rate = defaultRate));
         },
-        icon: const Icon(Icons.add),
-        label: const Text("Add Row"),
+        icon: const Icon(Icons.add_circle_outline, size: 18),
+        label: const Text("Add DIA"),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: ColorPalette.primary,
+          side: BorderSide(color: ColorPalette.primary.withOpacity(0.3)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        ),
       ),
     ],
   );
-  Widget _buildNavigationButtons() => Column(
-    children: [
-      SizedBox(
-        width: double.infinity,
-        height: 45,
-        child: ElevatedButton(
-          onPressed: _navigateToStickerPage,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
+  Widget _buildNavigationButtons() {
+    final diasWithRolls = _getDiasWithRolls();
+    final pending = diasWithRolls
+        .where((d) => !_completedStickerDias.contains(d))
+        .toList();
+    final allDone = diasWithRolls.isNotEmpty && pending.isEmpty;
+
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 45,
+          child: ElevatedButton(
+            onPressed: _navigateToStickerPage,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(
+              pending.isEmpty
+                  ? "Manage Storage Details"
+                  : "Next: Storage for DIA ${pending.first}",
+            ),
           ),
-          child: const Text("Next Page (Storage Details)"),
         ),
-      ),
-      const SizedBox(height: 12),
-      if (_allDiasHaveStorage)
+        const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           height: 45,
           child: ElevatedButton.icon(
-            onPressed: _save,
+            onPressed: allDone ? _save : null,
             icon: const Icon(Icons.save),
             label: const Text("Save Entry"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
+              backgroundColor: allDone ? Colors.green : Colors.grey.shade300,
+              foregroundColor: allDone ? Colors.white : Colors.grey,
             ),
           ),
-        )
-      else
-        const Text(
-          "Complete storage details for all DIAs before final save.",
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.red,
-            fontWeight: FontWeight.w500,
-          ),
         ),
-    ],
-  );
+        if (!allDone && diasWithRolls.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              "Missing storage for: ${pending.join(', ')}",
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   /// Save storage details for the currently selected DIA and return to main page.
   void _saveStorageForCurrentDia() {

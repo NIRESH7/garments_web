@@ -6,6 +6,8 @@ import '../../core/theme/color_palette.dart';
 import '../../services/color_prediction_service.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class ColorPredictionScreen extends StatefulWidget {
   const ColorPredictionScreen({super.key});
 
@@ -379,66 +381,20 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
   }
 
   Widget _buildFabricTypeDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: ColorPalette.softShadow,
-      ),
-      child: DropdownButtonFormField<String>(
-        value: _fabricType,
-        decoration: const InputDecoration(
-          labelText: 'Fabric',
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
-          labelStyle: TextStyle(fontSize: 13),
-        ),
-        style: const TextStyle(
-          fontSize: 14,
-          color: ColorPalette.textPrimary,
-          fontWeight: FontWeight.w600,
-        ),
-        icon: const Icon(LucideIcons.chevronDown, size: 16),
-        items: const [
-          DropdownMenuItem(value: 'cotton', child: Text('Cotton')),
-          DropdownMenuItem(value: 'polyester', child: Text('Polyester')),
-          DropdownMenuItem(value: 'blend', child: Text('Blend')),
-        ],
-        onChanged: (v) => setState(() => _fabricType = v!),
-      ),
+    return CustomDropdownField(
+      label: 'Fabric',
+      value: _fabricType,
+      items: const ['cotton', 'polyester', 'blend'],
+      onChanged: (v) => setState(() => _fabricType = v!),
     );
   }
 
   Widget _buildDyeTypeDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: ColorPalette.softShadow,
-      ),
-      child: DropdownButtonFormField<String>(
-        value: _dyeType,
-        decoration: const InputDecoration(
-          labelText: 'Dye Type',
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
-          labelStyle: TextStyle(fontSize: 13),
-        ),
-        style: const TextStyle(
-          fontSize: 14,
-          color: ColorPalette.textPrimary,
-          fontWeight: FontWeight.w600,
-        ),
-        icon: const Icon(LucideIcons.chevronDown, size: 16),
-        items: const [
-          DropdownMenuItem(value: 'reactive', child: Text('Reactive')),
-          DropdownMenuItem(value: 'disperse', child: Text('Disperse')),
-          DropdownMenuItem(value: 'vat', child: Text('Vat')),
-        ],
-        onChanged: (v) => setState(() => _dyeType = v!),
-      ),
+    return CustomDropdownField(
+      label: 'Dye Type',
+      value: _dyeType,
+      items: const ['reactive', 'disperse', 'vat'],
+      onChanged: (v) => setState(() => _dyeType = v!),
     );
   }
 

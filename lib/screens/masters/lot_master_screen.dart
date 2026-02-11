@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class LotMasterScreen extends StatefulWidget {
   const LotMasterScreen({super.key});
 
@@ -142,15 +144,13 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
     String? value,
     Function(String?) onChanged,
   ) {
-    return DropdownButtonFormField<String>(
+    return CustomDropdownField(
+      label: label,
+      items: items,
       value: value,
-      decoration: InputDecoration(labelText: label),
-      items: items
-          .map((i) => DropdownMenuItem(value: i, child: Text(i)))
-          .toList(),
       onChanged: onChanged,
-      validator: (val) => val == null ? 'Required' : null,
-      hint: Text('Select $label'),
+      validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+      hint: 'Select $label',
     );
   }
 }

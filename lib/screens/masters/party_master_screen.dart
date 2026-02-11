@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 
+import '../../widgets/custom_dropdown_field.dart';
+
 class PartyMasterScreen extends StatefulWidget {
   const PartyMasterScreen({super.key});
 
@@ -112,18 +114,15 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
                       keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
+                    CustomDropdownField(
+                      label: 'Process',
                       value: _selectedProcess,
-                      decoration: const InputDecoration(labelText: 'Process'),
-                      items: _processes
-                          .map(
-                            (p) => DropdownMenuItem(value: p, child: Text(p)),
-                          )
-                          .toList(),
+                      items: _processes,
                       onChanged: (val) =>
                           setState(() => _selectedProcess = val),
-                      validator: (v) => v == null ? 'Required' : null,
-                      hint: const Text('Select Process'),
+                      validator: (v) =>
+                          v == null || v.isEmpty ? 'Required' : null,
+                      hint: 'Select Process',
                     ),
                     const SizedBox(height: 16),
                     TextFormField(

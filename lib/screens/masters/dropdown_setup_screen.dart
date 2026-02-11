@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
+import '../../widgets/custom_dropdown_field.dart';
 
 class DropdownSetupScreen extends StatefulWidget {
   const DropdownSetupScreen({super.key});
@@ -174,23 +175,26 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  DropdownMenu<String>(
-                    initialSelection: _selectedCategoryId,
-                    width:
-                        MediaQuery.of(context).size.width -
-                        96, // Matches container padding
-                    label: const Text('Select Category'),
-                    dropdownMenuEntries: _categories.map((c) {
-                      return DropdownMenuEntry<String>(
-                        value: c['_id'] as String,
-                        label: c['name'] as String,
-                      );
-                    }).toList(),
-                    onSelected: (val) {
-                      setState(() {
-                        _selectedCategoryId = val;
-                      });
-                      _loadValues();
+                  CustomDropdownField(
+                    label: 'Select Category',
+                    value:
+                        _categories.any((c) => c['_id'] == _selectedCategoryId)
+                        ? _categories.firstWhere(
+                                (c) => c['_id'] == _selectedCategoryId,
+                              )['name']
+                              as String
+                        : null,
+                    items: _categories.map((c) => c['name'] as String).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        final cat = _categories.firstWhere(
+                          (c) => c['name'] == val,
+                        );
+                        setState(() {
+                          _selectedCategoryId = cat['_id'];
+                        });
+                        _loadValues();
+                      }
                     },
                   ),
                   const SizedBox(height: 16),
