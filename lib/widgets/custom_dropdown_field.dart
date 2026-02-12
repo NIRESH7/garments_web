@@ -82,7 +82,9 @@ class CustomDropdownField extends StatelessWidget {
                         ],
                         Expanded(
                           child: Text(
-                            value ?? hint,
+                            (value != null && value!.contains(' (#'))
+                                ? value!.split(' (#')[0]
+                                : value ?? hint,
                             style: TextStyle(
                               fontSize: 14,
                               color: value == null
@@ -268,7 +270,7 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
                         return ListTile(
                           onTap: () => widget.onSelected(item),
                           title: Text(
-                            item,
+                            item.contains(' (#') ? item.split(' (#')[0] : item,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: isSelected

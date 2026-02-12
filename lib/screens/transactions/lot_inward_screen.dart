@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 
 import 'package:image_picker/image_picker.dart';
@@ -44,6 +42,17 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   XFile? _qualityImage;
   final _complaintController = TextEditingController();
   XFile? _complaintImage;
+  XFile? _lotInchargeSignature;
+  XFile? _authorizedSignature;
+  XFile? _mdSignature;
+
+  // GSM, Shade, Washing Checks
+  String _gsmStatus = "OK";
+  XFile? _gsmImage;
+  String _shadeStatus = "OK";
+  XFile? _shadeImage;
+  String _washingStatus = "OK";
+  XFile? _washingImage;
 
   /// Per–DIA storage & sticker details
   Map<String, StickerDiaData> _stickerData = {};
@@ -217,193 +226,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Future<void> _pickColorFromImage(StickerRow row) async {
-    final ImagePicker picker = ImagePicker();
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Detect Colour from Image',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.photo_library,
-                color: ColorPalette.primary,
-              ),
-              title: const Text('Pick from Gallery'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final XFile? image = await picker.pickImage(
-                  source: ImageSource.gallery,
-                  imageQuality: 50,
-                  maxWidth: 800,
-                );
-                if (image != null) _detectAndSetColor(image, row);
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.camera_alt,
-                color: ColorPalette.primary,
-              ),
-              title: const Text('Take a Photo'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final XFile? image = await picker.pickImage(
-                  source: ImageSource.camera,
-                  imageQuality: 50,
-                  maxWidth: 800,
-                );
-                if (image != null) _detectAndSetColor(image, row);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _detectAndSetColor(XFile image, StickerRow row) async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text(
-                  'Detecting colour...',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'AI is analyzing the image',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    try {
-      // Read and encode image
-      final bytes = await File(image.path).readAsBytes();
-      final base64Str = base64Encode(bytes);
-
-      // Call API with existing colors so AI prefers matching them
-      final result = await _api.detectColorFromImage(
-        base64Str,
-        existingColors: _colours,
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // dismiss loading
-
-      if (result != null && result['colorName'] != null) {
-        final colorName = result['colorName'] as String;
-
-        // Try to find exact match in existing list (case-insensitive)
-        final matchedExisting = _colours.firstWhere(
-          (c) => c.toLowerCase() == colorName.toLowerCase(),
-          orElse: () => '',
-        );
-
-        final bool exists = matchedExisting.isNotEmpty;
-        // Use the exact string from the list for dropdown matching
-        final String finalColor = exists ? matchedExisting : colorName;
-
-        if (!exists) {
-          // Add to master colours via API
-          try {
-            final categories = await _api.getCategories();
-            var coloursCat = categories.firstWhere(
-              (c) => (c['name'] as String).toLowerCase() == 'colours',
-              orElse: () => null,
-            );
-
-            if (coloursCat != null) {
-              final categoryId = coloursCat['_id'] as String;
-              await _api.addCategoryValue(categoryId, colorName);
-            }
-          } catch (_) {}
-
-          // Update local list
-          setState(() {
-            _colours.add(colorName);
-            _masterColours.add(colorName);
-          });
-        }
-
-        // Set the colour on the row (using exact matched string)
-        setState(() => row.colour = finalColor);
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: _hexToColor(
-                      result['hexColor'] as String? ?? '#888888',
-                    ),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    exists
-                        ? 'Matched: $finalColor'
-                        : 'New colour added: $finalColor',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: exists
-                ? ColorPalette.primary
-                : const Color(0xFF10B981),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      } else {
-        _showError('Could not detect colour. Try again with a clearer image.');
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // dismiss loading
-        _showError('Error detecting colour: ${e.toString()}');
-      }
-    }
-  }
-
-  Color _hexToColor(String hex) {
-    hex = hex.replaceAll('#', '');
-    if (hex.length == 6) hex = 'FF$hex';
-    return Color(int.parse(hex, radix: 16));
-  }
-
   void _showLargeImage(XFile file) {
     showDialog(
       context: context,
@@ -485,8 +307,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           .map(
             (e) => {
               "dia": e.key,
-              "racks": e.value.racks.where((r) => r != null).toList(),
-              "pallets": e.value.pallets.where((p) => p != null).toList(),
+              "racks": e.value.racks,
+              "pallets": e.value.pallets,
               "rows": e.value.rows
                   .where((r) => r.colour != null)
                   .map((r) => {"colour": r.colour, "setWeights": r.setWeights})
@@ -501,18 +323,46 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     // String? balanceImgPath;
     String? qualityImgPath;
     String? complaintImgPath;
+    String? lotInchargeSigPath;
+    String? authorizedSigPath;
+    String? mdSigPath;
 
     // if (_balanceImage != null) balanceImgPath = await _api.uploadFile(_balanceImage!.path);
     if (_qualityImage != null)
       qualityImgPath = await _api.uploadFile(_qualityImage!.path);
     if (_complaintImage != null)
       complaintImgPath = await _api.uploadFile(_complaintImage!.path);
+    if (_lotInchargeSignature != null)
+      lotInchargeSigPath = await _api.uploadFile(_lotInchargeSignature!.path);
+    if (_authorizedSignature != null)
+      authorizedSigPath = await _api.uploadFile(_authorizedSignature!.path);
+    if (_mdSignature != null)
+      mdSigPath = await _api.uploadFile(_mdSignature!.path);
 
-    // inwardData["balanceImage"] = balanceImgPath;
+    // GSM, Shade, Washing Images
+    String? gsmImgPath;
+    String? shadeImgPath;
+    String? washingImgPath;
+
+    if (_gsmImage != null) gsmImgPath = await _api.uploadFile(_gsmImage!.path);
+    if (_shadeImage != null)
+      shadeImgPath = await _api.uploadFile(_shadeImage!.path);
+    if (_washingImage != null)
+      washingImgPath = await _api.uploadFile(_washingImage!.path);
+
     inwardData["qualityStatus"] = _qualityStatus;
     inwardData["qualityImage"] = qualityImgPath;
+    inwardData["gsmStatus"] = _gsmStatus;
+    inwardData["gsmImage"] = gsmImgPath;
+    inwardData["shadeStatus"] = _shadeStatus;
+    inwardData["shadeImage"] = shadeImgPath;
+    inwardData["washingStatus"] = _washingStatus;
+    inwardData["washingImage"] = washingImgPath;
     inwardData["complaintText"] = _complaintController.text;
     inwardData["complaintImage"] = complaintImgPath;
+    inwardData["lotInchargeSignature"] = lotInchargeSigPath;
+    inwardData["authorizedSignature"] = authorizedSigPath;
+    inwardData["mdSignature"] = mdSigPath;
 
     final success = await _api.saveInward(inwardData);
 
@@ -648,6 +498,30 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         // const SizedBox(height: 16),
         _buildQualitySection(),
         const SizedBox(height: 16),
+        _buildCheckSection(
+          title: "GSM Check",
+          status: _gsmStatus,
+          image: _gsmImage,
+          onStatusChanged: (v) => setState(() => _gsmStatus = v),
+          onImagePicked: (f) => _gsmImage = f,
+        ),
+        const SizedBox(height: 16),
+        _buildCheckSection(
+          title: "Shade Matching",
+          status: _shadeStatus,
+          image: _shadeImage,
+          onStatusChanged: (v) => setState(() => _shadeStatus = v),
+          onImagePicked: (f) => _shadeImage = f,
+        ),
+        const SizedBox(height: 16),
+        _buildCheckSection(
+          title: "Washing Check",
+          status: _washingStatus,
+          image: _washingImage,
+          onStatusChanged: (v) => setState(() => _washingStatus = v),
+          onImagePicked: (f) => _washingImage = f,
+        ),
+        const SizedBox(height: 16),
         _buildComplaintSection(),
         const SizedBox(height: 16),
         _buildGridHeader(),
@@ -781,273 +655,277 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildDataTable() {
-    return Column(
-      children: _rows.asMap().entries.map((entry) {
-        final idx = entry.key;
-        final row = entry.value;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300, width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with number and delete
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: ColorPalette.primary.withOpacity(0.06),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: ColorPalette.primary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${idx + 1}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      row.dia != null ? 'DIA: ${row.dia}' : 'DIA Entry',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (_rows.length > 1)
-                      InkWell(
-                        onTap: () => setState(() => _rows.removeAt(idx)),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.delete_outline,
-                            size: 18,
-                            color: Colors.red,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    // Row 1: DIA, Roll, Sets
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildCardField(
-                            'DIA',
-                            child: _buildSmallDropdown(
-                              row.dia,
-                              _dias,
-                              (v) => setState(() => row.dia = v),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildCardInput('Roll', row.rolls, (v) {
-                            row.rolls = int.tryParse(v) ?? 0;
-                            _updateRowMath(row);
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildCardInput('Sets', row.sets, (v) {
-                            row.sets = int.tryParse(v) ?? 0;
-                          }),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 2: Deliv. Wt, Rec. Wt, Rate
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildCardInput(
-                            'Deliv. Wt',
-                            row.deliveredWeight,
-                            (v) {
-                              row.deliveredWeight = double.tryParse(v) ?? 0;
-                              _updateRowMath(row);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildCardInput('Rec. Wt', row.recWeight, (v) {
-                            row.recWeight = double.tryParse(v) ?? 0;
-                            _updateRowMath(row);
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildCardInput('Rate', row.rate, (v) {
-                            row.rate = double.tryParse(v) ?? 0;
-                          }),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 3: Calculated values as info chips
-                    Row(
-                      children: [
-                        _buildInfoChip(
-                          'Rec Roll',
-                          '${row.recRoll}',
-                          Colors.blue,
-                        ),
-                        const SizedBox(width: 6),
-                        _buildInfoChip(
-                          'Diff',
-                          row.difference.toStringAsFixed(2),
-                          row.difference != 0 ? Colors.orange : Colors.grey,
-                        ),
-                        const SizedBox(width: 6),
-                        _buildInfoChip(
-                          'Loss',
-                          '${row.lossPercent.toStringAsFixed(1)}%',
-                          row.lossPercent > 0 ? Colors.red : Colors.green,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              // Table Header
+              _buildTableHeader(),
+              // Table Rows
+              ..._rows.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final row = entry.value;
+                return _buildDataRow(idx, row);
+              }),
             ],
           ),
-        );
-      }).toList(),
+        ),
+      ),
     );
   }
 
-  Widget _buildCardField(String label, {required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
-            letterSpacing: 0.5,
-          ),
+  Widget _buildTableHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300, width: 1),
         ),
-        const SizedBox(height: 4),
-        child,
-      ],
+      ),
+      child: Row(
+        children: [
+          _buildColumnHeader('#', 40),
+          _buildColumnHeader('DIA', 100),
+          _buildColumnHeader('ROLL', 80),
+          _buildColumnHeader('SETS', 80),
+          _buildColumnHeader('DELIV. WT', 100),
+          _buildColumnHeader('REC. ROLL', 100),
+          _buildColumnHeader('REC. WT', 100),
+          _buildColumnHeader('RATE', 80),
+          _buildColumnHeader('DIFF', 80),
+          _buildColumnHeader('LOSS %', 80),
+          _buildColumnHeader('ACTION', 60, isLast: true),
+        ],
+      ),
     );
   }
 
-  Widget _buildCardInput(String label, num val, Function(String) chg) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
-            letterSpacing: 0.5,
-          ),
+  Widget _buildColumnHeader(String label, double width, {bool isLast = false}) {
+    return Container(
+      width: width,
+      height: 40,
+      decoration: BoxDecoration(
+        border: Border(
+          right: isLast
+              ? BorderSide.none
+              : BorderSide(color: Colors.grey.shade300, width: 1),
         ),
-        const SizedBox(height: 4),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: TextFormField(
-            initialValue: val == 0 ? '' : val.toString(),
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.next,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            decoration: const InputDecoration(
-              hintText: '0',
-              hintStyle: TextStyle(color: Colors.grey),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 10,
-              ),
-              border: InputBorder.none,
-              isDense: true,
-            ),
-            onChanged: chg,
-          ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey.shade800,
+          letterSpacing: 0.5,
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildInfoChip(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.2)),
+  Widget _buildDataRow(int idx, InwardRow row) {
+    final bool isLastRow = idx == _rows.length - 1;
+    final Color rowBgColor = idx % 2 != 0
+        ? Colors.blue.shade50.withOpacity(0.2)
+        : Colors.white;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: rowBgColor,
+        border: Border(
+          bottom: BorderSide(
+            color: isLastRow ? Colors.transparent : Colors.grey.shade200,
+            width: 1,
+          ),
         ),
-        child: Column(
-          children: [
-            Text(
-              label,
+      ),
+      child: Row(
+        children: [
+          // #
+          _buildTableCell(
+            width: 40,
+            child: Text(
+              '${idx + 1}',
               style: TextStyle(
-                fontSize: 9,
-                color: color,
-                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade500,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
+          ),
+          // DIA
+          _buildTableCell(
+            width: 100,
+            child: _buildSmallDropdown(
+              row.dia,
+              _dias,
+              (v) => setState(() => row.dia = v),
+              hint: "-",
+            ),
+          ),
+          // ROLL
+          _buildTableCell(
+            width: 80,
+            child: _buildTableInput(row.rolls, (v) {
+              row.rolls = int.tryParse(v) ?? 0;
+              _updateRowMath(row);
+            }),
+          ),
+          // SETS
+          _buildTableCell(
+            width: 80,
+            child: _buildTableInput(row.sets, (v) {
+              row.sets = int.tryParse(v) ?? 0;
+            }),
+          ),
+          // DELIV. WT
+          _buildTableCell(
+            width: 100,
+            child: _buildTableInput(row.deliveredWeight, (v) {
+              row.deliveredWeight = double.tryParse(v) ?? 0;
+              _updateRowMath(row);
+            }),
+          ),
+          // REC. ROLL
+          _buildTableCell(
+            width: 100,
+            child: Text(
+              '${row.recRoll}',
+              style: const TextStyle(
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: Color(0xFF64748B),
               ),
             ),
-          ],
+          ),
+          // REC. WT
+          _buildTableCell(
+            width: 100,
+            child: _buildTableInput(row.recWeight, (v) {
+              row.recWeight = double.tryParse(v) ?? 0;
+              _updateRowMath(row);
+            }),
+          ),
+          // RATE
+          _buildTableCell(
+            width: 80,
+            child: _buildTableInput(row.rate, (v) {
+              row.rate = double.tryParse(v) ?? 0;
+            }),
+          ),
+          // DIFF
+          _buildTableCell(
+            width: 80,
+            child: Text(
+              row.difference.toStringAsFixed(2),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: row.difference != 0
+                    ? Colors.orange.shade800
+                    : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          // LOSS %
+          _buildTableCell(
+            width: 80,
+            child: Text(
+              '${row.lossPercent.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: row.lossPercent > 0
+                    ? Colors.red.shade800
+                    : Colors.green.shade800,
+              ),
+            ),
+          ),
+          // ACTION
+          _buildTableCell(
+            width: 60,
+            isLast: true,
+            child: _rows.length > 1
+                ? IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.grey,
+                      size: 20,
+                    ),
+                    onPressed: () => setState(() => _rows.removeAt(idx)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableCell({
+    required double width,
+    required Widget child,
+    bool isLast = false,
+  }) {
+    return Container(
+      width: width,
+      height: 48,
+      decoration: BoxDecoration(
+        border: Border(
+          right: isLast
+              ? BorderSide.none
+              : BorderSide(color: Colors.grey.shade300, width: 1),
         ),
+      ),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: child,
+    );
+  }
+
+  Widget _buildTableInput(num val, Function(String) chg) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.01),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: TextFormField(
+        initialValue: val == 0 ? '' : val.toString(),
+        keyboardType: TextInputType.number,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF334155),
+        ),
+        textAlign: TextAlign.center,
+        decoration: const InputDecoration(
+          hintText: '0',
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(vertical: 10),
+        ),
+        onChanged: chg,
       ),
     );
   }
@@ -1066,9 +944,17 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 4),
-        _buildDropdown(
+        const SizedBox(height: 16),
+        const Text(
           "Select DIA for Stickers",
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        _buildSmallDropdown(
           _selectedStickerDia,
           enteredDias,
           (v) => setState(() {
@@ -1078,9 +964,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             }
           }),
         ),
-        const SizedBox(height: 16),
         if (_selectedStickerDia != null) ...[
-          _buildStorageDropdowns(),
           const SizedBox(height: 16),
           if (setsCount > 0)
             _buildDynamicSetTable(setsCount)
@@ -1098,337 +982,277 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               ),
             ),
         ],
+        const SizedBox(height: 30),
+        _buildSignatureSection(),
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
-          height: 45,
+          height: 55,
           child: ElevatedButton.icon(
             onPressed: _saveStorageForCurrentDia,
             icon: const Icon(Icons.save),
-            label: const Text("Save Storage for DIA"),
+            label: const Text(
+              "Save Entry",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+              backgroundColor: const Color(0xFF22C55E).withOpacity(0.7),
               foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 40),
       ],
-    );
-  }
-
-  Widget _buildStorageDropdowns() {
-    if (_selectedStickerDia == null) return const SizedBox.shrink();
-    final diaData =
-        _stickerData[_selectedStickerDia!] ?? StickerDiaData(); // safety
-    _stickerData[_selectedStickerDia!] = diaData;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        children: [
-          const Text(
-            "Rack & Pallet (Required)",
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: ColorPalette.primary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: List.generate(
-              3,
-              (i) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: _buildSmallDropdown(
-                    diaData.racks[i],
-                    _rackNames,
-                    (v) => setState(() => diaData.racks[i] = v),
-                    hint: "Rack ${i + 1}",
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: List.generate(
-              3,
-              (i) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: _buildSmallDropdown(
-                    diaData.pallets[i],
-                    _palletNos,
-                    (v) => setState(() => diaData.pallets[i] = v),
-                    hint: "Pallet ${i + 1}",
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
   Widget _buildDynamicSetTable(int sets) {
     final dia = _selectedStickerDia!;
-    final diaData =
-        _stickerData[dia] ?? StickerDiaData(); // ensure entry exists
-    if (!_stickerData.containsKey(dia)) {
-      _stickerData[dia] = diaData;
-    }
+    final diaData = _stickerData[dia] ?? StickerDiaData();
     final rows = diaData.rows;
 
-    return Column(
-      children: [
-        ...rows.asMap().entries.map((e) {
-          final idx = e.key;
-          final r = e.value;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
+    // Ensure rack and pallet lists are sized correctly
+    while (diaData.racks.length < sets) diaData.racks.add(null);
+    while (diaData.pallets.length < sets) diaData.pallets.add(null);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row 1: Rack Name
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0).withOpacity(0.3),
+                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+              ),
+              child: Row(
+                children: [
+                  _buildGridCell(
+                    "Rack Name",
+                    170,
+                    alignment: Alignment.centerLeft,
+                    padding: 12,
                   ),
-                  decoration: BoxDecoration(
-                    color: ColorPalette.primary.withOpacity(0.06),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                      topRight: Radius.circular(14),
+                  ...List.generate(
+                    sets,
+                    (i) => _buildGridCell(
+                      "",
+                      100,
+                      child: _buildSmallDropdown(
+                        diaData.racks[i],
+                        _rackNames,
+                        (v) => setState(() => diaData.racks[i] = v),
+                        hint: "Rack",
+                      ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          color: ColorPalette.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${idx + 1}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Colour & Set Weights',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (rows.length > 1)
-                        InkWell(
-                          onTap: () => setState(() => rows.removeAt(idx)),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.delete_outline,
-                              size: 18,
-                              color: Colors.red,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Colour selector with camera
-                      Text(
-                        'COLOUR',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildSmallDropdown(
-                              r.colour,
-                              _colours,
-                              (v) => setState(() => r.colour = v),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          InkWell(
-                            onTap: () => _pickColorFromImage(r),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    ColorPalette.primary.withOpacity(0.15),
-                                    ColorPalette.primary.withOpacity(0.08),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: ColorPalette.primary.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Icon(
-                                    Icons.camera_alt,
-                                    size: 16,
-                                    color: ColorPalette.primary,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'AI',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: ColorPalette.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Set weights in grid
-                      Text(
-                        'SET WEIGHTS',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(sets, (i) {
-                          if (r.setWeights.length <= i) r.setWeights.add('');
-                          return SizedBox(
-                            width: (MediaQuery.of(context).size.width - 80) / 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Set ${i + 1}',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.grey.shade500,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.grey.shade200,
-                                    ),
-                                  ),
-                                  child: TextFormField(
-                                    initialValue: r.setWeights[i],
-                                    onChanged: (v) => r.setWeights[i] = v,
-                                    keyboardType: TextInputType.number,
-                                    textInputAction: TextInputAction.next,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      hintText: '0',
-                                      hintStyle: TextStyle(color: Colors.grey),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 10,
-                                      ),
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-        // Add row button
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 12),
-          child: OutlinedButton.icon(
-            onPressed: () => setState(() => rows.add(StickerRow())),
-            icon: const Icon(Icons.add_circle_outline, size: 18),
-            label: const Text('Add Colour Row'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: ColorPalette.primary,
-              side: BorderSide(color: ColorPalette.primary.withOpacity(0.3)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                ],
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
+            // Header Row 2: Pallet No
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0).withOpacity(0.3),
+                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+              ),
+              child: Row(
+                children: [
+                  _buildGridCell(
+                    "Pallet No",
+                    170,
+                    alignment: Alignment.centerLeft,
+                    padding: 12,
+                  ),
+                  ...List.generate(
+                    sets,
+                    (i) => _buildGridCell(
+                      "",
+                      100,
+                      child: _buildSmallDropdown(
+                        diaData.pallets[i],
+                        _palletNos,
+                        (v) => setState(() => diaData.pallets[i] = v),
+                        hint: "Pallet",
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Header Row 3: Labels
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0).withOpacity(0.5),
+                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+              ),
+              child: Row(
+                children: [
+                  _buildGridCell("S.NO", 50),
+                  _buildGridCell("Colour", 120),
+                  ...List.generate(
+                    sets,
+                    (i) => _buildGridCell("Set-${i + 1}", 100),
+                  ),
+                ],
+              ),
+            ),
+            // Data Rows
+            ...rows.asMap().entries.map((e) {
+              final idx = e.key;
+              final r = e.value;
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _buildGridCell('${idx + 1}', 50),
+                    _buildGridCell(
+                      "",
+                      120,
+                      child: _buildSmallDropdown(
+                        r.colour,
+                        _colours,
+                        (v) => setState(() => r.colour = v),
+                        hint: "Colour",
+                      ),
+                    ),
+                    ...List.generate(sets, (i) {
+                      if (r.setWeights.length <= i) r.setWeights.add('');
+                      return _buildGridCell(
+                        "",
+                        100,
+                        child: _buildTableInputText(
+                          r.setWeights[i],
+                          (v) => setState(() => r.setWeights[i] = v),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }),
+            // Add row button
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridCell(
+    String label,
+    double width, {
+    Widget? child,
+    Alignment alignment = Alignment.center,
+    double padding = 4,
+  }) {
+    return Container(
+      width: width,
+      height: 50,
+      padding: EdgeInsets.symmetric(horizontal: padding),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      ),
+      alignment: alignment,
+      child:
+          child ??
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: Color(0xFF475569),
+            ),
+          ),
+    );
+  }
+
+  Widget _buildTableInputText(String val, Function(String) chg) {
+    return TextFormField(
+      initialValue: val,
+      keyboardType: TextInputType.number,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+      textAlign: TextAlign.center,
+      decoration: const InputDecoration(
+        hintText: '-',
+        border: InputBorder.none,
+        isDense: true,
+      ),
+      onChanged: chg,
+    );
+  }
+
+  Widget _buildSignatureSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Signatures (E-Signature)",
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildSigBox(
+              "Lot Incharge",
+              _lotInchargeSignature,
+              (f) => setState(() => _lotInchargeSignature = f),
+            ),
+            _buildSigBox(
+              "Authorized",
+              _authorizedSignature,
+              (f) => setState(() => _authorizedSignature = f),
+            ),
+            _buildSigBox(
+              "MD",
+              _mdSignature,
+              (f) => setState(() => _mdSignature = f),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSigBox(String label, XFile? file, Function(XFile?) onPick) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () => _pickImage(onPick),
+          child: Container(
+            width: 90,
+            height: 50,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+            ),
+            child: file != null
+                ? Image.file(File(file.path), fit: BoxFit.contain)
+                : const Icon(Icons.edit, color: Colors.grey, size: 20),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -1486,9 +1310,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     children: [
       const Text(
         "DIA-wise Entry",
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF475569),
+        ),
       ),
-      OutlinedButton.icon(
+      TextButton.icon(
         onPressed: () async {
           double defaultRate = 0;
           if (_selectedParty != null) {
@@ -1501,16 +1329,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           }
           setState(() => _rows.add(InwardRow()..rate = defaultRate));
         },
-        icon: const Icon(Icons.add_circle_outline, size: 18),
-        label: const Text("Add DIA"),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: ColorPalette.primary,
-          side: BorderSide(color: ColorPalette.primary.withOpacity(0.3)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        icon: const Icon(Icons.add, size: 20),
+        label: const Text(
+          "Add Row",
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
+        style: TextButton.styleFrom(foregroundColor: const Color(0xFF0EA5E9)),
       ),
     ],
   );
@@ -1525,31 +1349,43 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       children: [
         SizedBox(
           width: double.infinity,
-          height: 45,
+          height: 60,
           child: ElevatedButton(
             onPressed: _navigateToStickerPage,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: const Color(0xFF0EA5E9),
               foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
-            child: Text(
-              pending.isEmpty
-                  ? "Manage Storage Details"
-                  : "Next: Storage for DIA ${pending.first}",
+            child: const Text(
+              "Next Page (Storage Details)",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
         ),
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
-          height: 45,
+          height: 60,
           child: ElevatedButton.icon(
             onPressed: allDone ? _save : null,
-            icon: const Icon(Icons.save),
-            label: const Text("Save Entry"),
+            icon: const Icon(Icons.save, size: 24),
+            label: const Text(
+              "Save Entry",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: allDone ? Colors.green : Colors.grey.shade300,
+              backgroundColor: allDone
+                  ? const Color(0xFF22C55E)
+                  : Colors.grey.shade300,
               foregroundColor: allDone ? Colors.white : Colors.grey,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
           ),
         ),
@@ -1620,6 +1456,36 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       _selectedStickerDia = null;
       _currentPage = 0; // back to main page
     });
+
+    // Check if another DIA is available for stickers
+    final allDias = _getDiasWithRolls();
+    final remaining = allDias
+        .where((d) => !_completedStickerDias.contains(d))
+        .toList();
+
+    if (remaining.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Sticker saved for DIA $dia. Another DIA (${remaining.join(', ')}) is available.",
+            ),
+            backgroundColor: Colors.blue.shade700,
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: "NEXT DIA",
+              textColor: Colors.white,
+              onPressed: () {
+                setState(() {
+                  _selectedStickerDia = remaining.first;
+                  _currentPage = 1;
+                });
+              },
+            ),
+          ),
+        );
+      });
+    }
   }
 
   Widget _buildImageSection(String label, XFile? file, Function(XFile?) onSet) {
@@ -1674,47 +1540,58 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildQualitySection() {
+  Widget _buildCheckSection({
+    required String title,
+    required String status,
+    required XFile? image,
+    required Function(String) onStatusChanged,
+    required Function(XFile?) onImagePicked,
+  }) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Quality Check",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             Row(
               children: [
                 Expanded(
                   child: RadioListTile(
                     title: const Text("OK", style: TextStyle(fontSize: 12)),
                     value: "OK",
-                    groupValue: _qualityStatus,
-                    onChanged: (v) =>
-                        setState(() => _qualityStatus = v.toString()),
+                    groupValue: status,
+                    onChanged: (v) => onStatusChanged(v.toString()),
                   ),
                 ),
                 Expanded(
                   child: RadioListTile(
                     title: const Text("Not OK", style: TextStyle(fontSize: 12)),
                     value: "Not OK",
-                    groupValue: _qualityStatus,
-                    onChanged: (v) =>
-                        setState(() => _qualityStatus = v.toString()),
+                    groupValue: status,
+                    onChanged: (v) => onStatusChanged(v.toString()),
                   ),
                 ),
               ],
             ),
             _buildImageSection(
-              "Quality Image",
-              _qualityImage,
-              (f) => _qualityImage = f,
+              "${title.split(' ')[0]} Image",
+              image,
+              onImagePicked,
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildQualitySection() {
+    return _buildCheckSection(
+      title: "Quality Check",
+      status: _qualityStatus,
+      image: _qualityImage,
+      onStatusChanged: (v) => setState(() => _qualityStatus = v),
+      onImagePicked: (f) => _qualityImage = f,
     );
   }
 
@@ -1769,7 +1646,7 @@ class StickerRow {
 }
 
 class StickerDiaData {
-  List<String?> racks = [null, null, null];
-  List<String?> pallets = [null, null, null];
+  List<String?> racks = [];
+  List<String?> pallets = [];
   List<StickerRow> rows = [StickerRow()];
 }

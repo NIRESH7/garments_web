@@ -25,11 +25,32 @@ class InwardDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildQualityCard(),
             const SizedBox(height: 16),
+            _buildCheckCard(
+              title: 'GSM Check',
+              statusField: 'gsmStatus',
+              imageField: 'gsmImage',
+            ),
+            const SizedBox(height: 16),
+            _buildCheckCard(
+              title: 'Shade Matching',
+              statusField: 'shadeStatus',
+              imageField: 'shadeImage',
+            ),
+            const SizedBox(height: 16),
+            _buildCheckCard(
+              title: 'Washing Check',
+              statusField: 'washingStatus',
+              imageField: 'washingImage',
+            ),
+            const SizedBox(height: 16),
             if (inward['complaintText'] != null &&
                 inward['complaintText'].toString().isNotEmpty)
               _buildComplaintCard(),
             const SizedBox(height: 16),
             _buildDiaEntriesCard(),
+            const SizedBox(height: 16),
+            _buildSignaturesCard(),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -90,7 +111,14 @@ class InwardDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQualityCard() {
+  Widget _buildCheckCard({
+    required String title,
+    required String statusField,
+    required String imageField,
+  }) {
+    final status = inward[statusField] ?? 'OK';
+    final image = inward[imageField];
+
     return Card(
       elevation: 2,
       child: Padding(
@@ -98,32 +126,47 @@ class InwardDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Quality Check',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
-            _buildInfoRow('Status', inward['qualityStatus'] ?? 'OK'),
-            if (inward['qualityImage'] != null) ...[
+            _buildInfoRow('Status', status),
+            if (image != null) ...[
               const SizedBox(height: 8),
-              const Text(
-                'Quality Image:',
-                style: TextStyle(fontWeight: FontWeight.w500),
+              Text(
+                '$title Image:',
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  '${ApiConstants.serverUrl}${inward['qualityImage']}',
+                  '${ApiConstants.serverUrl}$image',
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  errorBuilder: (ctx, err, stack) => Container(
+                    height: 100,
+                    color: Colors.grey.shade100,
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey),
+                    ),
+                  ),
                 ),
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildQualityCard() {
+    return _buildCheckCard(
+      title: 'Quality Check',
+      statusField: 'qualityStatus',
+      imageField: 'qualityImage',
     );
   }
 
@@ -280,10 +323,7 @@ class InwardDetailScreen extends StatelessWidget {
             const Divider(),
             const Text(
               'Storage Details',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             const SizedBox(height: 4),
             Builder(
@@ -327,14 +367,12 @@ class InwardDetailScreen extends StatelessWidget {
                                 )
                                 .map((w) => w.toString())
                                 .toList();
-                        final weightsText =
-                            weights.isEmpty ? '-' : weights.join(', ');
+                        final weightsText = weights.isEmpty
+                            ? '-'
+                            : weights.join(', ');
                         return Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child: _buildSmallInfo(
-                            'Colour $colour',
-                            weightsText,
-                          ),
+                          child: _buildSmallInfo('Colour $colour', weightsText),
                         );
                       }),
                     ],
@@ -382,6 +420,87 @@ class InwardDetailScreen extends StatelessWidget {
         '$label: $value',
         style: const TextStyle(fontSize: 12, color: Colors.black87),
       ),
+    );
+  }
+
+  Widget _buildSignaturesCard() {
+    final hasIncharge =
+        inward['lotInchargeSignature'] != null &&
+        inward['lotInchargeSignature'].toString().isNotEmpty;
+    final hasAuthorized =
+        inward['authorizedSignature'] != null &&
+        inward['authorizedSignature'].toString().isNotEmpty;
+    final hasMd =
+        inward['mdSignature'] != null &&
+        inward['mdSignature'].toString().isNotEmpty;
+
+    if (!hasIncharge && !hasAuthorized && !hasMd)
+      return const SizedBox.shrink();
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Signatures (E-Signature)',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                if (hasIncharge)
+                  _buildSignatureItem(
+                    'Lot Incharge',
+                    inward['lotInchargeSignature'],
+                  ),
+                if (hasAuthorized)
+                  _buildSignatureItem(
+                    'Authorized',
+                    inward['authorizedSignature'],
+                  ),
+                if (hasMd) _buildSignatureItem('MD', inward['mdSignature']),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignatureItem(String label, String? imagePath) {
+    return Column(
+      children: [
+        if (imagePath != null)
+          Container(
+            height: 60,
+            width: 100,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Image.network(
+              '${ApiConstants.serverUrl}$imagePath',
+              fit: BoxFit.contain,
+              errorBuilder: (ctx, err, stack) =>
+                  const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+            ),
+          )
+        else
+          const SizedBox(height: 60, width: 100),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF64748B),
+          ),
+        ),
+      ],
     );
   }
 }

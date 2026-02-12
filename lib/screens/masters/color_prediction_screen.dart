@@ -40,6 +40,33 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
 
   late AnimationController _pulseController;
 
+  Color? _manualSelectedColor;
+  final List<Color> _paletteColors = [
+    Colors.red,
+    Colors.pink,
+    Colors.purple,
+    Colors.deepPurple,
+    Colors.indigo,
+    Colors.blue,
+    Colors.lightBlue,
+    Colors.cyan,
+    Colors.teal,
+    Colors.green,
+    Colors.lightGreen,
+    Colors.lime,
+    Colors.yellow,
+    Colors.amber,
+    Colors.orange,
+    Colors.deepOrange,
+    Colors.brown,
+    Colors.grey,
+    Colors.blueGrey,
+    Colors.black,
+  ];
+
+  final _manualColorNameController = TextEditingController();
+  final _manualColorCodeController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +74,19 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    // Listen to color code changes to update preview
+    _manualColorCodeController.addListener(() {
+      final text = _manualColorCodeController.text.trim();
+      if (text.length == 7 && text.startsWith('#')) {
+        try {
+          final color = Color(int.parse(text.replaceAll('#', '0xFF')));
+          setState(() {
+            _manualSelectedColor = color;
+          });
+        } catch (_) {}
+      }
+    });
   }
 
   @override
@@ -58,54 +98,86 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
     _sodaAshController.dispose();
     _aceticAcidController.dispose();
     _dyeNamesController.dispose();
+    _manualColorNameController.dispose();
+    _manualColorCodeController.dispose();
     super.dispose();
   }
 
   void _predict() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isPredicting = true);
-
-    final dyeNames = _dyeNamesController.text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    ColorPredictionResult result;
-
     if (_useAI) {
-      // AI-powered prediction via backend API
-      result = await ColorPredictionService.predictWithAI(
-        fabricType: _fabricType,
-        fabricGSM: double.tryParse(_gsmController.text) ?? 160,
-        dyeType: _dyeType,
-        dyePercentage: double.tryParse(_dyePercentageController.text) ?? 2.0,
-        dyeNames: dyeNames,
-        saltPercentage: double.tryParse(_saltController.text) ?? 0,
-        sodaAshPercentage: double.tryParse(_sodaAshController.text) ?? 0,
-        aceticAcidPercentage: double.tryParse(_aceticAcidController.text) ?? 0,
-      );
+      if (!_formKey.currentState!.validate()) return;
     } else {
-      // Small delay for UX feel on local prediction
-      await Future.delayed(const Duration(milliseconds: 400));
-      // Local rule-based prediction
-      result = ColorPredictionService.predict(
-        fabricType: _fabricType,
-        fabricGSM: double.tryParse(_gsmController.text) ?? 160,
-        dyeType: _dyeType,
-        dyePercentage: double.tryParse(_dyePercentageController.text) ?? 2.0,
-        dyeNames: dyeNames,
-        saltPercentage: double.tryParse(_saltController.text) ?? 0,
-        sodaAshPercentage: double.tryParse(_sodaAshController.text) ?? 0,
-        aceticAcidPercentage: double.tryParse(_aceticAcidController.text) ?? 0,
-      );
+      if (_manualColorCodeController.text.isEmpty ||
+          _manualColorNameController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please enter color name and code'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.orange,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Validate Hex
+      final hex = _manualColorCodeController.text.trim();
+      if (!RegExp(r'^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$').hasMatch(hex)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Invalid Hex Color Code'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
     }
 
-    setState(() {
-      _result = result;
-      _isPredicting = false;
-    });
+    if (_useAI) {
+      setState(() => _isPredicting = true);
+      final dyeNames = _dyeNamesController.text
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+
+      // AI-powered prediction via backend API
+      final result = await ColorPredictionService.predictWithAI(
+        fabricType: _fabricType,
+        fabricGSM: double.tryParse(_gsmController.text) ?? 160,
+        dyeType: _dyeType,
+        dyePercentage: double.tryParse(_dyePercentageController.text) ?? 2.0,
+        dyeNames: dyeNames,
+        saltPercentage: double.tryParse(_saltController.text) ?? 0,
+        sodaAshPercentage: double.tryParse(_sodaAshController.text) ?? 0,
+        aceticAcidPercentage: double.tryParse(_aceticAcidController.text) ?? 0,
+      );
+
+      setState(() {
+        _result = result;
+        _isPredicting = false;
+      });
+    } else {
+      // Manual Color Selection - SAVE DIRECTLY
+      setState(() => _isPredicting = true);
+
+      String name = _manualColorNameController.text.trim();
+      String hex = _manualColorCodeController.text.trim();
+      if (!hex.startsWith('#')) hex = '#$hex';
+
+      // Save as "Name (#HEX)" so it can be resolved in lists
+      final valueToSave = "$name (${hex.toUpperCase()})";
+
+      await _addToColours(valueToSave);
+      setState(() => _isPredicting = false);
+      _reset(); // Clear form after saving
+    }
   }
 
   Future<void> _addToColours(String colorName) async {
@@ -217,6 +289,9 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
       _aceticAcidController.text = '0.5';
       _fabricType = 'cotton';
       _dyeType = 'reactive';
+      _manualSelectedColor = null;
+      _manualColorNameController.clear();
+      _manualColorCodeController.clear();
     });
   }
 
@@ -248,13 +323,13 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
             _buildHeaderCard(),
             const SizedBox(height: 20),
 
-            // Input Form
-            _buildInputForm(),
-            const SizedBox(height: 20),
-
-            // AI Mode Toggle
+            // AI Mode Toggle - Moved UP
             _buildModeToggle(),
             const SizedBox(height: 16),
+
+            // Input Form or Palette
+            _useAI ? _buildInputForm() : _buildManualPalette(),
+            const SizedBox(height: 20),
 
             // Predict Button
             _buildPredictButton(),
@@ -265,6 +340,174 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
             const SizedBox(height: 100),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildManualPalette() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: ColorPalette.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: ColorPalette.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  LucideIcons.palette,
+                  size: 20,
+                  color: ColorPalette.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Manual Color Input',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: ColorPalette.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Color Name Input
+          TextFormField(
+            controller: _manualColorNameController,
+            decoration: InputDecoration(
+              labelText: 'Color Name',
+              hintText: 'e.g., Royal Blue',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              prefixIcon: const Icon(LucideIcons.tag),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Color Code Input
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _manualColorCodeController,
+                  decoration: InputDecoration(
+                    labelText: 'Hex Code',
+                    hintText: '#0000FF',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(LucideIcons.hash),
+                  ),
+                  onChanged: (val) {
+                    if (val.length >= 6) {
+                      String hex = val;
+                      if (!hex.startsWith('#')) hex = '#$hex';
+                      try {
+                        final color = Color(
+                          int.parse(hex.replaceAll('#', '0xFF')),
+                        );
+                        setState(() => _manualSelectedColor = color);
+                      } catch (_) {}
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _manualSelectedColor ?? Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (_manualSelectedColor ?? Colors.black).withOpacity(
+                        0.1,
+                      ),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+          const Text(
+            'Quick Select Palette',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: _paletteColors.length,
+            itemBuilder: (context, index) {
+              final color = _paletteColors[index];
+              final isSelected = _manualSelectedColor == color;
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _manualSelectedColor = color;
+                    _manualColorCodeController.text =
+                        '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+                    // Optional: Clear or set a generic name? Keeping name as is allows user to name the color they picked.
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: isSelected
+                        ? Border.all(color: Colors.white, width: 3)
+                        : Border.all(
+                            color: Colors.grey.withOpacity(0.2),
+                            width: 1,
+                          ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: color.withOpacity(0.4),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      : null,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -585,7 +828,10 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _useAI = false),
+              onTap: () => setState(() {
+                _useAI = false;
+                _result = null;
+              }),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -703,11 +949,14 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(LucideIcons.sparkles, size: 20),
+                  Icon(
+                    _useAI ? LucideIcons.sparkles : LucideIcons.save,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
-                  const Text(
-                    'Predict Color',
-                    style: TextStyle(
+                  Text(
+                    _useAI ? 'Predict Color' : 'Save Color',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,

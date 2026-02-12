@@ -256,7 +256,9 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                                 ),
                               )
                             : null,
-                        title: Text(value),
+                        title: Text(
+                          value.contains(' (#') ? value.split(' (#')[0] : value,
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _delete(value),
@@ -348,6 +350,21 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       'lemon': Color(0xFFFFF44F),
       'plum': Color(0xFF8E4585),
     };
+
+    // Check for hex code in the name (e.g. "My Color #FF00FF")
+    final hexMatch = RegExp(
+      r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})',
+    ).firstMatch(name);
+    if (hexMatch != null) {
+      try {
+        String hex = hexMatch.group(1)!;
+        if (hex.length == 3) {
+          // Convert 3-digit hex to 6-digit
+          hex = hex[0] * 2 + hex[1] * 2 + hex[2] * 2;
+        }
+        return Color(int.parse('0xFF$hex'));
+      } catch (_) {}
+    }
 
     // Direct match
     if (colorMap.containsKey(lower)) return colorMap[lower]!;

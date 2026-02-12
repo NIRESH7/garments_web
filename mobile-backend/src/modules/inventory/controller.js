@@ -9,6 +9,7 @@ import Outward from './outwardModel.js';
 // @access  Private
 const createInward = asyncHandler(async (req, res) => {
     const {
+        inwardNo,
         inwardDate,
         inTime,
         outTime,
@@ -23,9 +24,18 @@ const createInward = asyncHandler(async (req, res) => {
         storageDetails,
         qualityStatus,
         qualityImage,
+        gsmStatus,
+        gsmImage,
+        shadeStatus,
+        shadeImage,
+        washingStatus,
+        washingImage,
         complaintText,
         complaintImage,
         balanceImage,
+        lotInchargeSignature,
+        authorizedSignature,
+        mdSignature,
     } = req.body;
 
     // Generate Inward No if not provided
@@ -58,9 +68,18 @@ const createInward = asyncHandler(async (req, res) => {
         storageDetails,
         qualityStatus,
         qualityImage,
+        gsmStatus,
+        gsmImage,
+        shadeStatus,
+        shadeImage,
+        washingStatus,
+        washingImage,
         complaintText,
         complaintImage,
         balanceImage,
+        lotInchargeSignature,
+        authorizedSignature,
+        mdSignature,
     });
 
     res.status(201).json(inward);
