@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_constants.dart';
 
 class InwardDetailScreen extends StatelessWidget {
@@ -13,6 +14,12 @@ class InwardDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Inward Details'),
         backgroundColor: Colors.green,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () => _shareDetails(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -55,6 +62,62 @@ class InwardDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _shareDetails(BuildContext context) async {
+    final sb = StringBuffer();
+    sb.writeln("*Inward Details*");
+    sb.writeln("Inward No: ${inward['inwardNo'] ?? 'N/A'}");
+    sb.writeln("Date: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(inward['inwardDate']))}");
+    sb.writeln("Party: ${inward['fromParty'] ?? 'N/A'}");
+    sb.writeln("Lot: ${inward['lotName']} / ${inward['lotNo']}");
+    sb.writeln("--------------------------------");
+    
+    final entries = inward['diaEntries'] as List<dynamic>? ?? [];
+    final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
+
+    for (var entry in entries) {
+      final e = entry as Map<String, dynamic>;
+      final dia = e['dia']?.toString();
+      final rate = double.tryParse(e['rate'].toString()) ?? 0;
+      final recWt = double.tryParse(e['recWt'].toString()) ?? 0;
+      final value = rate * recWt;
+      
+      sb.writeln("DIA: $dia");
+      sb.writeln("Rolls: ${e['recRoll']} | Wt: ${e['recWt']} Kg");
+      sb.writeln("Rate: ${e['rate']} | Value: ${value.toStringAsFixed(2)}");
+      
+      // Add Storage for this DIA
+      if (dia != null) {
+        final storage = storageDetails.firstWhere(
+          (s) => s['dia']?.toString() == dia,
+          orElse: () => null,
+        );
+        if (storage != null) {
+          final racks = (storage['racks'] as List<dynamic>? ?? []).where((r) => r != null).join(', ');
+          final pallets = (storage['pallets'] as List<dynamic>? ?? []).where((p) => p != null).join(', ');
+          if (racks.isNotEmpty) sb.writeln("Racks: $racks");
+          if (pallets.isNotEmpty) sb.writeln("Pallets: $pallets");
+          
+          final rows = storage['rows'] as List<dynamic>? ?? [];
+          for (var row in rows) {
+            final col = row['colour'] ?? '-';
+            final tot = row['totalWeight'] ?? '-';
+            sb.writeln(" - $col: $tot Kg");
+          }
+        }
+      }
+      sb.writeln("");
+    }
+    
+    final url = Uri.parse("whatsapp://send?text=${Uri.encodeComponent(sb.toString())}");
+     if (await canLaunchUrl(url)) { // url_launcher needed
+      await launchUrl(url);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Could not launch WhatsApp")),
+      );
+    }
   }
 
   Widget _buildHeaderCard() {
@@ -254,6 +317,10 @@ class InwardDetailScreen extends StatelessWidget {
     Map<String, dynamic> entry,
     Map<String, dynamic>? storage,
   ) {
+    final rate = double.tryParse(entry['rate']?.toString() ?? '0') ?? 0;
+    final recWt = double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
+    final value = rate * recWt;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -275,12 +342,25 @@ class InwardDetailScreen extends StatelessWidget {
                   fontSize: 16,
                 ),
               ),
-              Text(
-                'Rate: ${entry['rate'] ?? 0}',
-                style: const TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.bold,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Rate: ${entry['rate'] ?? 0}',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                   Text(
+                    'Val: ${value.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -299,7 +379,7 @@ class InwardDetailScreen extends StatelessWidget {
               Expanded(
                 child: _buildSmallInfo(
                   'Del. Wt',
-                  '${entry['delivWt'] ?? 0} Kg',
+                  '${entry['delWt'] ?? 0} Kg', // Corrected key
                 ),
               ),
               Expanded(
@@ -370,9 +450,10 @@ class InwardDetailScreen extends StatelessWidget {
                         final weightsText = weights.isEmpty
                             ? '-'
                             : weights.join(', ');
+                        final totalWt = rMap['totalWeight']?.toString() ?? '-';
                         return Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child: _buildSmallInfo('Colour $colour', weightsText),
+                          child: _buildSmallInfo('Colour $colour ($totalWt)', weightsText),
                         );
                       }),
                     ],

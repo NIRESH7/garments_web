@@ -6,8 +6,12 @@ import {
     addCategoryValue,
     createParty,
     getParties,
+    updateParty,
+    deleteParty,
     createItemGroup,
     getItemGroups,
+    updateItemGroup,
+    deleteItemGroup,
     deleteCategoryValue,
     createLot,
     getLots,
@@ -35,10 +39,18 @@ router.route('/parties')
     .post(protect, createParty)
     .get(protect, getParties);
 
+router.route('/parties/:id')
+    .put(protect, updateParty)
+    .delete(protect, deleteParty);
+
 // Item Group Master
 router.route('/item-groups')
     .post(protect, createItemGroup)
     .get(protect, getItemGroups);
+
+router.route('/item-groups/:id')
+    .put(protect, updateItemGroup)
+    .delete(protect, deleteItemGroup);
 
 // Lot Master
 router.route('/lots')

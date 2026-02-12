@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/constants/api_constants.dart';
 import '../../widgets/custom_dropdown_field.dart';
 
 class DropdownSetupScreen extends StatefulWidget {
@@ -13,6 +16,9 @@ class DropdownSetupScreen extends StatefulWidget {
 class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   final _api = MobileApiService();
   final _valueController = TextEditingController();
+  final _gsmController = TextEditingController();
+  File? _selectedImage;
+  final ImagePicker _picker = ImagePicker();
 
   // Static list of categories requested by the user
   final List<String> _staticCategoryNames = [
@@ -102,8 +108,16 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() => _selectedImage = File(image.path));
+    }
+  }
+
   Future<void> _add() async {
     if (_valueController.text.isEmpty || _selectedCategoryId == null) return;
+    setState(() => _isLoading = true);
     try {
       String categoryId = _selectedCategoryId!;
 
@@ -115,7 +129,6 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
         final success = await _api.createCategory(categoryName);
         if (success) {
-          // Reload categories to get the real ID
           final res = await _api.getCategories();
           final newCat = res.firstWhere(
             (c) =>
@@ -124,19 +137,30 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
           );
           categoryId = newCat['_id'];
           setState(() => _selectedCategoryId = categoryId);
-          await _loadCategories(); // Refresh local list
+          await _loadCategories();
         } else {
+          setState(() => _isLoading = false);
           return;
         }
+      }
+
+      String? photoUrl;
+      if (_selectedImage != null && _isColoursCategory) {
+        photoUrl = await _api.uploadImage(_selectedImage!);
       }
 
       final success = await _api.addCategoryValue(
         categoryId,
         _valueController.text,
+        photo: photoUrl,
+        gsm: _isColoursCategory ? _gsmController.text : null,
       );
+
       if (success) {
         _valueController.clear();
-        await _loadCategories(); // Reload all to get updated values
+        _gsmController.clear();
+        setState(() => _selectedImage = null);
+        await _loadCategories();
         await _loadValues();
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -144,7 +168,13 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         ).showSnackBar(const SnackBar(content: Text('Added successfully')));
       }
     } catch (e) {
-      debugPrint(e.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -205,10 +235,45 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                       hintText: 'Enter value to add',
                     ),
                   ),
+                  if (_isColoursCategory) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _gsmController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'GSM',
+                        hintText: 'Enter GSM for this color',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _selectedImage == null
+                                ? 'No image selected'
+                                : 'Image selected: ${_selectedImage!.path.split('/').last}',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _pickImage,
+                          icon: const Icon(Icons.image),
+                          label: const Text('Pick Photo'),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: _selectedCategoryId == null ? null : _add,
-                    child: const Text('Add Value'),
+                    onPressed: _selectedCategoryId == null || _isLoading ? null : _add,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Add Value'),
                   ),
                 ],
               ),
@@ -229,43 +294,62 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                 : ListView.builder(
                     itemCount: _values.length,
                     itemBuilder: (context, index) {
-                      final value = _values[index] as String;
-                      final isColoursCategory =
-                          _selectedCategoryName == 'Colours';
+                      final dynamic valueData = _values[index];
+                      final String valueName = valueData is String ? valueData : (valueData['name'] ?? '');
+                      final String? photoUrl = valueData is Map ? valueData['photo'] : null;
+                      final String? gsm = valueData is Map ? valueData['gsm'] : null;
+
+                      final isColoursCategory = _isColoursCategory;
+                      
                       return ListTile(
                         leading: isColoursCategory
-                            ? Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: _resolveColor(value),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                    width: 1.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: _resolveColor(
-                                        value,
-                                      ).withOpacity(0.4),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
+                            ? (photoUrl != null && photoUrl.isNotEmpty)
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      '${ApiConstants.baseUrl.replaceAll('/api', '')}$photoUrl',
+                                      width: 40,
+                                      height: 40,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          _colorCircle(valueName),
                                     ),
-                                  ],
-                                ),
-                              )
+                                  )
+                                : _colorCircle(valueName)
                             : null,
-                        title: Text(
-                          value.contains(' (#') ? value.split(' (#')[0] : value,
-                        ),
+                        title: Text(valueName),
+                        subtitle: (isColoursCategory && gsm != null && gsm.isNotEmpty)
+                            ? Text('GSM: $gsm')
+                            : null,
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _delete(value),
+                          onPressed: () => _delete(valueName),
                         ),
                       );
                     },
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _colorCircle(String value) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: _resolveColor(value),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.grey.shade300,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _resolveColor(value).withOpacity(0.4),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -279,6 +363,11 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       orElse: () => {'name': ''},
     );
     return cat['name'] as String? ?? '';
+  }
+
+  bool get _isColoursCategory {
+    final name = _selectedCategoryName.toLowerCase();
+    return name == 'colours' || name == 'colors' || name == 'colour' || name == 'color';
   }
 
   Color _resolveColor(String name) {

@@ -9,7 +9,9 @@ const categorySchema = mongoose.Schema(
         },
         values: [
             {
-                type: String,
+                name: { type: String, required: true },
+                photo: { type: String },
+                gsm: { type: String },
             },
         ],
     },

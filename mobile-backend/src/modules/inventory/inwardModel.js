@@ -41,6 +41,7 @@ const inwardSchema = mongoose.Schema(
         fromParty: { type: String, required: true },
         process: { type: String },
         rate: { type: Number },
+        gsm: { type: String },
         vehicleNo: { type: String },
         partyDcNo: { type: String },
         diaEntries: [diaEntrySchema],

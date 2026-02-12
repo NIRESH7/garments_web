@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
-
 import '../../widgets/custom_dropdown_field.dart';
+import 'party_history_screen.dart';
 
 class PartyMasterScreen extends StatefulWidget {
-  const PartyMasterScreen({super.key});
+  final Map<dynamic, dynamic>? editParty;
+  const PartyMasterScreen({super.key, this.editParty});
 
   @override
   State<PartyMasterScreen> createState() => _PartyMasterScreenState();
@@ -28,6 +29,14 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
   void initState() {
     super.initState();
     _loadMasterData();
+    if (widget.editParty != null) {
+      _nameController.text = widget.editParty!['name'] ?? '';
+      _addressController.text = widget.editParty!['address'] ?? '';
+      _mobileController.text = widget.editParty!['mobileNumber'] ?? '';
+      _selectedProcess = widget.editParty!['process'];
+      _gstController.text = widget.editParty!['gstIn'] ?? '';
+      _rateController.text = (widget.editParty!['rate'] ?? '').toString();
+    }
   }
 
   Future<void> _loadMasterData() async {
@@ -38,7 +47,10 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
     );
 
     setState(() {
-      _processes = List<String>.from(processCategory['values'] ?? []);
+      _processes = (processCategory['values'] as List).map((v) {
+        if (v is Map) return v['name'].toString();
+        return v.toString();
+      }).toList();
       _isLoading = false;
     });
   }
@@ -55,20 +67,29 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
       };
 
       try {
-        final success = await _api.createParty(partyData);
+        bool success;
+        if (widget.editParty != null) {
+          success = await _api.updateParty(widget.editParty!['_id'], partyData);
+        } else {
+          success = await _api.createParty(partyData);
+        }
 
         if (!mounted) return;
 
         if (success) {
-          _nameController.clear();
-          _addressController.clear();
-          _mobileController.clear();
-          _gstController.clear();
-          _rateController.clear();
-          setState(() => _selectedProcess = null);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Party saved to Backend')),
+            SnackBar(content: Text(widget.editParty != null ? 'Party updated' : 'Party saved')),
           );
+          if (widget.editParty != null) {
+            Navigator.pop(context, true);
+          } else {
+            _nameController.clear();
+            _addressController.clear();
+            _mobileController.clear();
+            _gstController.clear();
+            _rateController.clear();
+            setState(() => _selectedProcess = null);
+          }
         }
       } catch (e) {
         if (!mounted) return;
@@ -82,7 +103,19 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Party Master')),
+      appBar: AppBar(
+        title: Text(widget.editParty != null ? 'Edit Party' : 'Party Master'),
+        actions: [
+          if (widget.editParty == null)
+            IconButton(
+              icon: const Icon(Icons.history),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PartyHistoryScreen()),
+              ),
+            ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -141,7 +174,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _save,
-                        child: const Text('Save Party'),
+                        child: Text(widget.editParty != null ? 'Update Party' : 'Save Party'),
                       ),
                     ),
                   ],

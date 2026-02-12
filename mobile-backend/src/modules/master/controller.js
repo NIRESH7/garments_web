@@ -50,17 +50,45 @@ const deleteCategory = asyncHandler(async (req, res) => {
 // @route   POST /api/master/categories/:id/values
 // @access  Private/Admin
 const addCategoryValue = asyncHandler(async (req, res) => {
-    const { value } = req.body;
-    const category = await Category.findById(req.params.id);
+    const { name, photo, gsm } = req.body;
+
+    // Use lean() to get a plain JavaScript object, avoiding Mongoose document validation issues on load
+    const category = await Category.findById(req.params.id).lean();
 
     if (category) {
-        if (category.values.includes(value)) {
+        let values = category.values || [];
+
+        // Migration: Robustly Convert ALL values to objects
+        values = values.map(v => {
+            if (typeof v === 'string') {
+                return { name: v, photo: null, gsm: null };
+            }
+            // Handle edge case where v might be an object but missing 'name' or be something else
+            if (v && typeof v === 'object' && !v.name) {
+                // Try to fallback to string representation if it has meaningful data, else ignore
+                return { name: String(v), photo: null, gsm: null };
+            }
+            return v;
+        }).filter(v => v && v.name); // Filter out any nulls or invalid objects
+
+        // Case-insensitive check on the cleaned array
+        const exists = values.some(v => v.name.toLowerCase() === name.toLowerCase());
+
+        if (exists) {
             res.status(400);
             throw new Error('Value already exists in this category');
         }
-        category.values.push(value);
-        await category.save();
-        res.status(201).json(category);
+
+        values.push({ name, photo, gsm });
+
+        // Update the document directly with the sanitized array
+        const updatedCategory = await Category.findByIdAndUpdate(
+            req.params.id,
+            { values: values },
+            { new: true, runValidators: true }
+        );
+
+        res.status(201).json(updatedCategory);
     } else {
         res.status(404);
         throw new Error('Category not found');
@@ -68,11 +96,11 @@ const addCategoryValue = asyncHandler(async (req, res) => {
 });
 
 const deleteCategoryValue = asyncHandler(async (req, res) => {
-    const { value } = req.params;
+    const { value } = req.params; // 'value' passed as path param is the 'name'
     const category = await Category.findById(req.params.id);
 
     if (category) {
-        category.values = category.values.filter(v => v !== value);
+        category.values = category.values.filter(v => v.name !== value);
         await category.save();
         res.json(category);
     } else {
@@ -173,6 +201,79 @@ const getLots = asyncHandler(async (req, res) => {
     res.json(lots);
 });
 
+// @desc    Update a party
+// @route   PUT /api/master/parties/:id
+// @access  Private
+const updateParty = asyncHandler(async (req, res) => {
+    const { name, address, mobileNumber, process, gstIn, rate } = req.body;
+    const party = await Party.findById(req.params.id);
+
+    if (party) {
+        party.name = name || party.name;
+        party.address = address || party.address;
+        party.mobileNumber = mobileNumber || party.mobileNumber;
+        party.process = process || party.process;
+        party.gstIn = gstIn || party.gstIn;
+        party.rate = rate !== undefined ? rate : party.rate;
+
+        const updatedParty = await party.save();
+        res.json(updatedParty);
+    } else {
+        res.status(404);
+        throw new Error('Party not found');
+    }
+});
+
+// @desc    Update an item group
+// @route   PUT /api/master/item-groups/:id
+// @access  Private
+const updateItemGroup = asyncHandler(async (req, res) => {
+    const { groupName, itemNames, gsm, colours, rate } = req.body;
+    const itemGroup = await ItemGroup.findById(req.params.id);
+
+    if (itemGroup) {
+        itemGroup.groupName = groupName || itemGroup.groupName;
+        itemGroup.itemNames = itemNames || itemGroup.itemNames;
+        itemGroup.gsm = gsm || itemGroup.gsm;
+        itemGroup.colours = colours || itemGroup.colours;
+        itemGroup.rate = rate !== undefined ? rate : itemGroup.rate;
+
+        const updatedItemGroup = await itemGroup.save();
+        res.json(updatedItemGroup);
+    } else {
+        res.status(404);
+        throw new Error('Item Group not found');
+    }
+});
+
+// @desc    Delete a party
+// @route   DELETE /api/master/parties/:id
+// @access  Private
+const deleteParty = asyncHandler(async (req, res) => {
+    const party = await Party.findById(req.params.id);
+    if (party) {
+        await Party.deleteOne({ _id: party._id });
+        res.json({ message: 'Party removed' });
+    } else {
+        res.status(404);
+        throw new Error('Party not found');
+    }
+});
+
+// @desc    Delete an item group
+// @route   DELETE /api/master/item-groups/:id
+// @access  Private
+const deleteItemGroup = asyncHandler(async (req, res) => {
+    const itemGroup = await ItemGroup.findById(req.params.id);
+    if (itemGroup) {
+        await ItemGroup.deleteOne({ _id: itemGroup._id });
+        res.json({ message: 'Item Group removed' });
+    } else {
+        res.status(404);
+        throw new Error('Item Group not found');
+    }
+});
+
 export {
     createCategory,
     getCategories,
@@ -180,8 +281,12 @@ export {
     addCategoryValue,
     createParty,
     getParties,
+    updateParty,
+    deleteParty,
     createItemGroup,
     getItemGroups,
+    updateItemGroup,
+    deleteItemGroup,
     deleteCategoryValue,
     createLot,
     getLots,

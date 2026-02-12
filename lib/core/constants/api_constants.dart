@@ -33,7 +33,9 @@ class ApiConstants {
   // User
   static const String profile = '/users/profile';
 
-  // AI Color Prediction
   static const String colorPredict = '/color-predict';
   static const String colorPredictFromImage = '/color-predict/from-image';
+
+  // Upload
+  static const String upload = '/upload';
 }

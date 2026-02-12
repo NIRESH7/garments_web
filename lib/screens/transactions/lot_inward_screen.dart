@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
 
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_dropdown_field.dart';
+import 'package:garments/dialogs/signature_pad_dialog.dart';
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -30,6 +33,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   final _vehicleController = TextEditingController();
   final _dcController = TextEditingController();
   final _rateController = TextEditingController();
+  final _gsmController = TextEditingController();
 
   List<InwardRow> _rows = [InwardRow()];
   int _currentPage = 0;
@@ -56,6 +60,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   /// Per–DIA storage & sticker details
   Map<String, StickerDiaData> _stickerData = {};
+  Map<String, String> _colourGsmMap = {}; // Maps Colour Name -> GSM
 
   /// DIAs for which storage details have been completed
   final Set<String> _completedStickerDias = {};
@@ -113,7 +118,27 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           (n) => c['name'].toString().toLowerCase() == n.toLowerCase(),
         ),
       );
-      return List<String>.from(cat['values'] ?? []);
+      
+      final values = cat['values'] as List;
+      
+      // If this is the Colours category (checked via name match in the loop usually, 
+      // but here we just process whatever category we found).
+      // We can check if 'gsm' key exists in any value to populate the map.
+      // Or we can just try to populate it for everything, no harm.
+      
+      for (var v in values) {
+        if (v is Map) {
+          final name = v['name'].toString();
+          if (v['gsm'] != null && v['gsm'].toString().isNotEmpty) {
+             _colourGsmMap[name] = v['gsm'].toString();
+          }
+        }
+      }
+
+      return values.map((v) {
+        if (v is Map) return v['name'].toString();
+        return v.toString();
+      }).toList();
     } catch (e) {
       return [];
     }
@@ -152,19 +177,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
 
     if (val != null) {
-      final fetchedColours = await _api.getColoursByLot(val);
+      final group = await _api.getItemGroupByName(val);
       setState(() {
-        if (fetchedColours.isNotEmpty) {
-          // Combine lot-specific colors with master colors
-          final List<String> combined = List<String>.from(
-            fetchedColours.map((c) => c.toString()),
-          );
-          for (var mc in _masterColours) {
-            if (!combined.contains(mc)) {
-              combined.add(mc);
-            }
+        if (group != null) {
+          // Strictly restrict colours to those defined in the Item Group
+          _colours = List<String>.from(group['colours'] ?? []);
+          
+          // Carry over GSM and Rate
+          _gsmController.text = (group['gsm'] ?? '').toString();
+          
+          // Only set rate if it's currently 0 or empty, allowing Party rate to take precedence if already set
+          if (_rateController.text.isEmpty || _rateController.text == "0.0" || _rateController.text == "0") {
+             _rateController.text = (group['rate'] ?? '').toString();
           }
-          _colours = combined;
         } else {
           _colours = List<String>.from(_masterColours);
         }
@@ -172,13 +197,76 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
+  Future<void> _detectColorFromImage(StickerRow row) async {
+    final XFile? image = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxHeight: 800,
+      maxWidth: 800,
+    );
+    if (image == null) return;
+
+    setState(() => _isLoading = true);
+    
+    // Read bytes and convert to base64
+    final bytes = await File(image.path).readAsBytes();
+    final base64Image = base64Encode(bytes);
+
+    // Call API
+    final result = await _api.detectColorFromImage(
+      base64Image,
+      existingColors: _colours, 
+    );
+
+    setState(() => _isLoading = false);
+
+    if (result != null && result['colorName'] != null) {
+      final detectedColor = result['colorName'] as String;
+      final confidence = result['confidence'] ?? 'medium';
+      final matchType = result['matchType'];
+      
+      setState(() {
+        if (!_colours.contains(detectedColor)) {
+           _colours.add(detectedColor);
+        }
+        row.colour = detectedColor;
+      });
+      
+      String msg = "Detected: $detectedColor ($confidence)";
+      
+      if (matchType == 'exact_reference') {
+         msg = "✅ Visual Match: $detectedColor";
+      }
+
+      // GSM Validation
+      if (_colourGsmMap.containsKey(detectedColor)) {
+          final String refGsm = _colourGsmMap[detectedColor]!;
+          final String currentGsm = _gsmController.text.trim();
+          
+          if (currentGsm.isNotEmpty && refGsm.isNotEmpty && refGsm != currentGsm) {
+              msg += "\n⚠️ GSM Mismatch! Ref: $refGsm, Lot: $currentGsm";
+          } else if (currentGsm.isNotEmpty && refGsm.isNotEmpty) {
+              msg += " (GSM Matched)";
+          }
+      }
+      
+      _showError(msg);
+    } else {
+      _showError("Could not detect color");
+    }
+  }
+
   void _updateRowMath(InwardRow row) {
     setState(() {
-      // row.sets is no longer auto-calculated here if user overrides,
-      // but we can set a default if it's 0. For now, let's leave it manual or loose coupling.
-      if (row.rolls > 0 && row.sets == 0) {
-        row.sets = (row.rolls / 11).ceil();
+      // Auto-Calculate Sets: rolls / 11, rounded to nearest integer
+      if (row.rolls > 0) {
+        row.sets = (row.rolls / 11).round();
       }
+      
+      // Auto-Fill Received Weight from Delivered Weight if empty/zero
+      if (row.recWeight == 0 && row.deliveredWeight > 0) {
+        row.recWeight = row.deliveredWeight;
+      }
+
       row.recRoll = row.rolls;
       row.difference = row.recWeight - row.deliveredWeight;
       if (row.deliveredWeight > 0) {
@@ -190,6 +278,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       }
     });
   }
+
+
 
   Future<void> _pickImage(Function(XFile?) onPicked) async {
     final ImagePicker picker = ImagePicker();
@@ -287,6 +377,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       "fromParty": _selectedParty,
       "process": _process,
       "rate": double.tryParse(_rateController.text) ?? 0,
+      "gsm": _gsmController.text,
       "vehicleNo": _vehicleController.text,
       "partyDcNo": _dcController.text,
       "diaEntries": _rows
@@ -311,33 +402,27 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               "pallets": e.value.pallets,
               "rows": e.value.rows
                   .where((r) => r.colour != null)
-                  .map((r) => {"colour": r.colour, "setWeights": r.setWeights})
+                  .map((r) => {
+                    "colour": r.colour,
+                    "setWeights": r.setWeights,
+                    "totalWeight": r.totalWeight
+                  })
                   .toList(),
             },
           )
           .toList(),
     };
 
-    // Upload Images First
-    // Upload Images First
-    // String? balanceImgPath;
+    // Upload Images First (Legacy for non-signature images)
+    // Note: Signature images are now handled via Multipart in saveInward
     String? qualityImgPath;
     String? complaintImgPath;
-    String? lotInchargeSigPath;
-    String? authorizedSigPath;
-    String? mdSigPath;
-
-    // if (_balanceImage != null) balanceImgPath = await _api.uploadFile(_balanceImage!.path);
+    
+    // Non-signature uploads still use old method (might fail on Web, needs future refactor)
     if (_qualityImage != null)
       qualityImgPath = await _api.uploadFile(_qualityImage!.path);
     if (_complaintImage != null)
       complaintImgPath = await _api.uploadFile(_complaintImage!.path);
-    if (_lotInchargeSignature != null)
-      lotInchargeSigPath = await _api.uploadFile(_lotInchargeSignature!.path);
-    if (_authorizedSignature != null)
-      authorizedSigPath = await _api.uploadFile(_authorizedSignature!.path);
-    if (_mdSignature != null)
-      mdSigPath = await _api.uploadFile(_mdSignature!.path);
 
     // GSM, Shade, Washing Images
     String? gsmImgPath;
@@ -360,9 +445,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     inwardData["washingImage"] = washingImgPath;
     inwardData["complaintText"] = _complaintController.text;
     inwardData["complaintImage"] = complaintImgPath;
-    inwardData["lotInchargeSignature"] = lotInchargeSigPath;
-    inwardData["authorizedSignature"] = authorizedSigPath;
-    inwardData["mdSignature"] = mdSigPath;
+    
+    // Pass XFile objects directly for signatures to use Multipart upload
+    inwardData["lotInchargeSignature"] = _lotInchargeSignature;
+    inwardData["authorizedSignature"] = _authorizedSignature;
+    inwardData["mdSignature"] = _mdSignature;
 
     final success = await _api.saveInward(inwardData);
 
@@ -624,6 +711,17 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextFormField(
+                    controller: _gsmController,
+                    decoration: const InputDecoration(
+                      labelText: "GSM",
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
                     controller: _rateController,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
@@ -632,6 +730,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       contentPadding: EdgeInsets.all(8),
                     ),
                     keyboardType: TextInputType.number,
+                    onChanged: (v) {
+                      final r = double.tryParse(v) ?? 0;
+                      setState(() {
+                        for (var row in _rows) {
+                           row.rate = r;
+                        }
+                      });
+                    },
                     validator: (v) =>
                         v == null || v.isEmpty ? 'Required' : null,
                   ),
@@ -704,6 +810,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           _buildColumnHeader('RATE', 80),
           _buildColumnHeader('DIFF', 80),
           _buildColumnHeader('LOSS %', 80),
+          _buildColumnHeader('VALUE', 100),
           _buildColumnHeader('ACTION', 60, isLast: true),
         ],
       ),
@@ -852,6 +959,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               ),
             ),
           ),
+          // VALUE
+          _buildTableCell(
+            width: 100,
+            child: Text(
+              row.value.toStringAsFixed(2),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
           // ACTION
           _buildTableCell(
             width: 60,
@@ -967,7 +1086,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         if (_selectedStickerDia != null) ...[
           const SizedBox(height: 16),
           if (setsCount > 0)
-            _buildDynamicSetTable(setsCount)
+            _buildDynamicSetTable(setsCount, key: ValueKey(_selectedStickerDia))
           else
             const Center(
               child: Padding(
@@ -1010,7 +1129,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildDynamicSetTable(int sets) {
+  Widget _buildDynamicSetTable(int sets, {Key? key}) {
     final dia = _selectedStickerDia!;
     final diaData = _stickerData[dia] ?? StickerDiaData();
     final rows = diaData.rows;
@@ -1020,6 +1139,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     while (diaData.pallets.length < sets) diaData.pallets.add(null);
 
     return SingleChildScrollView(
+      key: key,
       scrollDirection: Axis.horizontal,
       child: Container(
         decoration: BoxDecoration(
@@ -1102,6 +1222,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     sets,
                     (i) => _buildGridCell("Set-${i + 1}", 100),
                   ),
+                  _buildGridCell("TOTAL", 100),
                 ],
               ),
             ),
@@ -1121,11 +1242,24 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     _buildGridCell(
                       "",
                       120,
-                      child: _buildSmallDropdown(
-                        r.colour,
-                        _colours,
-                        (v) => setState(() => r.colour = v),
-                        hint: "Colour",
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildSmallDropdown(
+                              r.colour,
+                              _colours,
+                              (v) => setState(() => r.colour = v),
+                              hint: "Colour",
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.camera_alt, size: 20, color: Colors.blue),
+                            onPressed: () => _detectColorFromImage(r),
+                            tooltip: 'Detect Color',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                          ),
+                        ],
                       ),
                     ),
                     ...List.generate(sets, (i) {
@@ -1139,6 +1273,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         ),
                       );
                     }),
+                    _buildGridCell(
+                      r.totalWeight.toStringAsFixed(2),
+                      100,
+                      alignment: Alignment.center,
+                    ),
                   ],
                 ),
               );
@@ -1230,11 +1369,21 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
+  Future<void> _openSignaturePad(Function(XFile?) onPick) async {
+    final XFile? result = await showDialog(
+      context: context,
+      builder: (context) => const SignaturePadDialog(),
+    );
+    if (result != null) {
+      onPick(result);
+    }
+  }
+
   Widget _buildSigBox(String label, XFile? file, Function(XFile?) onPick) {
     return Column(
       children: [
         GestureDetector(
-          onTap: () => _pickImage(onPick),
+          onTap: () => _openSignaturePad(onPick),
           child: Container(
             width: 90,
             height: 50,
@@ -1242,8 +1391,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
             ),
             child: file != null
-                ? Image.file(File(file.path), fit: BoxFit.contain)
-                : const Icon(Icons.edit, color: Colors.grey, size: 20),
+                ? (kIsWeb
+                    ? Image.network(file.path, fit: BoxFit.contain)
+                    : Image.file(File(file.path), fit: BoxFit.contain))
+                : const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.edit, color: Colors.grey, size: 20),
+                      Text("Sign", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    ],
+                  ),
           ),
         ),
         const SizedBox(height: 8),
@@ -1628,6 +1785,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 }
 
+
 class InwardRow {
   String? dia;
   int rolls = 0;
@@ -1638,11 +1796,19 @@ class InwardRow {
   double rate = 0;
   double difference = 0;
   double lossPercent = 0;
+
+  // New Getter for Value
+  double get value => rate * recWeight;
 }
 
 class StickerRow {
   String? colour;
   List<String> setWeights = [];
+
+  double get totalWeight => setWeights.fold(0.0, (sum, w) {
+    final val = double.tryParse(w.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+    return sum + val;
+  });
 }
 
 class StickerDiaData {

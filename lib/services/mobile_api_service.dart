@@ -1,7 +1,11 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import '../core/network/dio_client.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';
-import 'package:dio/dio.dart';
+
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 
 class MobileApiService {
   final DioClient _client = DioClient();
@@ -36,24 +40,49 @@ class MobileApiService {
   }
 
   // --- Inventory ---
-  Future<String?> uploadFile(String filePath) async {
+  Future<String?> uploadImage(File file) async {
     try {
+      final fileName = file.path.split('/').last;
       final formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(filePath),
+        'image': await MultipartFile.fromFile(file.path, filename: fileName),
       });
-      final response = await _client.post('/upload', data: formData);
-      return response
-          .data; // Returns the server path (e.g., /uploads/image-123.jpg)
+      final response = await _client.post(ApiConstants.upload, data: formData);
+      return response.data; // Returns /uploads/filename...
     } catch (e) {
       return null;
     }
   }
 
+  Future<String?> uploadFile(String path) async {
+    return uploadImage(File(path));
+  }
+
   Future<bool> saveInward(Map<String, dynamic> data) async {
     try {
-      final response = await _client.post(ApiConstants.inward, data: data);
+      final formData = FormData();
+
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          // Read bytes to support both Web and Mobile consistently
+          final bytes = await file.readAsBytes();
+          
+          formData.files.add(MapEntry(
+            entry.key,
+            MultipartFile.fromBytes(bytes, filename: file.name),
+          ));
+        } else if (entry.value is List || entry.value is Map) {
+          // Complex types must be JSON stringified for FormData text fields
+          formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+        }
+      }
+
+      final response = await _client.post(ApiConstants.inward, data: formData);
       return response.statusCode == 201;
     } catch (e) {
+      print('Save Inward Error: $e');
       return false;
     }
   }
@@ -227,6 +256,26 @@ class MobileApiService {
     }
   }
 
+  Future<bool> updateParty(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put('${ApiConstants.parties}/$id', data: data);
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw e.response?.data['message'] ?? 'Failed to update Party';
+    } catch (e) {
+      throw e.toString();
+    }
+  }
+
+  Future<bool> deleteParty(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.parties}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<dynamic>> getCategories() async {
     try {
       final response = await _client.get(ApiConstants.categories);
@@ -257,15 +306,21 @@ class MobileApiService {
     }
   }
 
-  Future<bool> addCategoryValue(String categoryId, String value) async {
+  Future<bool> addCategoryValue(String categoryId, String name, {String? photo, String? gsm}) async {
     try {
       final response = await _client.post(
         '${ApiConstants.categories}/$categoryId/values',
-        data: {'value': value},
+        data: {
+          'name': name,
+          'photo': photo,
+          'gsm': gsm,
+        },
       );
       return response.statusCode == 201;
+    } on DioException catch (e) {
+      throw e.response?.data['message'] ?? 'Failed to add value';
     } catch (e) {
-      return false;
+      throw e.toString();
     }
   }
 
@@ -297,6 +352,29 @@ class MobileApiService {
       throw e.response?.data['message'] ?? 'Failed to create Item Group';
     } catch (e) {
       throw e.toString();
+    }
+  }
+
+  Future<bool> updateItemGroup(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.itemGroups}/$id',
+        data: data,
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw e.response?.data['message'] ?? 'Failed to update Item Group';
+    } catch (e) {
+      throw e.toString();
+    }
+  }
+
+  Future<bool> deleteItemGroup(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.itemGroups}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -375,17 +453,25 @@ class MobileApiService {
 
   Future<List<String>> getColoursByLot(String lotName) async {
     try {
-      final groups = await getItemGroups();
-      final group = groups.firstWhere(
-        (g) => g['groupName'] == lotName,
-        orElse: () => null,
-      );
+      final group = await getItemGroupByName(lotName);
       if (group != null) {
         return List<String>.from(group['colours'] ?? []);
       }
       return [];
     } catch (e) {
       return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getItemGroupByName(String name) async {
+    try {
+      final groups = await getItemGroups();
+      return groups.firstWhere(
+        (g) => g['groupName'] == name,
+        orElse: () => null,
+      );
+    } catch (e) {
+      return null;
     }
   }
 

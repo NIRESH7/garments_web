@@ -18,6 +18,7 @@ const createInward = asyncHandler(async (req, res) => {
         fromParty,
         process,
         rate,
+        gsm,
         vehicleNo,
         partyDcNo,
         diaEntries,
@@ -33,10 +34,25 @@ const createInward = asyncHandler(async (req, res) => {
         complaintText,
         complaintImage,
         balanceImage,
-        lotInchargeSignature,
-        authorizedSignature,
-        mdSignature,
+        // Signatures might come as strings (if not changed) or handling files below
     } = req.body;
+
+    // Handle file uploads for signatures
+    let finalLotInchargeSignature = req.body.lotInchargeSignature;
+    let finalAuthorizedSignature = req.body.authorizedSignature;
+    let finalMdSignature = req.body.mdSignature;
+
+    if (req.files) {
+        if (req.files.lotInchargeSignature) {
+            finalLotInchargeSignature = req.files.lotInchargeSignature[0].path.replace(/\\/g, '/');
+        }
+        if (req.files.authorizedSignature) {
+            finalAuthorizedSignature = req.files.authorizedSignature[0].path.replace(/\\/g, '/');
+        }
+        if (req.files.mdSignature) {
+            finalMdSignature = req.files.mdSignature[0].path.replace(/\\/g, '/');
+        }
+    }
 
     // Generate Inward No if not provided
     let finalInwardNo = req.body.inwardNo;
@@ -62,6 +78,7 @@ const createInward = asyncHandler(async (req, res) => {
         fromParty,
         process,
         rate,
+        gsm,
         vehicleNo,
         partyDcNo,
         diaEntries,
@@ -77,9 +94,9 @@ const createInward = asyncHandler(async (req, res) => {
         complaintText,
         complaintImage,
         balanceImage,
-        lotInchargeSignature,
-        authorizedSignature,
-        mdSignature,
+        lotInchargeSignature: finalLotInchargeSignature,
+        authorizedSignature: finalAuthorizedSignature,
+        mdSignature: finalMdSignature,
     });
 
     res.status(201).json(inward);

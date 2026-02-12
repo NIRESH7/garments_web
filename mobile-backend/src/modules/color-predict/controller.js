@@ -1,5 +1,8 @@
 import asyncHandler from 'express-async-handler';
 import OpenAI from 'openai';
+import Category from '../master/categoryModel.js';
+import fs from 'fs';
+import path from 'path';
 
 const SYSTEM_PROMPT = `You are a garment dyeing expert with 20+ years experience in textile dyeing.
 
@@ -174,6 +177,27 @@ Chemicals:
     res.json(fallback);
 });
 
+// Helper to convert file to base64
+const fileToBase64 = (filePath) => {
+    try {
+        const absolutePath = path.resolve(filePath.startsWith('/') ? filePath.substring(1) : filePath);
+        if (fs.existsSync(absolutePath)) {
+            const fileBuffer = fs.readFileSync(absolutePath);
+            return fileBuffer.toString('base64');
+        }
+        // Try with __dirname if resolve fails relative to cwd
+        const builtPath = path.join(path.resolve(), filePath);
+        if (fs.existsSync(builtPath)) {
+            const fileBuffer = fs.readFileSync(builtPath);
+            return fileBuffer.toString('base64');
+        }
+        return null;
+    } catch (e) {
+        console.error(`Error reading file ${filePath}:`, e.message);
+        return null;
+    }
+};
+
 // @desc    Detect color from image using AI Vision
 // @route   POST /api/color-predict/from-image
 // @access  Private
@@ -194,69 +218,102 @@ const detectColorFromImage = asyncHandler(async (req, res) => {
     try {
         const openai = new OpenAI({ apiKey: openAiKey });
 
-        // Ensure proper data URI format
-        let imageUrl = imageBase64;
+        // Ensure proper data URI format for INPUT
+        let inputImageUrl = imageBase64;
         if (!imageBase64.startsWith('data:')) {
-            imageUrl = `data:image/jpeg;base64,${imageBase64}`;
+            inputImageUrl = `data:image/jpeg;base64,${imageBase64}`;
         }
 
-        // Build dynamic prompt with existing colors
-        const colorsList = Array.isArray(existingColors) && existingColors.length > 0
-            ? existingColors.join(', ')
-            : null;
-
-        let promptText = `You are a textile/garment color expert. Look at this image and identify the dominant fabric/garment color.
+        const messagesContent = [
+            {
+                type: 'text',
+                text: `You are a textile/garment color expert. Your task is to match the "Target Image" to one of the "Reference Options".
+                
+If you find a strong visual match, return that specific Color Name.
+If no strong visual match is found, but the color is similar to a standard shade, return the closest standard Industry name.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
   "colorName": "<color name>",
   "hexColor": "#RRGGBB",
-  "confidence": "low | medium | high"
-}`;
+  "confidence": "low | medium | high",
+  "matchType": "exact_reference | fallback_standard"
+}`
+            },
+            {
+                type: 'text',
+                text: "TARGET IMAGE (The fabric we need to identify):"
+            },
+            {
+                type: 'image_url',
+                image_url: {
+                    url: inputImageUrl,
+                    detail: 'low',
+                },
+            }
+        ];
 
-        if (colorsList) {
-            promptText += `
+        // Fetch Reference Images
+        if (Array.isArray(existingColors) && existingColors.length > 0) {
+            const category = await Category.findOne({ name: 'Colours' }); // or 'Colors'
 
-IMPORTANT: The user already has these colors in their system: [${colorsList}]
-- If the image color closely matches ANY of these existing colors, you MUST return that EXACT existing color name.
-- Only create a new color name if none of the existing colors match the image.
-- Use practical garment industry color names (e.g., "Golden Yellow", "Navy Blue", "Dusty Rose").`;
-        } else {
-            promptText += `
+            if (category && category.values) {
+                // Filter relevant values
+                const relevantValues = category.values.filter(
+                    v => existingColors.some(ec => ec.toLowerCase() === v.name.toLowerCase())
+                );
 
-Rules:
-- Use practical garment industry color names (e.g., "Golden Yellow", "Navy Blue", "Dusty Rose")
-- Be specific but standard — avoid overly creative names`;
+                // Add reference images to prompt
+                let refCount = 0;
+                for (const val of relevantValues) {
+                    if (val.photo && refCount < 10) { // Limit to 10 references to avoid token limits
+                        const b64 = fileToBase64(val.photo);
+                        if (b64) {
+                            messagesContent.push({
+                                type: 'text',
+                                text: `REFERENCE OPTION: "${val.name}" (GSM: ${val.gsm || 'N/A'})`
+                            });
+                            messagesContent.push({
+                                type: 'image_url',
+                                image_url: {
+                                    url: `data:image/jpeg;base64,${b64}`,
+                                    detail: 'low'
+                                }
+                            });
+                            refCount++;
+                        }
+                    }
+                }
+
+                if (refCount > 0) {
+                    messagesContent.unshift({
+                        type: 'text',
+                        text: `IMPORTANT: I have provided ${refCount} Reference Options below. Please compare the Target Image visually against these references and prioritize an exact visual match.`
+                    });
+                }
+            }
+
+            // Still provide the text list as fallback context
+            messagesContent.push({
+                type: 'text',
+                text: `Valid Color Names List: [${existingColors.join(', ')}]`
+            });
         }
 
-        promptText += `
-- hexColor must be a valid 6-digit hex color code
-- Return ONLY the JSON object, nothing else`;
-
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o',
+            model: 'gpt-4o', // Use gpt-4o for vision
             messages: [
                 {
                     role: 'user',
-                    content: [
-                        { type: 'text', text: promptText },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: imageUrl,
-                                detail: 'low',
-                            },
-                        },
-                    ],
+                    content: messagesContent,
                 },
             ],
             temperature: 0.1,
-            max_tokens: 200,
+            max_tokens: 300,
         });
 
         let content = response.choices[0].message.content.trim();
 
-        // Strip markdown code fence if present
         if (content.startsWith('```')) {
             content = content.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
         }
@@ -269,6 +326,7 @@ Rules:
                 hexColor: parsed.hexColor,
                 confidence: parsed.confidence || 'medium',
                 source: 'ai-vision',
+                matchType: parsed.matchType
             });
             return;
         }

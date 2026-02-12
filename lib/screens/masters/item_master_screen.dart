@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
-
 import '../../widgets/custom_dropdown_field.dart';
+import 'item_group_history_screen.dart';
 
 class ItemMasterScreen extends StatefulWidget {
-  const ItemMasterScreen({super.key});
+  final Map<dynamic, dynamic>? editGroup;
+  const ItemMasterScreen({super.key, this.editGroup});
 
   @override
   State<ItemMasterScreen> createState() => _ItemMasterScreenState();
@@ -14,6 +15,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   final _api = MobileApiService();
   final _formKey = GlobalKey<FormState>();
 
+  final _rateController = TextEditingController();
   String? _selectedGroupName;
   final List<String> _selectedItemNames = [];
   String? _selectedGsm;
@@ -30,6 +32,14 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   void initState() {
     super.initState();
     _loadDropdowns();
+    if (widget.editGroup != null) {
+      _selectedGroupName = widget.editGroup!['groupName'];
+      _selectedItemNames.addAll(List<String>.from(widget.editGroup!['itemNames'] ?? []));
+      _selectedGsm = widget.editGroup!['gsm'];
+      _selectedColours.addAll(List<String>.from(widget.editGroup!['colours'] ?? []));
+      _rate = (widget.editGroup!['rate'] as num?)?.toDouble() ?? 0;
+      _rateController.text = _rate.toString();
+    }
   }
 
   Future<void> _loadDropdowns() async {
@@ -68,7 +78,10 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
           (n) => c['name'].toString().toLowerCase() == n.toLowerCase(),
         ),
       );
-      return List<String>.from(cat['values'] ?? []);
+      return (cat['values'] as List).map((v) {
+        if (v is Map) return v['name'].toString();
+        return v.toString();
+      }).toList();
     } catch (e) {
       return [];
     }
@@ -96,20 +109,30 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       };
 
       try {
-        final success = await _api.createItemGroup(data);
+        bool success;
+        if (widget.editGroup != null) {
+          success = await _api.updateItemGroup(widget.editGroup!['_id'], data);
+        } else {
+          success = await _api.createItemGroup(data);
+        }
 
         if (!mounted) return;
 
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Item Group saved to Backend')),
+            SnackBar(content: Text(widget.editGroup != null ? 'Item Group updated' : 'Item Group saved')),
           );
-          setState(() {
-            _selectedGroupName = null;
-            _selectedItemNames.clear();
-            _selectedGsm = null;
-            _selectedColours.clear();
-          });
+          if (widget.editGroup != null) {
+            Navigator.pop(context, true);
+          } else {
+            setState(() {
+              _selectedGroupName = null;
+              _selectedItemNames.clear();
+              _selectedGsm = null;
+              _selectedColours.clear();
+              _rateController.clear();
+            });
+          }
         }
       } catch (e) {
         if (!mounted) return;
@@ -127,7 +150,19 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Item Group Master')),
+      appBar: AppBar(
+        title: Text(widget.editGroup != null ? 'Edit Item Group' : 'Item Group Master'),
+        actions: [
+          if (widget.editGroup == null)
+            IconButton(
+              icon: const Icon(Icons.history),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ItemGroupHistoryScreen()),
+              ),
+            ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -159,6 +194,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
+                      controller: _rateController,
                       decoration: const InputDecoration(
                         labelText: 'Rate',
                         hintText: 'Enter Rate',
@@ -202,7 +238,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _save,
-                        child: const Text('Save Group'),
+                        child: Text(widget.editGroup != null ? 'Update Group' : 'Save Group'),
                       ),
                     ),
                   ],
