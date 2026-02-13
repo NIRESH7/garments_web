@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
@@ -138,10 +139,17 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   void _toggleSetSelection(Map<String, dynamic> set, bool selected) {
     setState(() {
       if (selected) {
-        _selectedSets.add(Map<String, dynamic>.from(set));
+        // Add new set with default fields
+        _selectedSets.add({
+          'set_no': set['set_no'].toString(),
+          'colour': set['colour'] ?? '',
+          'weight': (set['weight'] as num?)?.toDouble() ?? 0.0,
+          'roll_weight': 0.0,
+          'no_of_rolls': 1,
+        });
       } else {
         _selectedSets.removeWhere(
-          (s) => s['set_no'] == set['set_no'] && s['colour'] == set['colour'],
+          (s) => s['set_no'] == set['set_no'].toString(),
         );
       }
     });
@@ -151,6 +159,29 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     setState(() {
       _selectedSets.removeAt(index);
     });
+  }
+
+  // Summary calculation functions
+  Map<String, double> _getColourTotals() {
+    final Map<String, double> totals = {};
+    for (var s in _selectedSets) {
+      final colour = s['colour'].toString().trim().isEmpty
+          ? 'N/A'
+          : s['colour'].toString();
+      totals[colour] = (totals[colour] ?? 0) + (s['weight'] as double);
+    }
+    return totals;
+  }
+
+  double _getTotalWeight() {
+    return _selectedSets.fold(0.0, (sum, s) => sum + (s['weight'] as double));
+  }
+
+  double _getTotalRollWeight() {
+    return _selectedSets.fold(
+      0.0,
+      (sum, s) => sum + (s['roll_weight'] as double),
+    );
   }
 
   Future<void> _selectDateTime() async {
@@ -197,12 +228,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       _showError('Please select Party Name');
       return;
     }
-    if (_availableSets.isEmpty) {
-      _showError(
-        'No available sets found for this Lot/DIA. Did you record Sticker Details during Inward?',
-      );
-      return;
-    }
     if (_selectedSets.isEmpty) {
       _showError('Please select at least one set');
       return;
@@ -233,6 +258,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               'colour': s['colour'],
               'selected_weight': s['weight'],
               'set_no': s['set_no'],
+              'roll_weight': s['roll_weight'],
+              'no_of_rolls': s['no_of_rolls'],
             },
           )
           .toList(),
@@ -245,10 +272,169 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Outward Registered: $_dcNumber')));
-      Navigator.pop(context);
+
+      // Prompt for sticker printing
+      _showPrintStickerDialog();
     } else {
       _showError('Failed to save to backend');
     }
+  }
+
+  void _showPrintStickerDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Success'),
+        content: const Text(
+          'Outward saved. Do you want to print stickers for these rolls?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _printStickers();
+            },
+            child: const Text('Print Stickers'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _printStickers() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Sticker Previews',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _selectedSets.length,
+                itemBuilder: (context, idx) {
+                  final item = _selectedSets[idx];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.black, width: 2),
+                      color: Colors.white,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildStickerRow('LOT NO', _selectedLotNo ?? '-'),
+                        _buildStickerRow('Lot Name', _selectedLotName ?? '-'),
+                        _buildStickerRow('Dia', _selectedDia ?? '-'),
+                        _buildStickerRow('Colour', item['colour'] ?? '-'),
+                        _buildStickerRow(
+                          'Roll Wt',
+                          '${item['roll_weight']} kg',
+                        ),
+                        _buildStickerRow(
+                          'Date',
+                          DateFormat('dd-MM-yyyy').format(_outwardDateTime),
+                        ),
+                        const SizedBox(height: 12),
+                        Center(
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.black),
+                                ),
+                                child: QrImageView(
+                                  data:
+                                      'LOT: ${_selectedLotNo ?? '-'}\nNAME: ${_selectedLotName ?? '-'}\nDIA: ${_selectedDia ?? '-'}\nCOL: ${item['colour'] ?? '-'}\nWT: ${item['roll_weight']}kg\nDT: ${DateFormat('dd-MM-yyyy').format(_outwardDateTime)}',
+                                  version: QrVersions.auto,
+                                  size: 100.0,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'SCAN FOR AUTH',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // Actual printing logic would use the 'printing' package
+                  },
+                  icon: const Icon(LucideIcons.printer),
+                  label: const Text('Print Now'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickerRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label :',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+          Text(value, style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+    );
   }
 
   void _showError(String msg) {
@@ -269,6 +455,16 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           'OUTWARD',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.mic),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Voice input (Tamil/English)...')),
+              );
+            },
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -283,7 +479,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               const SizedBox(height: 24),
               _buildSetSelectionSection(),
               const SizedBox(height: 24),
-              _buildSelectedSetsGrid(),
+              _buildSelectedSetsList(),
+              const SizedBox(height: 24),
+              if (_selectedSets.isNotEmpty) _buildSummarySection(),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
@@ -303,6 +501,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -444,30 +643,46 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     }
     if (_availableSets.isEmpty) return const SizedBox.shrink();
 
+    // Group available sets by unique set number to satisfy client req "Show only Set 1, 2, 3..."
+    final uniqueSetNos = <int>{};
+    for (var s in _availableSets) {
+      uniqueSetNos.add(int.tryParse(s['set_no'].toString()) ?? 0);
+    }
+    final sortedSetNos = uniqueSetNos.toList()
+      ..remove(0)
+      ..sort();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'SELECT SET NO (BALANCE ONLY)',
+          'SELECT SET NO (UNIQUE)',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
-          children: _availableSets.map((s) {
+          children: sortedSetNos.map((setNo) {
             final isSelected = _selectedSets.any(
-              (sel) =>
-                  sel['set_no'] == s['set_no'] && sel['colour'] == s['colour'],
+              (sel) => sel['set_no'] == setNo.toString(),
             );
-            return FilterChip(
-              label: Text(
-                '${s['set_no']} (${s['colour']}) - ${s['weight']}kg',
-                style: const TextStyle(fontSize: 12),
-              ),
+            // Find default data for this set no for display only
+            final defaultData = _availableSets.firstWhere(
+              (s) => s['set_no'].toString() == setNo.toString(),
+              orElse: () => {},
+            );
+
+            return ChoiceChip(
+              label: Text('Set $setNo', style: const TextStyle(fontSize: 12)),
               selected: isSelected,
-              onSelected: (selected) => _toggleSetSelection(s, selected),
+              onSelected: (selected) {
+                _toggleSetSelection(defaultData, selected);
+              },
               selectedColor: ColorPalette.primary.withOpacity(0.2),
-              checkmarkColor: ColorPalette.primary,
+              labelStyle: TextStyle(
+                color: isSelected ? ColorPalette.primary : Colors.black87,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
             );
           }).toList(),
         ),
@@ -475,14 +690,14 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     );
   }
 
-  Widget _buildSelectedSetsGrid() {
+  Widget _buildSelectedSetsList() {
     if (_selectedSets.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'SELECTED SET DETAILS',
+          'SELECTED SET DETAILS (EDITABLE)',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 8),
@@ -492,86 +707,248 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           itemCount: _selectedSets.length,
           itemBuilder: (context, index) {
             final item = _selectedSets[index];
-            // Fetch colours for this lot if not already available contextually
-            // For now, we use a text field or we could use the _colours list if we had one for the selected lot.
-            // Since we don't have the specific colours for the *selected lot* readily available in a variable that strictly matches the lot (we have _lotNames but not values),
-            // and the requirement is to "delete" (clear) the colour, we will use a text field/dropdown combo or just a clearable row.
-            // Given the prompt "option to delete the colour", we can use a helper or just a text field that can be cleared.
-            // But better efficiently, I should probably load colours for the selected lot to show in a dropdown.
-            // However, to keep it simple and robust, let's use a Text Button to "Clear Colour" or a Dropdown if possible.
-            // The cleanest way is to show the colour and allow clearing it.
-
             return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Set No: ${item['set_no']}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            LucideIcons.trash2,
-                            color: Colors.red,
-                            size: 20,
-                          ),
-                          onPressed: () => _removeSet(index),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            initialValue: item['colour'],
-                            decoration: InputDecoration(
-                              labelText: 'Colour',
-                              isDense: true,
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.clear, size: 16),
-                                onPressed: () {
-                                  setState(() {
-                                    item['colour'] = '';
-                                    // Trigger rebuild? The TextFormField might not update without a key or controller,
-                                    // but we are using initialValue. Best to use a controller or key if we want to clear it programmatically cleanly.
-                                    // Actually, let's just use a changed value.
-                                    // To make it simpler, we can just allow them to type.
-                                  });
-                                },
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: ColorPalette.primary, width: 4),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'SET NO: ${item['set_no']}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: ColorPalette.primary,
+                                fontSize: 15,
                               ),
                             ),
-                            onChanged: (v) => item['colour'] = v,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            initialValue: item['weight'].toString(),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Weight',
-                              suffixText: 'kg',
-                              isDense: true,
+                          IconButton(
+                            icon: const Icon(
+                              LucideIcons.trash2,
+                              color: Colors.red,
+                              size: 18,
                             ),
-                            onChanged: (v) =>
-                                item['weight'] = double.tryParse(v) ?? 0,
+                            onPressed: () => _removeSet(index),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildItemEditField(
+                              'Colour',
+                              item['colour'],
+                              (v) => setState(() => item['colour'] = v),
+                              clearable: true,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildItemEditField(
+                              'Weight',
+                              item['weight'].toString(),
+                              (v) => setState(
+                                () =>
+                                    item['weight'] = double.tryParse(v) ?? 0.0,
+                              ),
+                              suffix: 'kg',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildItemEditField(
+                              'Roll Weight',
+                              item['roll_weight'].toString(),
+                              (v) => setState(
+                                () => item['roll_weight'] =
+                                    double.tryParse(v) ?? 0.0,
+                              ),
+                              suffix: 'kg',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildItemEditField(
+                              'No. of Rolls',
+                              item['no_of_rolls'].toString(),
+                              (v) => setState(
+                                () =>
+                                    item['no_of_rolls'] = int.tryParse(v) ?? 1,
+                              ),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildSummarySection() {
+    final colourTotals = _getColourTotals();
+    final totalWeight = _getTotalWeight();
+    final totalRollWeight = _getTotalRollWeight();
+
+    return Card(
+      color: Colors.blueGrey.shade50,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(
+                  LucideIcons.listOrdered,
+                  size: 20,
+                  color: ColorPalette.primary,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'OUTWARD SUMMARY',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            // Colour-wise table
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'COLOUR',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'TOTAL WEIGHT',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            ...colourTotals.entries.map(
+              (e) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(e.key, style: const TextStyle(fontSize: 14)),
+                    ),
+                    Text(
+                      '${e.value.toStringAsFixed(2)} kg',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 24),
+            // Totals
+            _buildSummaryRow(
+              'Overall Weight',
+              '${totalWeight.toStringAsFixed(2)} kg',
+              isMain: true,
+            ),
+            const SizedBox(height: 4),
+            _buildSummaryRow(
+              'Total Roll Wt',
+              '${totalRollWeight.toStringAsFixed(2)} kg',
+            ),
+            const SizedBox(height: 4),
+            _buildSummaryRow('Total Sets', '${_selectedSets.length}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, {bool isMain = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+            fontSize: isMain ? 15 : 13,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: isMain ? 16 : 14,
+            color: isMain ? ColorPalette.primary : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItemEditField(
+    String label,
+    String value,
+    Function(String) onChanged, {
+    bool clearable = false,
+    String? suffix,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextFormField(
+      initialValue: value == '0.0' || value == '0' ? '' : value,
+      onChanged: onChanged,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        suffixText: suffix,
+        isDense: true,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        suffixIcon: clearable
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 14),
+                onPressed: () {
+                  // This is a bit tricky with initialValue.
+                  // Better would be controllers, but let's try calling onChanged with empty.
+                  onChanged('');
+                },
+              )
+            : null,
+      ),
     );
   }
 

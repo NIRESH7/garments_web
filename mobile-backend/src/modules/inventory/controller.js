@@ -261,7 +261,11 @@ const createOutward = asyncHandler(async (req, res) => {
         vehicleNo,
         inTime,
         outTime,
-        items,
+        items: items.map(item => ({
+            ...item,
+            roll_weight: item.roll_weight || 0,
+            no_of_rolls: item.no_of_rolls || 0
+        })),
     });
 
     res.status(201).json(outward);

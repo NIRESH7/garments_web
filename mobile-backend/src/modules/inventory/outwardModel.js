@@ -4,6 +4,8 @@ const outwardItemSchema = mongoose.Schema({
     colour: { type: String, required: false },
     selected_weight: { type: Number, required: true },
     set_no: { type: String, required: true },
+    roll_weight: { type: Number },
+    no_of_rolls: { type: Number },
 });
 
 const outwardSchema = mongoose.Schema(
