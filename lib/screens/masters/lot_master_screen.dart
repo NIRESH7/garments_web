@@ -30,14 +30,32 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
   Future<void> _loadDropdowns() async {
     final parties = await _api.getParties();
     final categories = await _api.getCategories();
-    final processCategory = categories.firstWhere(
-      (c) => c['name'].toString().toLowerCase() == 'process',
-      orElse: () => {'values': []},
-    );
+
+    final List<String> extractedProcesses = [];
+    final processMatches = categories.where((c) {
+      final String catName = (c['name'] ?? '').toString().trim().toLowerCase();
+      return catName == 'process';
+    });
+
+    for (var cat in processMatches) {
+      final dynamic rawValues = cat['values'];
+      if (rawValues is List) {
+        for (var v in rawValues) {
+          if (v is Map) {
+            extractedProcesses.add((v['name'] ?? '').toString());
+          } else if (v != null) {
+            extractedProcesses.add(v.toString());
+          }
+        }
+      }
+    }
 
     setState(() {
       _parties = parties.map((m) => m['name'] as String).toList();
-      _processes = List<String>.from(processCategory['values'] ?? []);
+      _processes = extractedProcesses
+          .where((s) => s.isNotEmpty)
+          .toSet()
+          .toList();
       _isLoading = false;
     });
   }

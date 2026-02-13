@@ -34,9 +34,13 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
     _loadDropdowns();
     if (widget.editGroup != null) {
       _selectedGroupName = widget.editGroup!['groupName'];
-      _selectedItemNames.addAll(List<String>.from(widget.editGroup!['itemNames'] ?? []));
+      _selectedItemNames.addAll(
+        List<String>.from(widget.editGroup!['itemNames'] ?? []),
+      );
       _selectedGsm = widget.editGroup!['gsm'];
-      _selectedColours.addAll(List<String>.from(widget.editGroup!['colours'] ?? []));
+      _selectedColours.addAll(
+        List<String>.from(widget.editGroup!['colours'] ?? []),
+      );
       _rate = (widget.editGroup!['rate'] as num?)?.toDouble() ?? 0;
       _rateController.text = _rate.toString();
     }
@@ -73,15 +77,30 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       final List<String> names = nameOrNames is List<String>
           ? nameOrNames
           : [nameOrNames.toString()];
-      final cat = categories.firstWhere(
-        (c) => names.any(
-          (n) => c['name'].toString().toLowerCase() == n.toLowerCase(),
-        ),
-      );
-      return (cat['values'] as List).map((v) {
-        if (v is Map) return v['name'].toString();
-        return v.toString();
-      }).toList();
+
+      final List<String> result = [];
+      final matches = categories.where((c) {
+        final catName = (c['name'] ?? '').toString().trim().toLowerCase();
+        return names.any((n) => catName == n.trim().toLowerCase());
+      });
+
+      for (var cat in matches) {
+        final dynamic rawValues = cat['values'];
+        if (rawValues is List) {
+          for (var v in rawValues) {
+            String? val;
+            if (v is Map) {
+              val = (v['name'] ?? v['value'] ?? '').toString();
+            } else if (v != null) {
+              val = v.toString();
+            }
+            if (val != null && val.isNotEmpty && !result.contains(val)) {
+              result.add(val);
+            }
+          }
+        }
+      }
+      return result;
     } catch (e) {
       return [];
     }
@@ -120,7 +139,13 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(widget.editGroup != null ? 'Item Group updated' : 'Item Group saved')),
+            SnackBar(
+              content: Text(
+                widget.editGroup != null
+                    ? 'Item Group updated'
+                    : 'Item Group saved',
+              ),
+            ),
           );
           if (widget.editGroup != null) {
             Navigator.pop(context, true);
@@ -151,14 +176,18 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.editGroup != null ? 'Edit Item Group' : 'Item Group Master'),
+        title: Text(
+          widget.editGroup != null ? 'Edit Item Group' : 'Item Group Master',
+        ),
         actions: [
           if (widget.editGroup == null)
             IconButton(
               icon: const Icon(Icons.history),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ItemGroupHistoryScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const ItemGroupHistoryScreen(),
+                ),
               ),
             ),
         ],
@@ -238,7 +267,11 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _save,
-                        child: Text(widget.editGroup != null ? 'Update Group' : 'Save Group'),
+                        child: Text(
+                          widget.editGroup != null
+                              ? 'Update Group'
+                              : 'Save Group',
+                        ),
                       ),
                     ),
                   ],

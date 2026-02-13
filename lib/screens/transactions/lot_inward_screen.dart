@@ -84,28 +84,61 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Future<void> _loadMasterData() async {
     setState(() => _isLoading = true);
-    final categories = await _api.getCategories();
-    final parties = await _api.getParties();
-    final inwardNo = await _api.generateInwardNumber();
+    print('DEBUG: Starting _loadMasterData');
+    try {
+      final categories = await _api.getCategories();
+      final parties = await _api.getParties();
+      final inwardNo = await _api.generateInwardNumber();
 
-    setState(() {
-      _isLoading = false;
-      _lotNames = _getValues(categories, ['Lot Name', 'lot name']);
-      _dias = _getValues(categories, ['Dia', 'dia']);
-      _masterColours = _getValues(categories, [
-        'Colours',
-        'Colour',
-        'colour',
-        'color',
-      ]);
-      _colours = List<String>.from(_masterColours);
-      _rackNames = _getValues(categories, ['Rack Name', 'Rack', 'Racks']);
-      _palletNos = _getValues(categories, ['Pallet No', 'Pallet', 'Pallets']);
-      _parties = parties.map((m) => m['name'] as String).toList();
-      if (inwardNo != null) {
-        _inwardNoController.text = inwardNo;
+      print('DEBUG: Categories received: ${categories.length}');
+
+      setState(() {
+        _isLoading = false;
+        _lotNames = _getValues(categories, ['Lot Name', 'lot name']);
+        _dias = _getValues(categories, ['Dia', 'dia']);
+        _masterColours = _getValues(categories, [
+          'Colours',
+          'Colour',
+          'colour',
+          'color',
+        ]);
+        _colours = List<String>.from(_masterColours);
+        _rackNames = _getValues(categories, ['Rack Name', 'Rack', 'Racks']);
+        _palletNos = _getValues(categories, ['Pallet No', 'Pallet', 'Pallets']);
+        _parties = parties.map((m) => m['name'] as String).toList();
+        if (inwardNo != null) {
+          _inwardNoController.text = inwardNo;
+        }
+
+        print(
+          'DEBUG: Final counts - Racks: ${_rackNames.length}, Pallets: ${_palletNos.length}',
+        );
+
+        // UI Feedback for debugging
+        if (categories.isNotEmpty && _rackNames.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'DEBUG: No Racks found. Categories: ${categories.length}',
+                  ),
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            }
+          });
+        }
+      });
+    } catch (e) {
+      print('DEBUG: Error in _loadMasterData: $e');
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading data: $e')));
       }
-    });
+    }
   }
 
   List<String> _getValues(List<dynamic> categories, dynamic nameOrNames) {
@@ -113,33 +146,50 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       final List<String> names = nameOrNames is List<String>
           ? nameOrNames
           : [nameOrNames.toString()];
-      final cat = categories.firstWhere(
-        (c) => names.any(
-          (n) => c['name'].toString().toLowerCase() == n.toLowerCase(),
-        ),
-      );
-      
-      final values = cat['values'] as List;
-      
-      // If this is the Colours category (checked via name match in the loop usually, 
-      // but here we just process whatever category we found).
-      // We can check if 'gsm' key exists in any value to populate the map.
-      // Or we can just try to populate it for everything, no harm.
-      
-      for (var v in values) {
-        if (v is Map) {
-          final name = v['name'].toString();
-          if (v['gsm'] != null && v['gsm'].toString().isNotEmpty) {
-             _colourGsmMap[name] = v['gsm'].toString();
+
+      final List<String> result = [];
+
+      // Improved: Find ALL matching categories (e.g. if both 'Rack' and 'Rack Name' exist)
+      final matches = categories.where((c) {
+        final String catName = (c['name'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        return names.any((n) => catName == n.trim().toLowerCase());
+      });
+
+      if (matches.isEmpty) {
+        final available = categories
+            .map((c) => c['name']?.toString() ?? 'null')
+            .toList();
+        print('DEBUG: No match for $names. Available: $available');
+        return [];
+      }
+
+      for (var cat in matches) {
+        final dynamic rawValues = cat['values'];
+        if (rawValues == null || rawValues is! List) continue;
+
+        for (var v in rawValues) {
+          String? valStr;
+          if (v is Map) {
+            valStr = (v['name'] ?? v['value'] ?? '').toString();
+            if (v['gsm'] != null && v['gsm'].toString().isNotEmpty) {
+              _colourGsmMap[valStr] = v['gsm'].toString();
+            }
+          } else if (v != null) {
+            valStr = v.toString();
+          }
+
+          if (valStr != null && valStr.isNotEmpty && !result.contains(valStr)) {
+            result.add(valStr);
           }
         }
       }
 
-      return values.map((v) {
-        if (v is Map) return v['name'].toString();
-        return v.toString();
-      }).toList();
+      return result;
     } catch (e) {
+      print('DEBUG: Error extraction for $nameOrNames: $e');
       return [];
     }
   }
@@ -182,13 +232,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         if (group != null) {
           // Strictly restrict colours to those defined in the Item Group
           _colours = List<String>.from(group['colours'] ?? []);
-          
+
           // Carry over GSM and Rate
           _gsmController.text = (group['gsm'] ?? '').toString();
-          
+
           // Only set rate if it's currently 0 or empty, allowing Party rate to take precedence if already set
-          if (_rateController.text.isEmpty || _rateController.text == "0.0" || _rateController.text == "0") {
-             _rateController.text = (group['rate'] ?? '').toString();
+          if (_rateController.text.isEmpty ||
+              _rateController.text == "0.0" ||
+              _rateController.text == "0") {
+            _rateController.text = (group['rate'] ?? '').toString();
           }
         } else {
           _colours = List<String>.from(_masterColours);
@@ -206,7 +258,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (image == null) return;
 
     setState(() => _isLoading = true);
-    
+
     // Read bytes and convert to base64
     final bytes = await File(image.path).readAsBytes();
     final base64Image = base64Encode(bytes);
@@ -214,7 +266,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     // Call API
     final result = await _api.detectColorFromImage(
       base64Image,
-      existingColors: _colours, 
+      existingColors: _colours,
     );
 
     setState(() => _isLoading = false);
@@ -223,32 +275,34 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       final detectedColor = result['colorName'] as String;
       final confidence = result['confidence'] ?? 'medium';
       final matchType = result['matchType'];
-      
+
       setState(() {
         if (!_colours.contains(detectedColor)) {
-           _colours.add(detectedColor);
+          _colours.add(detectedColor);
         }
         row.colour = detectedColor;
       });
-      
+
       String msg = "Detected: $detectedColor ($confidence)";
-      
+
       if (matchType == 'exact_reference') {
-         msg = "✅ Visual Match: $detectedColor";
+        msg = "✅ Visual Match: $detectedColor";
       }
 
       // GSM Validation
       if (_colourGsmMap.containsKey(detectedColor)) {
-          final String refGsm = _colourGsmMap[detectedColor]!;
-          final String currentGsm = _gsmController.text.trim();
-          
-          if (currentGsm.isNotEmpty && refGsm.isNotEmpty && refGsm != currentGsm) {
-              msg += "\n⚠️ GSM Mismatch! Ref: $refGsm, Lot: $currentGsm";
-          } else if (currentGsm.isNotEmpty && refGsm.isNotEmpty) {
-              msg += " (GSM Matched)";
-          }
+        final String refGsm = _colourGsmMap[detectedColor]!;
+        final String currentGsm = _gsmController.text.trim();
+
+        if (currentGsm.isNotEmpty &&
+            refGsm.isNotEmpty &&
+            refGsm != currentGsm) {
+          msg += "\n⚠️ GSM Mismatch! Ref: $refGsm, Lot: $currentGsm";
+        } else if (currentGsm.isNotEmpty && refGsm.isNotEmpty) {
+          msg += " (GSM Matched)";
+        }
       }
-      
+
       _showError(msg);
     } else {
       _showError("Could not detect color");
@@ -261,7 +315,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       if (row.rolls > 0) {
         row.sets = (row.rolls / 11).round();
       }
-      
+
       // Auto-Fill Received Weight from Delivered Weight if empty/zero
       if (row.recWeight == 0 && row.deliveredWeight > 0) {
         row.recWeight = row.deliveredWeight;
@@ -278,8 +332,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       }
     });
   }
-
-
 
   Future<void> _pickImage(Function(XFile?) onPicked) async {
     final ImagePicker picker = ImagePicker();
@@ -386,8 +438,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             (r) => {
               "dia": r.dia ?? "",
               "roll": r.rolls,
-              "set": r.sets,
-              "delWt": r.deliveredWeight,
+              "sets": r.sets,
+              "delivWt": r.deliveredWeight,
               "recRoll": r.recRoll,
               "recWt": r.recWeight,
               "rate": r.rate,
@@ -402,11 +454,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               "pallets": e.value.pallets,
               "rows": e.value.rows
                   .where((r) => r.colour != null)
-                  .map((r) => {
-                    "colour": r.colour,
-                    "setWeights": r.setWeights,
-                    "totalWeight": r.totalWeight
-                  })
+                  .map(
+                    (r) => {
+                      "colour": r.colour,
+                      "setWeights": r.setWeights,
+                      "totalWeight": r.totalWeight,
+                    },
+                  )
                   .toList(),
             },
           )
@@ -417,7 +471,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     // Note: Signature images are now handled via Multipart in saveInward
     String? qualityImgPath;
     String? complaintImgPath;
-    
+
     // Non-signature uploads still use old method (might fail on Web, needs future refactor)
     if (_qualityImage != null)
       qualityImgPath = await _api.uploadFile(_qualityImage!.path);
@@ -445,7 +499,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     inwardData["washingImage"] = washingImgPath;
     inwardData["complaintText"] = _complaintController.text;
     inwardData["complaintImage"] = complaintImgPath;
-    
+
     // Pass XFile objects directly for signatures to use Multipart upload
     inwardData["lotInchargeSignature"] = _lotInchargeSignature;
     inwardData["authorizedSignature"] = _authorizedSignature;
@@ -734,7 +788,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       final r = double.tryParse(v) ?? 0;
                       setState(() {
                         for (var row in _rows) {
-                           row.rate = r;
+                          row.rate = r;
                         }
                       });
                     },
@@ -1253,11 +1307,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.camera_alt, size: 20, color: Colors.blue),
+                            icon: const Icon(
+                              Icons.camera_alt,
+                              size: 20,
+                              color: Colors.blue,
+                            ),
                             onPressed: () => _detectColorFromImage(r),
                             tooltip: 'Detect Color',
                             padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                            constraints: const BoxConstraints(
+                              minWidth: 24,
+                              minHeight: 24,
+                            ),
                           ),
                         ],
                       ),
@@ -1392,13 +1453,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             ),
             child: file != null
                 ? (kIsWeb
-                    ? Image.network(file.path, fit: BoxFit.contain)
-                    : Image.file(File(file.path), fit: BoxFit.contain))
+                      ? Image.network(file.path, fit: BoxFit.contain)
+                      : Image.file(File(file.path), fit: BoxFit.contain))
                 : const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.edit, color: Colors.grey, size: 20),
-                      Text("Sign", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text(
+                        "Sign",
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
                     ],
                   ),
           ),
@@ -1784,7 +1848,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 }
-
 
 class InwardRow {
   String? dia;

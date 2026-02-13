@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 class SignaturePadDialog extends StatefulWidget {
   const SignaturePadDialog({super.key});
@@ -27,13 +30,22 @@ class _SignaturePadDialogState extends State<SignaturePadDialog> {
     if (_controller.isNotEmpty) {
       final Uint8List? data = await _controller.toPngBytes();
       if (data != null) {
-        // Use XFile.fromData to support both Web and Mobile without path_provider
-        final xFile = XFile.fromData(
-          data,
-          mimeType: 'image/png',
-          name: 'signature_${DateTime.now().millisecondsSinceEpoch}.png',
-        );
-        
+        XFile xFile;
+        if (kIsWeb) {
+          xFile = XFile.fromData(
+            data,
+            mimeType: 'image/png',
+            name: 'signature_${DateTime.now().millisecondsSinceEpoch}.png',
+          );
+        } else {
+          final tempDir = await getTemporaryDirectory();
+          final String filePath =
+              '${tempDir.path}/signature_${DateTime.now().millisecondsSinceEpoch}.png';
+          final file = File(filePath);
+          await file.writeAsBytes(data);
+          xFile = XFile(filePath);
+        }
+
         if (mounted) {
           Navigator.pop(context, xFile);
         }
@@ -113,7 +125,10 @@ class _SignaturePadDialogState extends State<SignaturePadDialog> {
                   TextButton.icon(
                     onPressed: () => _controller.clear(),
                     icon: const Icon(Icons.clear, color: Colors.red),
-                    label: const Text("Clear", style: TextStyle(color: Colors.red)),
+                    label: const Text(
+                      "Clear",
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Flexible(

@@ -8,98 +8,122 @@ import Outward from './outwardModel.js';
 // @route   POST /api/inventory/inward
 // @access  Private
 const createInward = asyncHandler(async (req, res) => {
-    const {
-        inwardNo,
-        inwardDate,
-        inTime,
-        outTime,
-        lotName,
-        lotNo,
-        fromParty,
-        process,
-        rate,
-        gsm,
-        vehicleNo,
-        partyDcNo,
-        diaEntries,
-        storageDetails,
-        qualityStatus,
-        qualityImage,
-        gsmStatus,
-        gsmImage,
-        shadeStatus,
-        shadeImage,
-        washingStatus,
-        washingImage,
-        complaintText,
-        complaintImage,
-        balanceImage,
-        // Signatures might come as strings (if not changed) or handling files below
-    } = req.body;
+    try {
+        const {
+            inwardNo,
+            inwardDate,
+            inTime,
+            outTime,
+            lotName,
+            lotNo,
+            fromParty,
+            process,
+            rate,
+            gsm,
+            vehicleNo,
+            partyDcNo,
+            diaEntries,
+            storageDetails,
+            qualityStatus,
+            qualityImage,
+            gsmStatus,
+            gsmImage,
+            shadeStatus,
+            shadeImage,
+            washingStatus,
+            washingImage,
+            complaintText,
+            complaintImage,
+            balanceImage,
+        } = req.body;
 
-    // Handle file uploads for signatures
-    let finalLotInchargeSignature = req.body.lotInchargeSignature;
-    let finalAuthorizedSignature = req.body.authorizedSignature;
-    let finalMdSignature = req.body.mdSignature;
+        // Handle file uploads for signatures
+        let finalLotInchargeSignature = req.body.lotInchargeSignature;
+        let finalAuthorizedSignature = req.body.authorizedSignature;
+        let finalMdSignature = req.body.mdSignature;
 
-    if (req.files) {
-        if (req.files.lotInchargeSignature) {
-            finalLotInchargeSignature = req.files.lotInchargeSignature[0].path.replace(/\\/g, '/');
-        }
-        if (req.files.authorizedSignature) {
-            finalAuthorizedSignature = req.files.authorizedSignature[0].path.replace(/\\/g, '/');
-        }
-        if (req.files.mdSignature) {
-            finalMdSignature = req.files.mdSignature[0].path.replace(/\\/g, '/');
-        }
-    }
-
-    // Generate Inward No if not provided
-    let finalInwardNo = req.body.inwardNo;
-    if (!finalInwardNo) {
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        const count = await Inward.countDocuments({
-            createdAt: {
-                $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-                $lt: new Date(new Date().setHours(23, 59, 59, 999))
+        if (req.files) {
+            if (req.files.lotInchargeSignature) {
+                finalLotInchargeSignature = req.files.lotInchargeSignature[0].path.replace(/\\/g, '/');
             }
+            if (req.files.authorizedSignature) {
+                finalAuthorizedSignature = req.files.authorizedSignature[0].path.replace(/\\/g, '/');
+            }
+            if (req.files.mdSignature) {
+                finalMdSignature = req.files.mdSignature[0].path.replace(/\\/g, '/');
+            }
+        }
+
+        // --- FIX: Parse JSON strings for diaEntries and storageDetails ---
+        let processedDiaEntries = diaEntries;
+        if (typeof diaEntries === 'string') {
+            try {
+                processedDiaEntries = JSON.parse(diaEntries);
+            } catch (e) {
+                console.error('Failed to parse diaEntries JSON:', e);
+            }
+        }
+
+        let processedStorageDetails = storageDetails;
+        if (typeof storageDetails === 'string') {
+            try {
+                processedStorageDetails = JSON.parse(storageDetails);
+            } catch (e) {
+                console.error('Failed to parse storageDetails JSON:', e);
+            }
+        }
+
+        // Generate Inward No if not provided
+        let finalInwardNo = inwardNo;
+        if (!finalInwardNo) {
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const count = await Inward.countDocuments({
+                createdAt: {
+                    $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+                    $lt: new Date(new Date().setHours(23, 59, 59, 999))
+                }
+            });
+            finalInwardNo = `INW-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
+        }
+
+        const inward = await Inward.create({
+            user: req.user._id,
+            inwardNo: finalInwardNo,
+            inwardDate,
+            inTime,
+            outTime,
+            lotName,
+            lotNo,
+            fromParty,
+            process,
+            rate: Number(rate) || 0,
+            gsm,
+            vehicleNo,
+            partyDcNo,
+            diaEntries: processedDiaEntries,
+            storageDetails: processedStorageDetails,
+            qualityStatus,
+            qualityImage,
+            gsmStatus,
+            gsmImage,
+            shadeStatus,
+            shadeImage,
+            washingStatus,
+            washingImage,
+            complaintText,
+            complaintImage,
+            balanceImage,
+            lotInchargeSignature: finalLotInchargeSignature,
+            authorizedSignature: finalAuthorizedSignature,
+            mdSignature: finalMdSignature,
         });
-        finalInwardNo = `INW-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
+
+        res.status(201).json(inward);
+    } catch (error) {
+        console.error('Error creating inward:', error);
+        res.status(500);
+        throw new Error(`Failed to create inward: ${error.message}`);
     }
-
-    const inward = await Inward.create({
-        user: req.user._id,
-        inwardNo: finalInwardNo,
-        inwardDate,
-        inTime,
-        outTime,
-        lotName,
-        lotNo,
-        fromParty,
-        process,
-        rate,
-        gsm,
-        vehicleNo,
-        partyDcNo,
-        diaEntries,
-        storageDetails,
-        qualityStatus,
-        qualityImage,
-        gsmStatus,
-        gsmImage,
-        shadeStatus,
-        shadeImage,
-        washingStatus,
-        washingImage,
-        complaintText,
-        complaintImage,
-        balanceImage,
-        lotInchargeSignature: finalLotInchargeSignature,
-        authorizedSignature: finalAuthorizedSignature,
-        mdSignature: finalMdSignature,
-    });
-
-    res.status(201).json(inward);
 });
 
 // @desc    Get all inward entries

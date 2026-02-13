@@ -47,7 +47,11 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       final cat = categories.firstWhere(
         (c) => c['name'].toString().toLowerCase() == name.toLowerCase(),
       );
-      return List<String>.from(cat['values'] ?? []);
+      final List<dynamic> values = cat['values'] ?? [];
+      return values.map<String>((v) {
+        if (v is Map) return v['name'].toString();
+        return v.toString();
+      }).toList();
     } catch (e) {
       return [];
     }

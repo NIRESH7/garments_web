@@ -47,7 +47,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
     );
 
     setState(() {
-      _processes = (processCategory['values'] as List).map((v) {
+      _processes = (processCategory['values'] as List).map<String>((v) {
         if (v is Map) return v['name'].toString();
         return v.toString();
       }).toList();
@@ -78,7 +78,11 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
 
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(widget.editParty != null ? 'Party updated' : 'Party saved')),
+            SnackBar(
+              content: Text(
+                widget.editParty != null ? 'Party updated' : 'Party saved',
+              ),
+            ),
           );
           if (widget.editParty != null) {
             Navigator.pop(context, true);
@@ -111,7 +115,9 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
               icon: const Icon(Icons.history),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const PartyHistoryScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const PartyHistoryScreen(),
+                ),
               ),
             ),
         ],
@@ -174,7 +180,11 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _save,
-                        child: Text(widget.editParty != null ? 'Update Party' : 'Save Party'),
+                        child: Text(
+                          widget.editParty != null
+                              ? 'Update Party'
+                              : 'Save Party',
+                        ),
                       ),
                     ),
                   ],

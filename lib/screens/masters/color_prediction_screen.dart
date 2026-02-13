@@ -210,7 +210,12 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen>
       categoryId = coloursCat['_id'] as String;
 
       // Check if value already exists
-      final existingValues = List<String>.from(coloursCat['values'] ?? []);
+      final List<dynamic> values = coloursCat['values'] ?? [];
+      final existingValues = values.map<String>((v) {
+        if (v is Map) return v['name'].toString();
+        return v.toString();
+      }).toList();
+
       if (existingValues
           .map((v) => v.toLowerCase())
           .contains(colorName.toLowerCase())) {

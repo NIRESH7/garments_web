@@ -64,10 +64,29 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
   List<String> _getValues(List<dynamic> categories, String name) {
     try {
-      final cat = categories.firstWhere(
-        (c) => c['name'].toString().toLowerCase() == name.toLowerCase(),
-      );
-      return List<String>.from(cat['values'] ?? []);
+      final List<String> result = [];
+      final matches = categories.where((c) {
+        final catName = (c['name'] ?? '').toString().trim().toLowerCase();
+        return catName == name.trim().toLowerCase();
+      });
+
+      for (var cat in matches) {
+        final dynamic rawValues = cat['values'];
+        if (rawValues is List) {
+          for (var v in rawValues) {
+            String? val;
+            if (v is Map) {
+              val = (v['name'] ?? v['value'] ?? '').toString();
+            } else if (v != null) {
+              val = v.toString();
+            }
+            if (val != null && val.isNotEmpty && !result.contains(val)) {
+              result.add(val);
+            }
+          }
+        }
+      }
+      return result;
     } catch (e) {
       return [];
     }
