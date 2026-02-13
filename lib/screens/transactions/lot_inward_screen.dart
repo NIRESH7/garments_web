@@ -492,8 +492,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (!mounted) return;
 
     if (success) {
-      // Prompt to Share or Print Stickers
-      _showPrintStickerDialog(inwardData);
+      // Directly ask to share after success instead of showing sticker dialog automatically
+      _askToShare(inwardData);
     } else {
       _showError("Failed to Save. Check if all required fields are filled.");
     }
@@ -554,19 +554,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  void _printStickers(Map<String, dynamic> inwardData) {
+  void _printStickers(Map<String, dynamic>? inwardData) {
     // Flatten sticker data
     final List<Map<String, dynamic>> stickers = [];
 
-    // inwardData['storageDetails'] structure:
-    // List of objects with { dia, racks, pallets, rows: [{colour, setWeights: []}] }
-    
-    // However, inwardData is what we sent to API. Let's rely on _stickerData for consistency as it's the source.
-    // Actually inwardData is constructed from _stickerData so it should be fine, but using _stickerData directly 
-    // gives us the most raw access, though inwardData has everything needed and is passed around.
-    
-    // Let's use _stickerData to be safe and consistent with current state
-    
     _stickerData.forEach((dia, data) {
       for (var row in data.rows) {
         if (row.colour != null && row.colour!.isNotEmpty) {
@@ -588,8 +579,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     if (stickers.isEmpty) {
         _showError("No sticker data found.");
-        // Proceed to share anyway
-        _askToShare(inwardData);
+        if (inwardData != null) _askToShare(inwardData);
         return;
     }
 
@@ -621,7 +611,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     icon: const Icon(Icons.close),
                     onPressed: () {
                         Navigator.pop(ctx);
-                        _askToShare(inwardData); // Chain back to share
+                        if (inwardData != null) _askToShare(inwardData);
                     },
                   ),
                 ],
@@ -661,8 +651,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           child: Column(
                             children: [
                               Container(
-                                width: 100,
-                                height: 100,
+                                width: 80,
+                                height: 80,
                                 decoration: BoxDecoration(
                                   border: Border.all(color: Colors.black),
                                 ),
@@ -670,7 +660,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                   data:
                                       'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
                                   version: QrVersions.auto,
-                                  size: 100.0,
+                                  size: 80.0,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -696,10 +686,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    // Placeholder for printing logic
                     Navigator.pop(ctx);
                     _showError("Printing not implemented yet");
-                    _askToShare(inwardData);
+                    if (inwardData != null) _askToShare(inwardData);
                   },
                   icon: const Icon(Icons.print),
                   label: const Text('Print Now'),
@@ -1126,6 +1115,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             width: 80,
             child: _buildTableInput(row.rolls, (v) {
               row.rolls = int.tryParse(v) ?? 0;
+              row.sets = (row.rolls / 11).round();
               _updateRowMath(row);
             }, key: ValueKey('rolls_${row.rolls}')),
           ),
@@ -1134,9 +1124,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             width: 80,
             child: _buildTableInput(row.sets, (v) {
               row.sets = int.tryParse(v) ?? 0;
-              row.rolls = (row.sets / 11).round();
               _updateRowMath(row);
-            }),
+            }, key: ValueKey('sets_${row.sets}')),
           ),
           // DELIV. WT
           _buildTableCell(
@@ -1345,27 +1334,52 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             ),
         ],
         const SizedBox(height: 30),
-        _buildSignatureSection(),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 55,
-          child: ElevatedButton.icon(
-            onPressed: _saveStorageForCurrentDia,
-            icon: const Icon(Icons.save),
-            label: const Text(
-              "Save Entry",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF22C55E).withOpacity(0.7),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 55,
+                child: ElevatedButton.icon(
+                  onPressed: () => _printStickers(null),
+                  icon: const Icon(Icons.visibility),
+                  label: const Text(
+                    "Preview Stickers",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0EA5E9),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: 55,
+                child: ElevatedButton.icon(
+                  onPressed: _saveStorageForCurrentDia,
+                  icon: const Icon(Icons.save),
+                  label: const Text(
+                    "Save Entry",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF22C55E).withOpacity(0.7),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 40),
       ],
