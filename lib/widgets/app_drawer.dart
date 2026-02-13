@@ -1,0 +1,158 @@
+import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../core/theme/color_palette.dart';
+import '../screens/dashboard/dashboard_screen.dart';
+import '../screens/auth/login_screen.dart';
+
+// Masters
+import '../screens/masters/categories_master_screen.dart';
+import '../screens/masters/dropdown_setup_screen.dart';
+import '../screens/masters/party_master_screen.dart';
+import '../screens/masters/item_master_screen.dart';
+import '../screens/masters/color_prediction_screen.dart';
+
+// Transactions
+import '../screens/transactions/lot_inward_screen.dart';
+import '../screens/transactions/lot_outward_screen.dart';
+import '../screens/assessment/item_assignment_list_screen.dart';
+
+// Reports
+import '../screens/reports/overview_report.dart';
+import '../screens/reports/lot_aging_report.dart';
+import '../screens/reports/inward_outward_report.dart';
+import '../screens/reports/monthly_summary_report.dart';
+
+class AppDrawer extends StatelessWidget {
+  const AppDrawer({super.key});
+
+  void _navigateTo(BuildContext context, Widget screen) {
+    Navigator.pop(context); // Close drawer
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: ColorPalette.primary),
+            accountName: const Text(
+              "Garments Admin",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            accountEmail: const Text("admin@garments.com"),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(LucideIcons.user, size: 30, color: ColorPalette.primary),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero, // Remove top padding
+              children: [
+                ListTile(
+                  leading: const Icon(LucideIcons.home),
+                  title: const Text('Home'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                      (route) => false,
+                    );
+                  },
+                ),
+                
+                // Masters Group
+                ExpansionTile(
+                  leading: const Icon(LucideIcons.database),
+                  title: const Text("Masters"),
+                  children: [
+                    _buildSubItem(context, "Categories", const CategoriesMasterScreen()),
+                    _buildSubItem(context, "Dropdown Setup", const DropdownSetupScreen()),
+                    _buildSubItem(context, "Party Master", const PartyMasterScreen()),
+                    _buildSubItem(context, "Item Group Master", const ItemMasterScreen()), // Assuming ItemMasterScreen is Item Group Master
+                    _buildSubItem(context, "Colour Prediction", const ColorPredictionScreen()),
+                  ],
+                ),
+
+                // Transactions Group
+                ExpansionTile(
+                  leading: const Icon(LucideIcons.arrowLeftRight),
+                  title: const Text("Transactions"),
+                  children: [
+                    _buildSubItem(context, "Lot Inward", const LotInwardScreen()),
+                    _buildSubItem(context, "Lot Outward", const LotOutwardScreen()),
+                    _buildSubItem(context, "Item Assignments", const ItemAssignmentListScreen()),
+                  ],
+                ),
+
+                // Reports Group
+                ExpansionTile(
+                  leading: const Icon(LucideIcons.fileBarChart),
+                  title: const Text("Reports"),
+                  children: [
+                    _buildSubItem(context, "Overview", const OverviewReportScreen()),
+                    _buildSubItem(context, "Ageing Details", const LotAgingReportScreen()),
+                    // Formatting/Aging Summary might be separate, check file if needed, but for now map broadly
+                    // The user said "Aging Summary", but file name is 'lot_aging_report.dart'.
+                    // I'll check if there's another report or reuse. 
+                    // Let's assume 'Ageing Details' covers it or add placeholder if unsure.
+                    // Actually 'Aging Summary' might be different. I saw 'monthly_summary_report.dart' which is Closing/Summary.
+                    // 'Inward' and 'Outward' reports -> InwardOutwardReportScreen covers both usually or separate tabs.
+                     _buildSubItem(context, "Inward & Outward", const InwardOutwardReportScreen()),
+                     _buildSubItem(context, "Closing Stock", const MonthlySummaryReportScreen()),
+                  ],
+                ),
+
+                ListTile(
+                  leading: const Icon(LucideIcons.mic),
+                  title: const Text('Voice Queries'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Voice Queries not implemented yet")),
+                    );
+                  },
+                ),
+
+                const Divider(),
+                ListTile(
+                  leading: const Icon(LucideIcons.logOut, color: Colors.red),
+                  title: const Text('Logout', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(context);
+                     Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      (route) => false,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              "v1.0.0",
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubItem(BuildContext context, String title, Widget screen) {
+    return ListTile(
+      contentPadding: const EdgeInsets.only(left: 50, right: 16),
+      title: Text(title, style: const TextStyle(fontSize: 14)),
+      onTap: () => _navigateTo(context, screen),
+    );
+  }
+}

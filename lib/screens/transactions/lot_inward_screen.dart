@@ -9,6 +9,9 @@ import '../../core/constants/api_constants.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_dropdown_field.dart';
 import 'package:garments/dialogs/signature_pad_dialog.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+
+import 'package:garments/widgets/app_drawer.dart';
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -489,34 +492,242 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (!mounted) return;
 
     if (success) {
-      // Prompt to Share
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Saved Successfully"),
-          content: const Text("Do you want to share details on WhatsApp?"),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              },
-              child: const Text("No"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _shareToWhatsApp(inwardData);
-                Navigator.pop(context);
-              },
-              child: const Text("Share"),
-            ),
-          ],
-        ),
-      );
+      // Prompt to Share or Print Stickers
+      _showPrintStickerDialog(inwardData);
     } else {
       _showError("Failed to Save. Check if all required fields are filled.");
     }
+  }
+
+  void _showPrintStickerDialog(Map<String, dynamic> inwardData) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Saved Successfully"),
+        content: const Text(
+            "Do you want to print stickers for the received rolls?"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              // Ask for WhatsApp share after declining print
+              _askToShare(inwardData);
+            },
+            child: const Text("No"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _printStickers(inwardData);
+            },
+            child: const Text("Print Stickers"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _askToShare(Map<String, dynamic> inwardData) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Share Details?"),
+        content: const Text("Do you want to share details on WhatsApp?"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context); // Close screen
+            },
+            child: const Text("No"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _shareToWhatsApp(inwardData);
+              Navigator.pop(context); // Close screen
+            },
+            child: const Text("Share"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _printStickers(Map<String, dynamic> inwardData) {
+    // Flatten sticker data
+    final List<Map<String, dynamic>> stickers = [];
+
+    // inwardData['storageDetails'] structure:
+    // List of objects with { dia, racks, pallets, rows: [{colour, setWeights: []}] }
+    
+    // However, inwardData is what we sent to API. Let's rely on _stickerData for consistency as it's the source.
+    // Actually inwardData is constructed from _stickerData so it should be fine, but using _stickerData directly 
+    // gives us the most raw access, though inwardData has everything needed and is passed around.
+    
+    // Let's use _stickerData to be safe and consistent with current state
+    
+    _stickerData.forEach((dia, data) {
+      for (var row in data.rows) {
+        if (row.colour != null && row.colour!.isNotEmpty) {
+           for (var weight in row.setWeights) {
+             if (weight.trim().isNotEmpty) {
+               stickers.add({
+                 'lotNo': _lotNumberController.text,
+                 'lotName': _selectedLotName ?? '',
+                 'dia': dia,
+                 'colour': row.colour!,
+                 'weight': weight,
+                 'date': DateFormat('dd-MM-yyyy').format(_inwardDate),
+               });
+             }
+           }
+        }
+      }
+    });
+
+    if (stickers.isEmpty) {
+        _showError("No sticker data found.");
+        // Proceed to share anyway
+        _askToShare(inwardData);
+        return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Sticker Previews',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                        Navigator.pop(ctx);
+                        _askToShare(inwardData); // Chain back to share
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: stickers.length,
+                itemBuilder: (context, idx) {
+                  final item = stickers[idx];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.black, width: 2),
+                      color: Colors.white,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildStickerRow('LOT NO', item['lotNo']),
+                        _buildStickerRow('Lot Name', item['lotName']),
+                        _buildStickerRow('Dia', item['dia']),
+                        _buildStickerRow('Colour', item['colour']),
+                        _buildStickerRow(
+                          'Roll Wt',
+                          '${item['weight']} kg',
+                        ),
+                        _buildStickerRow(
+                          'Date',
+                          item['date'],
+                        ),
+                        const SizedBox(height: 12),
+                        Center(
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.black),
+                                ),
+                                child: QrImageView(
+                                  data:
+                                      'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                                  version: QrVersions.auto,
+                                  size: 100.0,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'SCAN FOR AUTH',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // Placeholder for printing logic
+                    Navigator.pop(ctx);
+                    _showError("Printing not implemented yet");
+                    _askToShare(inwardData);
+                  },
+                  icon: const Icon(Icons.print),
+                  label: const Text('Print Now'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickerRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label :',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+          Text(value, style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+    );
   }
 
   void _navigateToStickerPage() {
@@ -566,17 +777,20 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         }
       },
       child: Scaffold(
+        drawer: _currentPage == 0 ? const AppDrawer() : null,
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (_currentPage != 0) {
-                setState(() => _currentPage = 0);
-              } else {
-                Navigator.of(context).pop();
-              }
-            },
-          ),
+          leading: _currentPage == 0
+              ? null // Use default hamburger
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    if (_currentPage != 0) {
+                      setState(() => _currentPage = 0);
+                    } else {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
           title: Text(
             _currentPage == 0
                 ? 'Lot Inward Entry'
@@ -1271,12 +1485,51 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     _buildGridCell(
                       "",
                       120,
-                      child: _buildSmallDropdown(
-                        r.colour,
-                        _colours,
-                        (v) => setState(() => r.colour = v),
-                        hint: "Colour",
-                        itemImages: _colourImages,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildSmallDropdown(
+                              r.colour,
+                              _colours,
+                              (v) => setState(() => r.colour = v),
+                              hint: "Colour",
+                              itemImages: _colourImages,
+                            ),
+                          ),
+                          if (r.colour != null &&
+                              _colourImages.containsKey(r.colour))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4.0),
+                              child: GestureDetector(
+                                onTap: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => Dialog(
+                                      child: Image.network(
+                                        _colourImages[r.colour]!,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    border:
+                                        Border.all(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(4),
+                                    image: DecorationImage(
+                                      image: NetworkImage(
+                                        _colourImages[r.colour]!,
+                                      ),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     ...List.generate(sets, (i) {
