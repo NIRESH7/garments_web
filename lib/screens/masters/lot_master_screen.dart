@@ -20,6 +20,7 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
 
   List<String> _parties = [], _processes = [];
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -62,6 +63,7 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
 
   Future<void> _save() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isSaving = true);
       _formKey.currentState!.save();
       final lotData = {
         'lotNumber': _lotNumberController.text,
@@ -70,17 +72,28 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
         'remarks': _remarksController.text,
       };
 
-      final success = await _api.createLot(lotData);
-      if (success) {
+      try {
+        final success = await _api.createLot(lotData);
+        if (success) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Lot created successfully in Backend'),
+            ),
+          );
+          Navigator.pop(context);
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Failed to create lot')));
+        }
+      } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lot created successfully in Backend')),
-        );
-        Navigator.pop(context);
-      } else {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to create lot')));
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
       }
     }
   }
@@ -129,8 +142,17 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
                     ),
                     const SizedBox(height: 40),
                     ElevatedButton(
-                      onPressed: _save,
-                      child: const Text('Create Lot'),
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Create Lot'),
                     ),
                     const SizedBox(height: 20),
                     Container(

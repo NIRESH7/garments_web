@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
-
-import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
+import '../../core/constants/api_constants.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_dropdown_field.dart';
 import 'package:garments/dialogs/signature_pad_dialog.dart';
@@ -61,6 +61,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   /// Per–DIA storage & sticker details
   Map<String, StickerDiaData> _stickerData = {};
   Map<String, String> _colourGsmMap = {}; // Maps Colour Name -> GSM
+  Map<String, String> _colourImages = {}; // Maps Colour Name -> Image URL/Path
 
   /// DIAs for which storage details have been completed
   final Set<String> _completedStickerDias = {};
@@ -72,8 +73,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   List<String> _parties = [];
   List<String> _rackNames = [];
   List<String> _palletNos = [];
-
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -177,6 +178,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             if (v['gsm'] != null && v['gsm'].toString().isNotEmpty) {
               _colourGsmMap[valStr] = v['gsm'].toString();
             }
+            if (v['image'] != null && v['image'].toString().isNotEmpty) {
+              String imgPath = v['image'].toString();
+              // If it's a relative path (uploads/...), prepend base URL
+              if (!imgPath.startsWith('http') && !imgPath.startsWith('/')) {
+                imgPath = '${ApiConstants.serverUrl}/$imgPath';
+              }
+              // If it starts with uploads/, it likely needs base URL without extra slash if base has it, but usually safe to join.
+              // Actually, best to check ApiConstants.
+
+              _colourImages[valStr] = imgPath;
+              print('DEBUG: Image found for $valStr: $imgPath');
+            }
           } else if (v != null) {
             valStr = v.toString();
           }
@@ -249,77 +262,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
-  Future<void> _detectColorFromImage(StickerRow row) async {
-    final XFile? image = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      maxHeight: 800,
-      maxWidth: 800,
-    );
-    if (image == null) return;
-
-    setState(() => _isLoading = true);
-
-    // Read bytes and convert to base64
-    final bytes = await File(image.path).readAsBytes();
-    final base64Image = base64Encode(bytes);
-
-    // Call API
-    final result = await _api.detectColorFromImage(
-      base64Image,
-      existingColors: _colours,
-    );
-
-    setState(() => _isLoading = false);
-
-    if (result != null && result['colorName'] != null) {
-      final detectedColor = result['colorName'] as String;
-      final confidence = result['confidence'] ?? 'medium';
-      final matchType = result['matchType'];
-
-      setState(() {
-        if (!_colours.contains(detectedColor)) {
-          _colours.add(detectedColor);
-        }
-        row.colour = detectedColor;
-      });
-
-      String msg = "Detected: $detectedColor ($confidence)";
-
-      if (matchType == 'exact_reference') {
-        msg = "✅ Visual Match: $detectedColor";
-      }
-
-      // GSM Validation
-      if (_colourGsmMap.containsKey(detectedColor)) {
-        final String refGsm = _colourGsmMap[detectedColor]!;
-        final String currentGsm = _gsmController.text.trim();
-
-        if (currentGsm.isNotEmpty &&
-            refGsm.isNotEmpty &&
-            refGsm != currentGsm) {
-          msg += "\n⚠️ GSM Mismatch! Ref: $refGsm, Lot: $currentGsm";
-        } else if (currentGsm.isNotEmpty && refGsm.isNotEmpty) {
-          msg += " (GSM Matched)";
-        }
-      }
-
-      _showError(msg);
-    } else {
-      _showError("Could not detect color");
-    }
-  }
-
   void _updateRowMath(InwardRow row) {
     setState(() {
       // Auto-Calculate Sets: rolls / 11, rounded to nearest integer
-      if (row.rolls > 0) {
-        row.sets = (row.rolls / 11).round();
-      }
+      // Auto-Calculate Sets logic removed as per new requirement (Sets drives Rolls now)
+      // if (row.rolls > 0) {
+      //   row.sets = (row.rolls / 11).round();
+      // }
 
-      // Auto-Fill Received Weight from Delivered Weight if empty/zero
-      if (row.recWeight == 0 && row.deliveredWeight > 0) {
-        row.recWeight = row.deliveredWeight;
-      }
+      // Auto-Fill Received Weight Logic Removed
+      // if (row.recWeight == 0 && row.deliveredWeight > 0) {
+      //   row.recWeight = row.deliveredWeight;
+      // }
 
       row.recRoll = row.rolls;
       row.difference = row.recWeight - row.deliveredWeight;
@@ -431,6 +385,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     setState(() {
       _outTime = DateFormat('hh:mm a').format(DateTime.now());
       _isLoading = true;
+      _isSaving = true;
     });
 
     final inwardData = {
@@ -525,6 +480,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     setState(() {
       _isLoading = false;
+      _isSaving = false;
       if (success) {
         // No-op for now unless we need to track local save state
       }
@@ -957,13 +913,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             child: _buildTableInput(row.rolls, (v) {
               row.rolls = int.tryParse(v) ?? 0;
               _updateRowMath(row);
-            }),
+            }, key: ValueKey('rolls_${row.rolls}')),
           ),
           // SETS
           _buildTableCell(
             width: 80,
             child: _buildTableInput(row.sets, (v) {
               row.sets = int.tryParse(v) ?? 0;
+              row.rolls = (row.sets / 11).round();
+              _updateRowMath(row);
             }),
           ),
           // DELIV. WT
@@ -1084,8 +1042,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildTableInput(num val, Function(String) chg) {
+  Widget _buildTableInput(num val, Function(String) chg, {Key? key}) {
     return Container(
+      key: key,
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1312,31 +1271,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     _buildGridCell(
                       "",
                       120,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildSmallDropdown(
-                              r.colour,
-                              _colours,
-                              (v) => setState(() => r.colour = v),
-                              hint: "Colour",
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.camera_alt,
-                              size: 20,
-                              color: Colors.blue,
-                            ),
-                            onPressed: () => _detectColorFromImage(r),
-                            tooltip: 'Detect Color',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 24,
-                              minHeight: 24,
-                            ),
-                          ),
-                        ],
+                      child: _buildSmallDropdown(
+                        r.colour,
+                        _colours,
+                        (v) => setState(() => r.colour = v),
+                        hint: "Colour",
+                        itemImages: _colourImages,
                       ),
                     ),
                     ...List.generate(sets, (i) {
@@ -1360,6 +1300,21 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               );
             }),
             // Add row button
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    diaData.rows.add(StickerRow());
+                  });
+                },
+                icon: const Icon(Icons.add, size: 20),
+                label: const Text("Add Row"),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF0EA5E9),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1535,12 +1490,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     List<String> items,
     Function(String?) chg, {
     String hint = "-",
+    Map<String, String>? itemImages,
   }) => CustomDropdownField(
     label: "", // No label for small dropdown in grid
     value: val,
     items: items,
     onChanged: chg,
     hint: hint,
+    itemImages: itemImages,
   );
   Widget _buildGridHeader() => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1608,11 +1565,20 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           width: double.infinity,
           height: 60,
           child: ElevatedButton.icon(
-            onPressed: allDone ? _save : null,
-            icon: const Icon(Icons.save, size: 24),
-            label: const Text(
-              "Save Entry",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            onPressed: (allDone && !_isSaving) ? _save : null,
+            icon: _isSaving
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.save, size: 24),
+            label: Text(
+              _isSaving ? "Saving..." : "Save Entry",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: allDone
@@ -1690,39 +1656,43 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     setState(() {
       _stickerData[dia] = diaData;
       _completedStickerDias.add(dia);
-      _selectedStickerDia = null;
-      _currentPage = 0; // back to main page
+
+      // Update the main row's received weight based on sticker entries
+      try {
+        final mainRow = _rows.firstWhere((r) => r.dia == dia);
+        double totalRecWeight = 0;
+        for (var sRow in diaData.rows) {
+          totalRecWeight += sRow.totalWeight;
+        }
+        mainRow.recWeight = totalRecWeight;
+        // Also update other math like difference and loss%
+        _updateRowMath(mainRow);
+      } catch (e) {
+        print('Error updating main row for dia $dia: $e');
+      }
+
+      // Check if another DIA is available for stickers
+      final allDias = _getDiasWithRolls();
+      final remaining = allDias
+          .where((d) => !_completedStickerDias.contains(d))
+          .toList();
+
+      if (remaining.isNotEmpty) {
+        // Move to next DIA
+        _selectedStickerDia = remaining.first;
+        // Ensure the sticker data structure exists for the new DIA
+        if (!_stickerData.containsKey(_selectedStickerDia)) {
+          _stickerData[_selectedStickerDia!] = StickerDiaData();
+        }
+        // Stay on sticker page (assuming logic elsewhere renders sticker page based on some state,
+        // usually _currentPage needs to be 1 for sticker page if checking screens, but based on code flow it seems we are already there.
+        // If `_buildStickerPage` is shown when `_currentPage == 1`.
+        // The previous code set `_currentPage = 0`, so I should only do that if NO remaining.
+      } else {
+        _selectedStickerDia = null;
+        _currentPage = 0; // Back to main page only if all done
+      }
     });
-
-    // Check if another DIA is available for stickers
-    final allDias = _getDiasWithRolls();
-    final remaining = allDias
-        .where((d) => !_completedStickerDias.contains(d))
-        .toList();
-
-    if (remaining.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Sticker saved for DIA $dia. Another DIA (${remaining.join(', ')}) is available.",
-            ),
-            backgroundColor: Colors.blue.shade700,
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: "NEXT DIA",
-              textColor: Colors.white,
-              onPressed: () {
-                setState(() {
-                  _selectedStickerDia = remaining.first;
-                  _currentPage = 1;
-                });
-              },
-            ),
-          ),
-        );
-      });
-    }
   }
 
   Widget _buildImageSection(String label, XFile? file, Function(XFile?) onSet) {

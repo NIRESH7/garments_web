@@ -27,6 +27,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   List<String> _gsmValues = [];
   List<String> _colours = [];
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -108,6 +109,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
   Future<void> _save() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isSaving = true);
       _formKey.currentState!.save();
 
       if (_selectedItemNames.isEmpty) {
@@ -162,6 +164,8 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
       } catch (e) {
         if (!mounted) return;
         _showError(e.toString());
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
       }
     }
   }
@@ -266,12 +270,21 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _save,
-                        child: Text(
-                          widget.editGroup != null
-                              ? 'Update Group'
-                              : 'Save Group',
-                        ),
+                        onPressed: _isSaving ? null : _save,
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                widget.editGroup != null
+                                    ? 'Update Group'
+                                    : 'Save Group',
+                              ),
                       ),
                     ),
                   ],

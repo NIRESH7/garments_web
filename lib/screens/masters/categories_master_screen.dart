@@ -14,6 +14,7 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
   final _controller = TextEditingController();
   List<dynamic> _list = [];
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -32,6 +33,7 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
 
   Future<void> _add() async {
     if (_controller.text.isEmpty) return;
+    setState(() => _isSaving = true);
     try {
       final success = await _api.createCategory(_controller.text);
       if (success) {
@@ -49,6 +51,8 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
       }
     } catch (e) {
       debugPrint(e.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -91,8 +95,17 @@ class _CategoriesMasterScreenState extends State<CategoriesMasterScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _add,
-                      child: const Text('Create Category'),
+                      onPressed: _isSaving ? null : _add,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Create Category'),
                     ),
                   ),
                 ],

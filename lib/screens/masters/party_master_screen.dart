@@ -24,6 +24,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
   String? _selectedProcess;
   List<String> _processes = [];
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
 
   Future<void> _save() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isSaving = true);
       final partyData = {
         'name': _nameController.text,
         'address': _addressController.text,
@@ -100,6 +102,8 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
         );
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
       }
     }
   }
@@ -179,12 +183,21 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _save,
-                        child: Text(
-                          widget.editParty != null
-                              ? 'Update Party'
-                              : 'Save Party',
-                        ),
+                        onPressed: _isSaving ? null : _save,
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                widget.editParty != null
+                                    ? 'Update Party'
+                                    : 'Save Party',
+                              ),
                       ),
                     ),
                   ],

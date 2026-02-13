@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../core/theme/color_palette.dart';
@@ -10,6 +11,7 @@ class CustomDropdownField extends StatelessWidget {
   final String? Function(String?)? validator;
   final String hint;
   final IconData? prefixIcon;
+  final Map<String, String>? itemImages;
 
   const CustomDropdownField({
     super.key,
@@ -20,6 +22,7 @@ class CustomDropdownField extends StatelessWidget {
     this.validator,
     this.hint = 'Select an option',
     this.prefixIcon,
+    this.itemImages,
   });
 
   @override
@@ -80,6 +83,12 @@ class CustomDropdownField extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                         ],
+                        if (value != null &&
+                            itemImages != null &&
+                            itemImages!.containsKey(value)) ...[
+                          _buildImagePreview(itemImages![value]!),
+                          const SizedBox(width: 10),
+                        ],
                         Expanded(
                           child: Text(
                             (value != null && value!.contains(' (#'))
@@ -132,10 +141,30 @@ class CustomDropdownField extends StatelessWidget {
         title: 'Select $label',
         items: items,
         initialValue: value,
+        itemImages: itemImages,
         onSelected: (val) {
           onChanged(val);
           Navigator.pop(context);
         },
+      ),
+    );
+  }
+
+  Widget _buildImagePreview(String path) {
+    bool isNetwork = path.startsWith('http');
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.grey.shade300),
+        image: DecorationImage(
+          image: isNetwork
+              ? NetworkImage(path) as ImageProvider
+              : FileImage(File(path)), // Correcting io.File usage
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
@@ -145,12 +174,14 @@ class _SearchableListDialog extends StatefulWidget {
   final String title;
   final List<String> items;
   final String? initialValue;
+  final Map<String, String>? itemImages;
   final Function(String) onSelected;
 
   const _SearchableListDialog({
     required this.title,
     required this.items,
     this.initialValue,
+    this.itemImages,
     required this.onSelected,
   });
 
@@ -267,8 +298,29 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
                       itemBuilder: (context, index) {
                         final item = _filteredItems[index];
                         final isSelected = item == widget.initialValue;
+                        final imagePath = widget.itemImages?[item];
+
                         return ListTile(
                           onTap: () => widget.onSelected(item),
+                          leading: imagePath != null
+                              ? Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    image: DecorationImage(
+                                      image: imagePath.startsWith('http')
+                                          ? NetworkImage(imagePath)
+                                                as ImageProvider
+                                          : FileImage(File(imagePath)),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                )
+                              : null,
                           title: Text(
                             item.contains(' (#') ? item.split(' (#')[0] : item,
                             style: TextStyle(

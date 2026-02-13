@@ -52,19 +52,37 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       final res = await _api.getCategories();
 
       // Map server categories to our static list
+      // Map server categories to our static list with aliases
       final List<Map<String, dynamic>> filteredCategories = [];
 
+      final Map<String, List<String>> categoryAliases = {
+        'Colours': ['Colours', 'Colors', 'Colour', 'Color'],
+        'Dia': ['Dia', 'dia'],
+        'Item': ['Item', 'Items'],
+        'Item Name': ['Item Name', 'ItemName', 'item name'],
+        'Lot Name': ['Lot Name', 'LotName', 'lot name'],
+        'GSM': ['GSM', 'Gsm', 'gsm'],
+        'Rack Name': ['Rack Name', 'Rack', 'racks'],
+        'Pallet No': ['Pallet No', 'Pallet', 'pallets'],
+      };
+
       for (var name in _staticCategoryNames) {
-        // Find existing category on server (case-insensitive and trimmed match)
+        final List<String> aliases = (categoryAliases[name] ?? [])
+            .map((e) => e.toLowerCase().trim())
+            .toList();
+        if (!aliases.contains(name.toLowerCase().trim())) {
+          aliases.add(name.toLowerCase().trim());
+        }
+
+        // Find existing category on server (case-insensitive and trimmed match against aliases)
         final serverCat = res.firstWhere((c) {
           final String serverName = (c['name'] as String? ?? '')
               .trim()
               .toLowerCase();
-          final String targetName = name.trim().toLowerCase();
-          return serverName == targetName;
-        }, orElse: () => null);
+          return aliases.contains(serverName);
+        }, orElse: () => <String, dynamic>{});
 
-        if (serverCat != null) {
+        if (serverCat.isNotEmpty) {
           filteredCategories.add(serverCat);
         } else {
           // If category doesn't exist on server, create a placeholder
@@ -103,9 +121,9 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
     final category = _categories.firstWhere(
       (c) => c['_id'] == _selectedCategoryId,
-      orElse: () => null,
+      orElse: () => <String, dynamic>{},
     );
-    _values = category != null ? (category['values'] ?? []) : [];
+    _values = category['values'] ?? [];
   }
 
   void _loadValues() {
@@ -212,7 +230,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   CustomDropdownField(
-                    label: 'Select Category',
+                    label: 'Category',
                     value:
                         _categories.any((c) => c['_id'] == _selectedCategoryId)
                         ? _categories.firstWhere(

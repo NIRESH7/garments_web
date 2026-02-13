@@ -42,6 +42,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
   bool _isLoading = true;
   bool _isSaved = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -238,6 +239,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
     setState(() {
       _outTime = DateFormat('hh:mm a').format(DateTime.now());
+      _isSaving = true;
     });
 
     final outwardData = {
@@ -265,18 +267,24 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           .toList(),
     };
 
-    final success = await _api.saveOutward(outwardData);
-    if (success) {
-      setState(() => _isSaved = true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Outward Registered: $_dcNumber')));
+    try {
+      final success = await _api.saveOutward(outwardData);
+      if (success) {
+        setState(() => _isSaved = true);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Outward Registered: $_dcNumber')),
+        );
 
-      // Prompt for sticker printing
-      _showPrintStickerDialog();
-    } else {
-      _showError('Failed to save to backend');
+        // Prompt for sticker printing
+        _showPrintStickerDialog();
+      } else {
+        _showError('Failed to save to backend');
+      }
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -487,9 +495,22 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: _isSaved ? null : _save,
-                  icon: const Icon(LucideIcons.checkCircle),
-                  label: Text(_isSaved ? 'Dispatch Confirmed' : 'Save Outward'),
+                  onPressed: (_isSaved || _isSaving) ? null : _save,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(LucideIcons.checkCircle),
+                  label: Text(
+                    _isSaving
+                        ? 'Saving...'
+                        : (_isSaved ? 'Dispatch Confirmed' : 'Save Outward'),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isSaved
                         ? Colors.grey
