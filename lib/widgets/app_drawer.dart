@@ -14,6 +14,8 @@ import '../screens/masters/color_prediction_screen.dart';
 // Transactions
 import '../screens/transactions/lot_inward_screen.dart';
 import '../screens/transactions/lot_outward_screen.dart';
+import '../screens/transactions/inward_list_screen.dart';
+import '../screens/transactions/outward_list_screen.dart';
 import '../screens/assessment/item_assignment_list_screen.dart';
 
 // Reports
@@ -38,16 +40,47 @@ class AppDrawer extends StatelessWidget {
     return Drawer(
       child: Column(
         children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: ColorPalette.primary),
-            accountName: const Text(
-              "Garments Admin",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(top: 50, bottom: 20),
+            decoration: const BoxDecoration(
+              color: ColorPalette.primary,
             ),
-            accountEmail: const Text("admin@garments.com"),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(LucideIcons.user, size: 30, color: ColorPalette.primary),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const CircleAvatar(
+                    radius: 35,
+                    backgroundColor: Colors.white,
+                    child: Icon(
+                      LucideIcons.user,
+                      size: 40,
+                      color: ColorPalette.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Garments Admin",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+                Text(
+                  "admin@garments.com",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -87,6 +120,8 @@ class AppDrawer extends StatelessWidget {
                   children: [
                     _buildSubItem(context, "Lot Inward", const LotInwardScreen()),
                     _buildSubItem(context, "Lot Outward", const LotOutwardScreen()),
+                    _buildSubItem(context, "Inward List", const InwardListScreen()),
+                    _buildSubItem(context, "Outward List", const OutwardListScreen()),
                     _buildSubItem(context, "Item Assignments", const ItemAssignmentListScreen()),
                   ],
                 ),

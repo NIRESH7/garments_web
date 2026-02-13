@@ -13,6 +13,7 @@ import '../dashboard/notifications_screen.dart';
 import '../assessment/item_assignment_list_screen.dart';
 import '../transactions/inward_list_screen.dart';
 import '../transactions/outward_list_screen.dart';
+import '../../widgets/app_drawer.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -38,93 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const ReportsDashboard(),
         ],
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: const BoxDecoration(color: ColorPalette.primary),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundImage: NetworkImage(
-                      'https://i.pravatar.cc/150?u=deepak',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Garments Admin',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'admin@garments.com',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.home),
-              title: const Text('Home'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => _pageIndex = 0);
-              },
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.download),
-              title: const Text('Inward List'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const InwardListScreen(),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.upload),
-              title: const Text('Outward List'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const OutwardListScreen(),
-                  ),
-                );
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(
-                LucideIcons.logOut,
-                color: ColorPalette.error,
-              ),
-              title: const Text(
-                'Logout',
-                style: TextStyle(color: ColorPalette.error),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                // Trigger logout logic
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const AppDrawer(),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(
           boxShadow: [
