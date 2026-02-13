@@ -22,7 +22,8 @@
     "mongoose": "^9.1.6",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
-    "openai": "^6.21.0"
+    "openai": "^6.21.0",
+    "cloudinary": "^2.5.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

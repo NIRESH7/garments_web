@@ -65,58 +65,104 @@ class InwardDetailScreen extends StatelessWidget {
   }
 
   Future<void> _shareDetails(BuildContext context) async {
-    final sb = StringBuffer();
-    sb.writeln("*Inward Details*");
-    sb.writeln("Inward No: ${inward['inwardNo'] ?? 'N/A'}");
-    sb.writeln("Date: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(inward['inwardDate']))}");
-    sb.writeln("Party: ${inward['fromParty'] ?? 'N/A'}");
-    sb.writeln("Lot: ${inward['lotName']} / ${inward['lotNo']}");
-    sb.writeln("--------------------------------");
-    
-    final entries = inward['diaEntries'] as List<dynamic>? ?? [];
-    final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
+    try {
+      final sb = StringBuffer();
+      sb.writeln("*Inward Details*");
+      sb.writeln("Inward No: ${inward['inwardNo'] ?? 'N/A'}");
 
-    for (var entry in entries) {
-      final e = entry as Map<String, dynamic>;
-      final dia = e['dia']?.toString();
-      final rate = double.tryParse(e['rate'].toString()) ?? 0;
-      final recWt = double.tryParse(e['recWt'].toString()) ?? 0;
-      final value = rate * recWt;
-      
-      sb.writeln("DIA: $dia");
-      sb.writeln("Rolls: ${e['recRoll']} | Wt: ${e['recWt']} Kg");
-      sb.writeln("Rate: ${e['rate']} | Value: ${value.toStringAsFixed(2)}");
-      
-      // Add Storage for this DIA
-      if (dia != null) {
-        final storage = storageDetails.firstWhere(
-          (s) => s['dia']?.toString() == dia,
-          orElse: () => null,
+      String formattedDate = 'N/A';
+      if (inward['inwardDate'] != null) {
+        try {
+          formattedDate = DateFormat(
+            'dd-MM-yyyy',
+          ).format(DateTime.parse(inward['inwardDate']));
+        } catch (e) {
+          formattedDate = inward['inwardDate'].toString();
+        }
+      }
+      sb.writeln("Date: $formattedDate");
+      sb.writeln("Party: ${inward['fromParty'] ?? 'N/A'}");
+      sb.writeln(
+        "Lot: ${inward['lotName'] ?? 'N/A'} / ${inward['lotNo'] ?? 'N/A'}",
+      );
+      sb.writeln("--------------------------------");
+
+      final entries = inward['diaEntries'] as List<dynamic>? ?? [];
+      final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
+
+      for (var entry in entries) {
+        if (entry == null) continue;
+        final e = entry as Map<String, dynamic>;
+        final dia = e['dia']?.toString();
+        final rate = double.tryParse(e['rate']?.toString() ?? '0') ?? 0;
+        final recWt = double.tryParse(e['recWt']?.toString() ?? '0') ?? 0;
+        final value = rate * recWt;
+
+        if (dia != null) sb.writeln("DIA: $dia");
+        sb.writeln(
+          "Rolls: ${e['recRoll'] ?? 0} | Wt: ${recWt.toStringAsFixed(2)} Kg",
         );
-        if (storage != null) {
-          final racks = (storage['racks'] as List<dynamic>? ?? []).where((r) => r != null).join(', ');
-          final pallets = (storage['pallets'] as List<dynamic>? ?? []).where((p) => p != null).join(', ');
-          if (racks.isNotEmpty) sb.writeln("Racks: $racks");
-          if (pallets.isNotEmpty) sb.writeln("Pallets: $pallets");
-          
-          final rows = storage['rows'] as List<dynamic>? ?? [];
-          for (var row in rows) {
-            final col = row['colour'] ?? '-';
-            final tot = row['totalWeight'] ?? '-';
-            sb.writeln(" - $col: $tot Kg");
+        sb.writeln("Rate: $rate | Value: ${value.toStringAsFixed(2)}");
+
+        // Add Storage for this DIA
+        if (dia != null && dia.isNotEmpty) {
+          final storage = storageDetails.firstWhere(
+            (s) => s != null && s['dia']?.toString() == dia,
+            orElse: () => null,
+          );
+          if (storage != null) {
+            final racks = (storage['racks'] as List<dynamic>? ?? [])
+                .where((r) => r != null && r.toString().isNotEmpty)
+                .join(', ');
+            final pallets = (storage['pallets'] as List<dynamic>? ?? [])
+                .where((p) => p != null && p.toString().isNotEmpty)
+                .join(', ');
+            if (racks.isNotEmpty) sb.writeln("Racks: $racks");
+            if (pallets.isNotEmpty) sb.writeln("Pallets: $pallets");
+
+            final rows = storage['rows'] as List<dynamic>? ?? [];
+            for (var row in rows) {
+              if (row == null) continue;
+              final col = row['colour'] ?? '-';
+              final tot = row['totalWeight'] ?? '-';
+              sb.writeln(" - $col: $tot Kg");
+            }
+          }
+        }
+        sb.writeln("");
+      }
+
+      final whatsappUrl =
+          "whatsapp://send?text=${Uri.encodeComponent(sb.toString())}";
+      final url = Uri.parse(whatsappUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback for some devices or if the deep link fails
+        final webUrl = Uri.parse(
+          "https://wa.me/?text=${Uri.encodeComponent(sb.toString())}",
+        );
+        if (await canLaunchUrl(webUrl)) {
+          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "Could not launch WhatsApp. Please ensure it is installed.",
+                ),
+              ),
+            );
           }
         }
       }
-      sb.writeln("");
-    }
-    
-    final url = Uri.parse("whatsapp://send?text=${Uri.encodeComponent(sb.toString())}");
-     if (await canLaunchUrl(url)) { // url_launcher needed
-      await launchUrl(url);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not launch WhatsApp")),
-      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error preparing sharing details: $e")),
+        );
+      }
     }
   }
 
@@ -136,12 +182,15 @@ class InwardDetailScreen extends StatelessWidget {
             _buildInfoRow('Inward No', inward['inwardNo'] ?? 'N/A'),
             _buildInfoRow('Lot Name', inward['lotName'] ?? 'N/A'),
             _buildInfoRow('Lot No', inward['lotNo'] ?? 'N/A'),
-            _buildInfoRow(
-              'Inward Date',
-              DateFormat(
-                'dd-MM-yyyy',
-              ).format(DateTime.parse(inward['inwardDate'])),
-            ),
+            _buildInfoRow('Inward Date', () {
+              try {
+                return DateFormat(
+                  'dd-MM-yyyy',
+                ).format(DateTime.parse(inward['inwardDate']));
+              } catch (e) {
+                return inward['inwardDate'] ?? 'N/A';
+              }
+            }()),
             _buildInfoRow('In Time', inward['inTime'] ?? 'N/A'),
             _buildInfoRow('Out Time', inward['outTime'] ?? 'N/A'),
             _buildInfoRow('Vehicle No', inward['vehicleNo'] ?? 'N/A'),
@@ -205,7 +254,7 @@ class InwardDetailScreen extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  '${ApiConstants.serverUrl}$image',
+                  _getImageUrl(image),
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -261,7 +310,7 @@ class InwardDetailScreen extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  '${ApiConstants.serverUrl}${inward['complaintImage']}',
+                  _getImageUrl(inward['complaintImage']),
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -352,7 +401,7 @@ class InwardDetailScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                   Text(
+                  Text(
                     'Val: ${value.toStringAsFixed(2)}',
                     style: const TextStyle(
                       color: Colors.blue,
@@ -453,7 +502,10 @@ class InwardDetailScreen extends StatelessWidget {
                         final totalWt = rMap['totalWeight']?.toString() ?? '-';
                         return Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child: _buildSmallInfo('Colour $colour ($totalWt)', weightsText),
+                          child: _buildSmallInfo(
+                            'Colour $colour ($totalWt)',
+                            weightsText,
+                          ),
                         );
                       }),
                     ],
@@ -564,7 +616,7 @@ class InwardDetailScreen extends StatelessWidget {
               border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
             ),
             child: Image.network(
-              '${ApiConstants.serverUrl}$imagePath',
+              _getImageUrl(imagePath),
               fit: BoxFit.contain,
               errorBuilder: (ctx, err, stack) =>
                   const Icon(Icons.broken_image, size: 20, color: Colors.grey),
@@ -583,5 +635,18 @@ class InwardDetailScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String _getImageUrl(dynamic path) {
+    if (path == null) return '';
+    String imageUrl = path.toString();
+    if (imageUrl.startsWith('http')) return imageUrl;
+
+    // Ensure leading slash
+    if (!imageUrl.startsWith('/')) {
+      imageUrl = '/$imageUrl';
+    }
+
+    return '${ApiConstants.serverUrl}$imageUrl';
   }
 }

@@ -44,13 +44,13 @@ const createInward = asyncHandler(async (req, res) => {
 
         if (req.files) {
             if (req.files.lotInchargeSignature) {
-                finalLotInchargeSignature = req.files.lotInchargeSignature[0].path.replace(/\\/g, '/');
+                finalLotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
             }
             if (req.files.authorizedSignature) {
-                finalAuthorizedSignature = req.files.authorizedSignature[0].path.replace(/\\/g, '/');
+                finalAuthorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
             }
             if (req.files.mdSignature) {
-                finalMdSignature = req.files.mdSignature[0].path.replace(/\\/g, '/');
+                finalMdSignature = `/${req.files.mdSignature[0].path.replace(/\\/g, '/')}`;
             }
         }
 

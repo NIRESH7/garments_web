@@ -392,20 +392,36 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Future<void> _shareToWhatsApp(Map<String, dynamic> data) async {
-    String msg = "*Lot Inward Entry*\n";
-    msg += "Date: ${data['inwardDate']}\n";
-    msg += "Lot: ${data['lotName']} / ${data['lotNo']}\n";
-    msg += "Party: ${data['fromParty']}\n";
-    msg += "Quality: ${data['qualityStatus']}\n";
-    if (data['complaintText'] != null && data['complaintText'].isNotEmpty) {
-      msg += "Complaint: ${data['complaintText']}\n";
-    }
+    try {
+      String msg = "*Lot Inward Entry*\n";
+      msg += "Date: ${data['inwardDate']}\n";
+      msg += "Lot: ${data['lotName']} / ${data['lotNo']}\n";
+      msg += "Party: ${data['fromParty']}\n";
+      msg += "Quality: ${data['qualityStatus']}\n";
+      if (data['complaintText'] != null &&
+          data['complaintText'].toString().isNotEmpty) {
+        msg += "Complaint: ${data['complaintText']}\n";
+      }
 
-    final url = Uri.parse("whatsapp://send?text=${Uri.encodeComponent(msg)}");
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    } else {
-      _showError("Could not launch WhatsApp");
+      final whatsappUrl = "whatsapp://send?text=${Uri.encodeComponent(msg)}";
+      final url = Uri.parse(whatsappUrl);
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        final webUrl = Uri.parse(
+          "https://wa.me/?text=${Uri.encodeComponent(msg)}",
+        );
+        if (await canLaunchUrl(webUrl)) {
+          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+        } else {
+          _showError(
+            "Could not launch WhatsApp. Please ensure it is installed.",
+          );
+        }
+      }
+    } catch (e) {
+      _showError("Error preparing WhatsApp message: $e");
     }
   }
 

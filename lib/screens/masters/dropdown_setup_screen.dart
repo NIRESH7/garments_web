@@ -30,6 +30,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     'GSM',
     'Dyeing',
     'Process',
+    'Party Name',
     'Rack Name',
     'Pallet No',
   ];
@@ -54,18 +55,19 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       final List<Map<String, dynamic>> filteredCategories = [];
 
       for (var name in _staticCategoryNames) {
-        // Find existing category on server (case-insensitive match)
-        final serverCat = res.firstWhere(
-          (c) => (c['name'] as String).toLowerCase() == name.toLowerCase(),
-          orElse: () => null,
-        );
+        // Find existing category on server (case-insensitive and trimmed match)
+        final serverCat = res.firstWhere((c) {
+          final String serverName = (c['name'] as String? ?? '')
+              .trim()
+              .toLowerCase();
+          final String targetName = name.trim().toLowerCase();
+          return serverName == targetName;
+        }, orElse: () => null);
 
         if (serverCat != null) {
           filteredCategories.add(serverCat);
         } else {
-          // If category doesn't exist on server, we might need to create it later
-          // or just show it as empty for now. For now, let's create a placeholder
-          // so the user can see the option in the dropdown.
+          // If category doesn't exist on server, create a placeholder
           filteredCategories.add({
             '_id': 'new_$name',
             'name': name,
@@ -76,10 +78,11 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
       setState(() {
         _categories = filteredCategories;
-        if (_categories.isNotEmpty && _selectedCategoryId == null) {
+        if (_selectedCategoryId == null && _categories.isNotEmpty) {
           _selectedCategoryId = _categories.first['_id'];
-          _loadValues();
         }
+        // Always refresh values from the current categories list
+        _syncValuesWithSelectedCategory();
         _isLoading = false;
       });
     } catch (e) {
@@ -87,25 +90,28 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     }
   }
 
-  Future<void> _loadValues() async {
-    if (_selectedCategoryId == null) return;
-    if (_selectedCategoryId!.startsWith('new_')) {
-      setState(() => _values = []);
+  void _syncValuesWithSelectedCategory() {
+    if (_selectedCategoryId == null) {
+      _values = [];
       return;
     }
 
-    setState(() => _isLoading = true);
-    try {
-      final category = _categories.firstWhere(
-        (c) => c['_id'] == _selectedCategoryId,
-      );
-      setState(() {
-        _values = category['values'] ?? [];
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
+    if (_selectedCategoryId!.startsWith('new_')) {
+      _values = [];
+      return;
     }
+
+    final category = _categories.firstWhere(
+      (c) => c['_id'] == _selectedCategoryId,
+      orElse: () => null,
+    );
+    _values = category != null ? (category['values'] ?? []) : [];
+  }
+
+  void _loadValues() {
+    setState(() {
+      _syncValuesWithSelectedCategory();
+    });
   }
 
   Future<void> _pickImage() async {
@@ -161,7 +167,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         _gsmController.clear();
         setState(() => _selectedImage = null);
         await _loadCategories();
-        await _loadValues();
+        _loadValues();
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
@@ -169,9 +175,9 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -183,7 +189,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     final success = await _api.deleteCategoryValue(_selectedCategoryId!, value);
     if (success) {
       await _loadCategories();
-      await _loadValues();
+      _loadValues();
     }
   }
 
@@ -253,7 +259,10 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                             _selectedImage == null
                                 ? 'No image selected'
                                 : 'Image selected: ${_selectedImage!.path.split('/').last}',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                         TextButton.icon(
@@ -266,12 +275,17 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                   ],
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: _selectedCategoryId == null || _isLoading ? null : _add,
+                    onPressed: _selectedCategoryId == null || _isLoading
+                        ? null
+                        : _add,
                     child: _isLoading
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
                         : const Text('Add Value'),
                   ),
@@ -295,30 +309,38 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                     itemCount: _values.length,
                     itemBuilder: (context, index) {
                       final dynamic valueData = _values[index];
-                      final String valueName = valueData is String ? valueData : (valueData['name'] ?? '');
-                      final String? photoUrl = valueData is Map ? valueData['photo'] : null;
-                      final String? gsm = valueData is Map ? valueData['gsm'] : null;
+                      final String valueName = valueData is String
+                          ? valueData
+                          : (valueData['name'] ?? '');
+                      final String? photoUrl = valueData is Map
+                          ? valueData['photo']
+                          : null;
+                      final String? gsm = valueData is Map
+                          ? valueData['gsm']
+                          : null;
 
                       final isColoursCategory = _isColoursCategory;
-                      
+
                       return ListTile(
                         leading: isColoursCategory
                             ? (photoUrl != null && photoUrl.isNotEmpty)
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Image.network(
-                                      '${ApiConstants.baseUrl.replaceAll('/api', '')}$photoUrl',
-                                      width: 40,
-                                      height: 40,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                          _colorCircle(valueName),
-                                    ),
-                                  )
-                                : _colorCircle(valueName)
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Image.network(
+                                        '${ApiConstants.baseUrl.replaceAll('/api', '')}$photoUrl',
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                _colorCircle(valueName),
+                                      ),
+                                    )
+                                  : _colorCircle(valueName)
                             : null,
                         title: Text(valueName),
-                        subtitle: (isColoursCategory && gsm != null && gsm.isNotEmpty)
+                        subtitle:
+                            (isColoursCategory && gsm != null && gsm.isNotEmpty)
                             ? Text('GSM: $gsm')
                             : null,
                         trailing: IconButton(
@@ -341,10 +363,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       decoration: BoxDecoration(
         color: _resolveColor(value),
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.grey.shade300,
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.grey.shade300, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: _resolveColor(value).withOpacity(0.4),
@@ -367,7 +386,10 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
   bool get _isColoursCategory {
     final name = _selectedCategoryName.toLowerCase();
-    return name == 'colours' || name == 'colors' || name == 'colour' || name == 'color';
+    return name == 'colours' ||
+        name == 'colors' ||
+        name == 'colour' ||
+        name == 'color';
   }
 
   Color _resolveColor(String name) {
