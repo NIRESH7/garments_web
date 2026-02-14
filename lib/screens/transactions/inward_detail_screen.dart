@@ -64,6 +64,17 @@ class InwardDetailScreen extends StatelessWidget {
     );
   }
 
+  String _getImageUrl(dynamic path) {
+    if (path == null || path.toString().isEmpty) return '';
+    String imageUrl = path.toString();
+    if (imageUrl.startsWith('http')) return imageUrl;
+
+    // Remove any redundant leading slashes to avoid // in URL
+    imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+
+    return '${ApiConstants.serverUrl}/$imageUrl';
+  }
+
   Future<void> _shareDetails(BuildContext context) async {
     try {
       final sb = StringBuffer();
@@ -557,21 +568,9 @@ class InwardDetailScreen extends StatelessWidget {
   }
 
   Widget _buildSignaturesCard() {
-    final hasIncharge =
-        inward['lotInchargeSignature'] != null &&
-        inward['lotInchargeSignature'].toString().isNotEmpty;
-    final hasAuthorized =
-        inward['authorizedSignature'] != null &&
-        inward['authorizedSignature'].toString().isNotEmpty;
-    final hasMd =
-        inward['mdSignature'] != null &&
-        inward['mdSignature'].toString().isNotEmpty;
-
-    if (!hasIncharge && !hasAuthorized && !hasMd)
-      return const SizedBox.shrink();
-
     return Card(
       elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -579,24 +578,26 @@ class InwardDetailScreen extends StatelessWidget {
           children: [
             const Text(
               'Signatures (E-Signature)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
             ),
             const Divider(),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                if (hasIncharge)
-                  _buildSignatureItem(
-                    'Lot Incharge',
-                    inward['lotInchargeSignature'],
-                  ),
-                if (hasAuthorized)
-                  _buildSignatureItem(
-                    'Authorized',
-                    inward['authorizedSignature'],
-                  ),
-                if (hasMd) _buildSignatureItem('MD', inward['mdSignature']),
+                _buildSignatureItem(
+                  'Lot Incharge',
+                  inward['lotInchargeSignature'],
+                ),
+                _buildSignatureItem(
+                  'Authorized',
+                  inward['authorizedSignature'],
+                ),
+                _buildSignatureItem('MD', inward['mdSignature']),
               ],
             ),
           ],
@@ -606,47 +607,47 @@ class InwardDetailScreen extends StatelessWidget {
   }
 
   Widget _buildSignatureItem(String label, String? imagePath) {
+    final bool hasImage = imagePath != null && imagePath.toString().isNotEmpty;
+
     return Column(
       children: [
-        if (imagePath != null)
-          Container(
-            height: 60,
-            width: 100,
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        Container(
+          height: 60,
+          width: 90,
+          decoration: BoxDecoration(
+            color: hasImage ? Colors.transparent : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: hasImage ? Colors.grey.shade200 : Colors.grey.shade100,
             ),
-            child: Image.network(
-              _getImageUrl(imagePath),
-              fit: BoxFit.contain,
-              errorBuilder: (ctx, err, stack) =>
-                  const Icon(Icons.broken_image, size: 20, color: Colors.grey),
-            ),
-          )
-        else
-          const SizedBox(height: 60, width: 100),
+          ),
+          child: hasImage
+              ? Image.network(
+                  _getImageUrl(imagePath),
+                  fit: BoxFit.contain,
+                  errorBuilder: (ctx, err, stack) => const Icon(
+                    Icons.broken_image,
+                    size: 20,
+                    color: Colors.grey,
+                  ),
+                )
+              : const Center(
+                  child: Text(
+                    "Missing",
+                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ),
+        ),
         const SizedBox(height: 4),
         Text(
           label,
           style: const TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             color: Color(0xFF64748B),
           ),
         ),
       ],
     );
-  }
-
-  String _getImageUrl(dynamic path) {
-    if (path == null) return '';
-    String imageUrl = path.toString();
-    if (imageUrl.startsWith('http')) return imageUrl;
-
-    // Ensure leading slash
-    if (!imageUrl.startsWith('/')) {
-      imageUrl = '/$imageUrl';
-    }
-
-    return '${ApiConstants.serverUrl}$imageUrl';
   }
 }

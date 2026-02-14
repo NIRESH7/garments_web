@@ -160,7 +160,7 @@ const getBalancedSets = asyncHandler(async (req, res) => {
     const { lotNo, dia } = req.query;
     const inwards = await Inward.find({ lotNo, 'diaEntries.dia': dia });
 
-    // Aggregate sets from storageDetails
+    // Aggregate all possible sets from storageDetails (Inwards)
     let allSets = [];
     inwards.forEach(inward => {
         if (inward.storageDetails && inward.storageDetails.length > 0) {
@@ -169,7 +169,7 @@ const getBalancedSets = asyncHandler(async (req, res) => {
                     sd.rows.forEach(row => {
                         row.setWeights.forEach((wt, idx) => {
                             allSets.push({
-                                set_no: idx + 1,
+                                set_no: (idx + 1).toString(),
                                 colour: row.colour,
                                 weight: parseFloat(wt) || 0
                             });
@@ -180,19 +180,23 @@ const getBalancedSets = asyncHandler(async (req, res) => {
         }
     });
 
-    // Subtract weights from Outwards
+    // Find all set_no already used in Outwards for this Lot + Dia
     const outwards = await Outward.find({ lotNo, dia });
+    const usedSetNumbers = new Set();
     outwards.forEach(outward => {
-        outward.items.forEach(item => {
-            const setIndex = allSets.findIndex(s => s.set_no === item.set_no && s.colour === item.colour);
-            if (setIndex !== -1) {
-                allSets[setIndex].weight -= item.selected_weight;
-            }
-        });
+        if (outward.items) {
+            outward.items.forEach(item => {
+                if (item.set_no) {
+                    usedSetNumbers.add(item.set_no.toString());
+                }
+            });
+        }
     });
 
-    // Filter out zero/negative weight sets
-    const balancedSets = allSets.filter(s => s.weight > 0.01);
+    // Filter out ANY set that has already been dispatched (even if partial color was used, though standard should be full set)
+    // The requirement is: "Already used Set Numbers must NOT appear again"
+    const balancedSets = allSets.filter(s => !usedSetNumbers.has(s.set_no.toString()));
+
     res.json(balancedSets);
 });
 
@@ -248,6 +252,21 @@ const createOutward = asyncHandler(async (req, res) => {
 
     const dcNo = dc_number || `DC-${Date.now()}`;
 
+    // CHECK FOR DUPLICATE SET NUMBERS (Validation Rule: Lot + Dia + Set must be unique)
+    const existingOutwards = await Outward.find({ lotNo, dia });
+    const usedSetNumbers = new Set();
+    existingOutwards.forEach(out => {
+        out.items.forEach(item => usedSetNumbers.add(item.set_no.toString()));
+    });
+
+    const requestedSetNumbers = items.map(item => item.set_no.toString());
+    const duplicates = requestedSetNumbers.filter(setNo => usedSetNumbers.has(setNo));
+
+    if (duplicates.length > 0) {
+        res.status(400);
+        throw new Error(`Set Number(s) ${duplicates.join(', ')} already delivered for Lot ${lotNo} and DIA ${dia}`);
+    }
+
     const outward = await Outward.create({
         user: req.user._id,
         dcNo,
@@ -262,9 +281,14 @@ const createOutward = asyncHandler(async (req, res) => {
         inTime,
         outTime,
         items: items.map(item => ({
-            ...item,
-            roll_weight: item.roll_weight || 0,
-            no_of_rolls: item.no_of_rolls || 0
+            set_no: item.set_no,
+            total_weight: item.total_weight || 0,
+            colours: item.colours.map(c => ({
+                colour: c.colour,
+                weight: c.weight || 0,
+                no_of_rolls: c.no_of_rolls || 0,
+                roll_weight: c.roll_weight || 0
+            }))
         })),
     });
 

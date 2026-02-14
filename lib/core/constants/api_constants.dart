@@ -3,11 +3,6 @@ class ApiConstants {
       'http://localhost:5001/api'; // Update to your production IP
   static const String serverUrl = 'http://localhost:5001';
 
-
-
-
-
-
   // Auth
   static const String login = '/auth/login';
   static const String register = '/auth/register';
@@ -31,6 +26,7 @@ class ApiConstants {
   static const String overviewReport = '/inventory/reports/overview';
   static const String inwardOutwardReport = '/inventory/reports/inward-outward';
   static const String monthlyReport = '/inventory/reports/monthly';
+  static const String clientReport = '/inventory/reports/client';
 
   // Production
   static const String assignments = '/production/assignments';

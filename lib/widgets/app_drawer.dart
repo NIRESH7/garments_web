@@ -23,16 +23,14 @@ import '../screens/reports/overview_report.dart';
 import '../screens/reports/lot_aging_report.dart';
 import '../screens/reports/inward_outward_report.dart';
 import '../screens/reports/monthly_summary_report.dart';
+import '../screens/reports/client_format_report.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
   void _navigateTo(BuildContext context, Widget screen) {
     Navigator.pop(context); // Close drawer
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => screen),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
   }
 
   @override
@@ -43,9 +41,7 @@ class AppDrawer extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 50, bottom: 20),
-            decoration: const BoxDecoration(
-              color: ColorPalette.primary,
-            ),
+            decoration: const BoxDecoration(color: ColorPalette.primary),
             child: Column(
               children: [
                 Container(
@@ -94,22 +90,44 @@ class AppDrawer extends StatelessWidget {
                     Navigator.pop(context);
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const DashboardScreen(),
+                      ),
                       (route) => false,
                     );
                   },
                 ),
-                
+
                 // Masters Group
                 ExpansionTile(
                   leading: const Icon(LucideIcons.database),
                   title: const Text("Masters"),
                   children: [
-                    _buildSubItem(context, "Categories", const CategoriesMasterScreen()),
-                    _buildSubItem(context, "Dropdown Setup", const DropdownSetupScreen()),
-                    _buildSubItem(context, "Party Master", const PartyMasterScreen()),
-                    _buildSubItem(context, "Item Group Master", const ItemMasterScreen()), // Assuming ItemMasterScreen is Item Group Master
-                    _buildSubItem(context, "Colour Prediction", const ColorPredictionScreen()),
+                    _buildSubItem(
+                      context,
+                      "Categories",
+                      const CategoriesMasterScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Dropdown Setup",
+                      const DropdownSetupScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Party Master",
+                      const PartyMasterScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Item Group Master",
+                      const ItemMasterScreen(),
+                    ), // Assuming ItemMasterScreen is Item Group Master
+                    _buildSubItem(
+                      context,
+                      "Colour Prediction",
+                      const ColorPredictionScreen(),
+                    ),
                   ],
                 ),
 
@@ -118,11 +136,31 @@ class AppDrawer extends StatelessWidget {
                   leading: const Icon(LucideIcons.arrowLeftRight),
                   title: const Text("Transactions"),
                   children: [
-                    _buildSubItem(context, "Lot Inward", const LotInwardScreen()),
-                    _buildSubItem(context, "Lot Outward", const LotOutwardScreen()),
-                    _buildSubItem(context, "Inward List", const InwardListScreen()),
-                    _buildSubItem(context, "Outward List", const OutwardListScreen()),
-                    _buildSubItem(context, "Item Assignments", const ItemAssignmentListScreen()),
+                    _buildSubItem(
+                      context,
+                      "Lot Inward",
+                      const LotInwardScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Lot Outward",
+                      const LotOutwardScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Inward List",
+                      const InwardListScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Outward List",
+                      const OutwardListScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Item Assignments",
+                      const ItemAssignmentListScreen(),
+                    ),
                   ],
                 ),
 
@@ -131,16 +169,37 @@ class AppDrawer extends StatelessWidget {
                   leading: const Icon(LucideIcons.fileBarChart),
                   title: const Text("Reports"),
                   children: [
-                    _buildSubItem(context, "Overview", const OverviewReportScreen()),
-                    _buildSubItem(context, "Ageing Details", const LotAgingReportScreen()),
+                    _buildSubItem(
+                      context,
+                      "Client Format Report",
+                      const ClientFormatReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Overview",
+                      const OverviewReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Ageing Details",
+                      const LotAgingReportScreen(),
+                    ),
                     // Formatting/Aging Summary might be separate, check file if needed, but for now map broadly
                     // The user said "Aging Summary", but file name is 'lot_aging_report.dart'.
-                    // I'll check if there's another report or reuse. 
+                    // I'll check if there's another report or reuse.
                     // Let's assume 'Ageing Details' covers it or add placeholder if unsure.
                     // Actually 'Aging Summary' might be different. I saw 'monthly_summary_report.dart' which is Closing/Summary.
                     // 'Inward' and 'Outward' reports -> InwardOutwardReportScreen covers both usually or separate tabs.
-                     _buildSubItem(context, "Inward & Outward", const InwardOutwardReportScreen()),
-                     _buildSubItem(context, "Closing Stock", const MonthlySummaryReportScreen()),
+                    _buildSubItem(
+                      context,
+                      "Inward & Outward",
+                      const InwardOutwardReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Closing Stock",
+                      const MonthlySummaryReportScreen(),
+                    ),
                   ],
                 ),
 
@@ -150,7 +209,9 @@ class AppDrawer extends StatelessWidget {
                   onTap: () {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Voice Queries not implemented yet")),
+                      const SnackBar(
+                        content: Text("Voice Queries not implemented yet"),
+                      ),
                     );
                   },
                 ),
@@ -158,12 +219,17 @@ class AppDrawer extends StatelessWidget {
                 const Divider(),
                 ListTile(
                   leading: const Icon(LucideIcons.logOut, color: Colors.red),
-                  title: const Text('Logout', style: TextStyle(color: Colors.red)),
+                  title: const Text(
+                    'Logout',
+                    style: TextStyle(color: Colors.red),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
-                     Navigator.pushAndRemoveUntil(
+                    Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
                       (route) => false,
                     );
                   },

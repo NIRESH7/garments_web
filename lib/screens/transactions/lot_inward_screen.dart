@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
 import 'package:image_picker/image_picker.dart';
@@ -240,14 +241,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Future<void> _onLotNameChanged(String? val) async {
     setState(() {
       _selectedLotName = val;
+      _stickerData.clear(); // Ensure fresh start for storage details
+      _completedStickerDias.clear();
     });
 
     if (val != null) {
       final group = await _api.getItemGroupByName(val);
       setState(() {
         if (group != null) {
-          // Strictly restrict colours to those defined in the Item Group
-          _colours = List<String>.from(group['colours'] ?? []);
+          // Include all master colours + any specific lot colours
+          _colours = List<String>.from({
+            ..._masterColours,
+            ...List<String>.from(group['colours'] ?? []),
+          });
 
           // Carry over GSM and Rate
           _gsmController.text = (group['gsm'] ?? '').toString();
@@ -279,11 +285,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       // }
 
       row.recRoll = row.rolls;
-      row.difference = row.recWeight - row.deliveredWeight;
-      if (row.deliveredWeight > 0) {
-        // Loss is positive when we receive less than delivered
-        row.lossPercent =
-            ((row.deliveredWeight - row.recWeight) / row.deliveredWeight) * 100;
+      row.difference = double.parse(
+        (row.deliveredWeight - row.recWeight).toStringAsFixed(3),
+      );
+      if (row.deliveredWeight != 0) {
+        row.lossPercent = (row.difference / row.deliveredWeight) * 100;
       } else {
         row.lossPercent = 0;
       }
@@ -384,6 +390,40 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // --- WEIGHT CALCULATIONS CHECK ---
+    for (var r in _rows) {
+      if (r.dia == null || r.dia!.trim().isEmpty) continue;
+      // Skip rows with no entering data
+      if (r.recRoll == 0 && r.recWeight == 0) continue;
+
+      final dia = r.dia!.trim();
+      final recWt = r.recWeight;
+
+      final storage = _stickerData[dia];
+      if (storage == null) {
+        _showError(
+          "Storage details missing for DIA $dia. Please enter weights in Storage Details page.",
+        );
+        return;
+      }
+
+      final storageTotal = storage.rows.fold(
+        0.0,
+        (sum, row) => sum + row.totalWeight,
+      );
+
+      // Using small epsilon for double comparison (3 decimal places precision)
+      if ((storageTotal - recWt).abs() > 0.0001) {
+        _showError(
+          "Weight Mismatch for DIA $dia!\n\n"
+          "Total Rec. Wt (Page 1): ${recWt.toStringAsFixed(3)} Kg\n"
+          "Sum of Storage (Page 2): ${storageTotal.toStringAsFixed(3)} Kg\n\n"
+          "Please correct the weights to match exactly.",
+        );
+        return;
+      }
+    }
 
     setState(() {
       _outTime = DateFormat('hh:mm a').format(DateTime.now());
@@ -505,7 +545,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("Saved Successfully"),
         content: const Text(
-            "Do you want to print stickers for the received rolls?"),
+          "Do you want to print stickers for the received rolls?",
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -561,142 +602,291 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _stickerData.forEach((dia, data) {
       for (var row in data.rows) {
         if (row.colour != null && row.colour!.isNotEmpty) {
-           for (var weight in row.setWeights) {
-             if (weight.trim().isNotEmpty) {
-               stickers.add({
-                 'lotNo': _lotNumberController.text,
-                 'lotName': _selectedLotName ?? '',
-                 'dia': dia,
-                 'colour': row.colour!,
-                 'weight': weight,
-                 'date': DateFormat('dd-MM-yyyy').format(_inwardDate),
-               });
-             }
-           }
+          for (int i = 0; i < row.setWeights.length; i++) {
+            final weight = row.setWeights[i];
+            if (weight.trim().isNotEmpty) {
+              stickers.add({
+                'lotNo': _lotNumberController.text,
+                'lotName': _selectedLotName ?? '',
+                'dia': dia,
+                'colour': row.colour!,
+                'weight': weight,
+                'date': DateFormat('dd-MM-yyyy').format(_inwardDate),
+                'setNo': i + 1,
+              });
+            }
+          }
         }
       }
     });
 
     if (stickers.isEmpty) {
-        _showError("No sticker data found.");
-        if (inwardData != null) _askToShare(inwardData);
-        return;
+      _showError("No sticker data found.");
+      if (inwardData != null) _askToShare(inwardData);
+      return;
     }
+
+    // Filter state variables for the modal
+    String? _modalFilterDia;
+    String? _modalFilterColour;
+    String? _modalFilterSet;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Sticker Previews',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                        Navigator.pop(ctx);
-                        if (inwardData != null) _askToShare(inwardData);
-                    },
-                  ),
-                ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          // Available filter options
+          final allSets =
+              stickers.map((e) => e['setNo'].toString()).toSet().toList()
+                ..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
+          final allColours =
+              stickers.map((e) => e['colour'].toString()).toSet().toList()
+                ..sort();
+          final allDias =
+              stickers.map((e) => e['dia'].toString()).toSet().toList()..sort();
+
+          // Note: To keep filter state persistent within the dialog session,
+          // we should ideally move these to a separate stateful component or use a nested state.
+          // For simplicity here, we'll keep it within the builder but realize it resets on setState of the DIALOG.
+          // Wait, StatefulBuilder's setModalState will only rebuild its children.
+          // To track these correctly, we use static-like variables or closure variables OUTSIDE the builder if we want persistence.
+          // Let's use local variables outside the builder but inside _printStickers if we need it.
+          // Actually, let's just use local vars inside _printStickers scope.
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: stickers.length,
-                itemBuilder: (context, idx) {
-                  final item = stickers[idx];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 24),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.black, width: 2),
-                      color: Colors.white,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildStickerRow('LOT NO', item['lotNo']),
-                        _buildStickerRow('Lot Name', item['lotName']),
-                        _buildStickerRow('Dia', item['dia']),
-                        _buildStickerRow('Colour', item['colour']),
-                        _buildStickerRow(
-                          'Roll Wt',
-                          '${item['weight']} kg',
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Sticker Previews',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
                         ),
-                        _buildStickerRow(
-                          'Date',
-                          item['date'],
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.black),
-                                ),
-                                child: QrImageView(
-                                  data:
-                                      'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
-                                  version: QrVersions.auto,
-                                  size: 80.0,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'SCAN FOR AUTH',
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          if (inwardData != null) _askToShare(inwardData);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                // --- FILTER SECTION ---
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildModalFilter(
+                              "DIA",
+                              _modalFilterDia,
+                              allDias,
+                              (v) => setModalState(() => _modalFilterDia = v),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildModalFilter(
+                              "Colour",
+                              _modalFilterColour,
+                              allColours,
+                              (v) =>
+                                  setModalState(() => _modalFilterColour = v),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildModalFilter(
+                              "Set No",
+                              _modalFilterSet,
+                              allSets,
+                              (v) => setModalState(() => _modalFilterSet = v),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_modalFilterDia != null ||
+                          _modalFilterColour != null ||
+                          _modalFilterSet != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                _modalFilterDia = null;
+                                _modalFilterColour = null;
+                                _modalFilterSet = null;
+                              });
+                            },
+                            child: const Text(
+                              "Clear Filters",
+                              style: TextStyle(fontSize: 12, color: Colors.red),
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _showError("Printing not implemented yet");
-                    if (inwardData != null) _askToShare(inwardData);
-                  },
-                  icon: const Icon(Icons.print),
-                  label: const Text('Print Now'),
+                    ],
+                  ),
                 ),
-              ),
+                const Divider(),
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      // Apply filters
+                      final filteredStickers = stickers.where((s) {
+                        if (_modalFilterDia != null &&
+                            s['dia'] != _modalFilterDia) {
+                          return false;
+                        }
+                        if (_modalFilterColour != null &&
+                            s['colour'] != _modalFilterColour) {
+                          return false;
+                        }
+                        if (_modalFilterSet != null &&
+                            s['setNo'].toString() != _modalFilterSet) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
+
+                      if (filteredStickers.isEmpty) {
+                        return const Center(
+                          child: Text("No stickers match the filters"),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filteredStickers.length,
+                        itemBuilder: (context, idx) {
+                          final item = filteredStickers[idx];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 24),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.black, width: 2),
+                              color: Colors.white,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildStickerRow('LOT NO', item['lotNo']),
+                                _buildStickerRow('Lot Name', item['lotName']),
+                                _buildStickerRow('Dia', item['dia']),
+                                _buildStickerRow('Colour', item['colour']),
+                                _buildStickerRow('Set No', '#${item['setNo']}'),
+                                _buildStickerRow(
+                                  'Roll Wt',
+                                  '${item['weight']} kg',
+                                ),
+                                _buildStickerRow('Date', item['date']),
+                                const SizedBox(height: 12),
+                                Center(
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                        child: QrImageView(
+                                          data:
+                                              'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                                          version: QrVersions.auto,
+                                          size: 80.0,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'SCAN FOR AUTH',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // Apply filter to final print list
+                        final filteredToPrint = stickers.where((s) {
+                          if (_modalFilterDia != null &&
+                              s['dia'] != _modalFilterDia) {
+                            return false;
+                          }
+                          if (_modalFilterColour != null &&
+                              s['colour'] != _modalFilterColour) {
+                            return false;
+                          }
+                          if (_modalFilterSet != null &&
+                              s['setNo'].toString() != _modalFilterSet) {
+                            return false;
+                          }
+                          return true;
+                        }).toList();
+                        _showError(
+                          "Printing not implemented yet for ${filteredToPrint.length} stickers",
+                        );
+                        Navigator.pop(ctx); // Close the modal after "printing"
+                        if (inwardData != null) _askToShare(inwardData);
+                      },
+                      icon: const Icon(Icons.print),
+                      label: const Text(
+                        'Print Now',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0EA5E9),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -842,6 +1032,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         const SizedBox(height: 16),
         _buildGridHeader(),
         _buildDataTable(),
+        const SizedBox(height: 24),
+        _buildSignatureSection(),
         const SizedBox(height: 24),
         _buildNavigationButtons(),
       ],
@@ -1263,7 +1455,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       ),
       child: TextFormField(
         initialValue: val == 0 ? '' : val.toString(),
-        keyboardType: TextInputType.number,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
+        ],
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
@@ -1530,8 +1725,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                   width: 24,
                                   height: 24,
                                   decoration: BoxDecoration(
-                                    border:
-                                        Border.all(color: Colors.grey.shade300),
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
                                     borderRadius: BorderRadius.circular(4),
                                     image: DecorationImage(
                                       image: NetworkImage(
@@ -1558,7 +1754,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       );
                     }),
                     _buildGridCell(
-                      r.totalWeight.toStringAsFixed(2),
+                      r.totalWeight.toStringAsFixed(3),
                       100,
                       alignment: Alignment.center,
                     ),
@@ -1619,7 +1815,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Widget _buildTableInputText(String val, Function(String) chg) {
     return TextFormField(
       initialValue: val,
-      keyboardType: TextInputType.number,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
+      ],
       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
       textAlign: TextAlign.center,
       decoration: const InputDecoration(
@@ -1676,6 +1875,57 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (result != null) {
       onPick(result);
     }
+  }
+
+  Widget _buildModalFilter(
+    String label,
+    String? val,
+    List<String> items,
+    Function(String?) chg,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: val,
+              isExpanded: true,
+              hint: Text(
+                "All",
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              ),
+              items: items
+                  .map(
+                    (e) => DropdownMenuItem(
+                      value: e,
+                      child: Text(e, style: const TextStyle(fontSize: 12)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: chg,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildSigBox(String label, XFile? file, Function(XFile?) onPick) {
@@ -2121,10 +2371,13 @@ class StickerRow {
   String? colour;
   List<String> setWeights = [];
 
-  double get totalWeight => setWeights.fold(0.0, (sum, w) {
-    final val = double.tryParse(w.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
-    return sum + val;
-  });
+  double get totalWeight {
+    final sum = setWeights.fold(0.0, (sum, w) {
+      final val = double.tryParse(w.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+      return sum + val;
+    });
+    return double.parse(sum.toStringAsFixed(3));
+  }
 }
 
 class StickerDiaData {

@@ -11,11 +11,14 @@ import {
     getOutwards,
     getLotAgingReport,
 } from './controller.js';
+
 import {
     getOverviewReport,
     getInwardOutwardReport,
     getMonthlySummaryReport,
+    getClientFormatReport,
 } from './reportController.js';
+
 import { protect } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
@@ -52,6 +55,7 @@ router.route('/outward')
 router.get('/outward/generate-dc', protect, generateDcNumber);
 
 // Reports
+router.get('/reports/client', protect, getClientFormatReport);
 router.get('/reports/aging', protect, getLotAgingReport);
 router.get('/reports/overview', protect, getOverviewReport);
 router.get('/reports/inward-outward', protect, getInwardOutwardReport);

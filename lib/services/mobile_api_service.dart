@@ -66,11 +66,13 @@ class MobileApiService {
           final file = entry.value as XFile;
           // Read bytes to support both Web and Mobile consistently
           final bytes = await file.readAsBytes();
-          
-          formData.files.add(MapEntry(
-            entry.key,
-            MultipartFile.fromBytes(bytes, filename: file.name),
-          ));
+
+          formData.files.add(
+            MapEntry(
+              entry.key,
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ),
+          );
         } else if (entry.value is List || entry.value is Map) {
           // Complex types must be JSON stringified for FormData text fields
           formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
@@ -91,8 +93,13 @@ class MobileApiService {
     try {
       final response = await _client.post(ApiConstants.outward, data: data);
       return response.statusCode == 201;
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data != null && e.response?.data is Map
+          ? (e.response?.data['message'] ?? e.message)
+          : e.message;
+      throw Exception(errorMsg);
     } catch (e) {
-      return false;
+      throw Exception('Failed to save outward: $e');
     }
   }
 
@@ -216,6 +223,18 @@ class MobileApiService {
     }
   }
 
+  Future<List<dynamic>> getClientFormatReport({String? fromParty}) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.clientReport,
+        queryParameters: {if (fromParty != null) 'fromParty': fromParty},
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
   // --- Production ---
   Future<List<dynamic>> getAssignments() async {
     try {
@@ -258,7 +277,10 @@ class MobileApiService {
 
   Future<bool> updateParty(String id, Map<String, dynamic> data) async {
     try {
-      final response = await _client.put('${ApiConstants.parties}/$id', data: data);
+      final response = await _client.put(
+        '${ApiConstants.parties}/$id',
+        data: data,
+      );
       return response.statusCode == 200;
     } on DioException catch (e) {
       throw e.response?.data['message'] ?? 'Failed to update Party';
@@ -306,15 +328,16 @@ class MobileApiService {
     }
   }
 
-  Future<bool> addCategoryValue(String categoryId, String name, {String? photo, String? gsm}) async {
+  Future<bool> addCategoryValue(
+    String categoryId,
+    String name, {
+    String? photo,
+    String? gsm,
+  }) async {
     try {
       final response = await _client.post(
         '${ApiConstants.categories}/$categoryId/values',
-        data: {
-          'name': name,
-          'photo': photo,
-          'gsm': gsm,
-        },
+        data: {'name': name, 'photo': photo, 'gsm': gsm},
       );
       return response.statusCode == 201;
     } on DioException catch (e) {

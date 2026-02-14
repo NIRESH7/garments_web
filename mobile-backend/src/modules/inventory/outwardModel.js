@@ -1,11 +1,16 @@
 import mongoose from 'mongoose';
 
+const outwardColourSchema = mongoose.Schema({
+    colour: { type: String, required: true },
+    weight: { type: Number, required: true },
+    no_of_rolls: { type: Number, default: 0 },
+    roll_weight: { type: Number, default: 0 },
+});
+
 const outwardItemSchema = mongoose.Schema({
-    colour: { type: String, required: false },
-    selected_weight: { type: Number, required: true },
     set_no: { type: String, required: true },
-    roll_weight: { type: Number },
-    no_of_rolls: { type: Number },
+    colours: [outwardColourSchema],
+    total_weight: { type: Number, required: true },
 });
 
 const outwardSchema = mongoose.Schema(

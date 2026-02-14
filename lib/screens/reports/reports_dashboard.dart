@@ -6,6 +6,7 @@ import 'lot_aging_report.dart';
 import 'inward_outward_report.dart';
 import 'monthly_summary_report.dart';
 import 'format_reports_screen.dart';
+import 'client_format_report.dart';
 
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
@@ -18,10 +19,23 @@ class ReportsDashboard extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         children: [
           _ReportCard(
-            title: 'Overview',
+            title: 'Client Format Report',
+            subtitle: 'Professional stock status summary',
+            icon: LucideIcons.fileText,
+            color: ColorPalette.primary,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ClientFormatReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Stock Overview',
             subtitle: 'Lot name, rolls, and weights',
             icon: LucideIcons.eye,
-            color: ColorPalette.primary,
+            color: Colors.blueAccent,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -70,8 +84,8 @@ class ReportsDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _ReportCard(
-            title: 'Client Format Reports',
-            subtitle: 'Standardized Excel format views',
+            title: 'Client Spreadsheet Views',
+            subtitle: 'Standardized Excel format data',
             icon: LucideIcons.fileSpreadsheet,
             color: Colors.teal,
             onTap: () => Navigator.push(

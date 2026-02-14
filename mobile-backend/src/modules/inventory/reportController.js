@@ -40,8 +40,11 @@ const getOverviewReport = asyncHandler(async (req, res) => {
     outwards.forEach(o => {
         // Only process outwards for lots that passed the inward filters
         if (stockMap[o.lotNo]) {
-            stockMap[o.lotNo].deliv_rolls += o.items ? o.items.length : 0;
-            stockMap[o.lotNo].deliv_weight += o.items ? o.items.reduce((acc, curr) => acc + (curr.selected_weight || 0), 0) : 0;
+            o.items.forEach(item => {
+                // Sum up rolls and weight for all colors in the set
+                stockMap[o.lotNo].deliv_rolls += item.colours.reduce((acc, curr) => acc + (curr.no_of_rolls || 0), 0);
+                stockMap[o.lotNo].deliv_weight += item.total_weight || 0;
+            });
         } else {
             // Handle case where outward exists but inward doesn't (shouldn't happen ideally)
             // For now we ignore or create a negative entry if required, but usually strict reference implies inward exists
@@ -94,8 +97,10 @@ const getInwardOutwardReport = asyncHandler(async (req, res) => {
 
     outwards.forEach(o => {
         if (reportMap[o.lotNo]) {
-            reportMap[o.lotNo].out_rolls += o.items ? o.items.length : 0;
-            reportMap[o.lotNo].out_weight += o.items ? o.items.reduce((acc, curr) => acc + curr.selected_weight, 0) : 0;
+            o.items.forEach(item => {
+                reportMap[o.lotNo].out_rolls += item.colours.reduce((acc, curr) => acc + (curr.no_of_rolls || 0), 0);
+                reportMap[o.lotNo].out_weight += item.total_weight || 0;
+            });
         }
     });
 
@@ -131,7 +136,11 @@ const getMonthlySummaryReport = asyncHandler(async (req, res) => {
     // We'll iterate through all months from first record to current
     const allRecords = [
         ...inwards.map(i => ({ type: 'IN', date: i.inwardDate, rolls: i.diaEntries.reduce((acc, curr) => acc + curr.recRoll, 0), weight: i.diaEntries.reduce((acc, curr) => acc + curr.recWt, 0) })),
-        ...outwards.map(o => ({ type: 'OUT', date: o.dateTime, rolls: o.items ? o.items.length : 0, weight: o.items ? o.items.reduce((acc, curr) => acc + curr.selected_weight, 0) : 0 }))
+        ...outwards.map(o => {
+            const totalRolls = o.items ? o.items.reduce((acc, set) => acc + set.colours.reduce((accIn, col) => accIn + (col.no_of_rolls || 0), 0), 0) : 0;
+            const totalWeight = o.items ? o.items.reduce((acc, set) => acc + (set.total_weight || 0), 0) : 0;
+            return { type: 'OUT', date: o.dateTime, rolls: totalRolls, weight: totalWeight };
+        })
     ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     if (allRecords.length === 0) return res.json([]);
@@ -190,8 +199,54 @@ const getMonthlySummaryReport = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Get Client Format Report (Professional Summary)
+// @route   GET /api/inventory/reports/client-format
+const getClientFormatReport = asyncHandler(async (req, res) => {
+    const { fromParty } = req.query;
+
+    let query = {};
+    if (fromParty) {
+        query.fromParty = { $regex: new RegExp(fromParty, 'i') };
+    }
+
+    const inwards = await Inward.find(query).sort({ inwardDate: -1 });
+    const outwards = await Outward.find({});
+
+    // Create a map of outward weights per lot
+    const outwardMap = {};
+    outwards.forEach(o => {
+        if (!outwardMap[o.lotNo]) outwardMap[o.lotNo] = 0;
+        o.items.forEach(item => {
+            outwardMap[o.lotNo] += (item.total_weight || 0);
+        });
+    });
+
+    const report = inwards.map(i => {
+        const totalInWeight = i.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
+        const totalOutWeight = outwardMap[i.lotNo] || 0;
+        const balanceWeight = Math.max(0, totalInWeight - totalOutWeight);
+        const status = balanceWeight > 0.1 ? 'In Stock' : 'Dispatched';
+
+        return {
+            id: i._id,
+            lotNo: i.lotNo,
+            lotName: i.lotName,
+            fromParty: i.fromParty,
+            inwardDate: i.inwardDate,
+            totalWeight: totalInWeight,
+            balanceWeight: balanceWeight,
+            status: status,
+            qualityStatus: i.qualityStatus || 'N/A',
+            vehicleNo: i.vehicleNo || 'N/A'
+        };
+    });
+
+    res.json(report);
+});
+
 export {
     getOverviewReport,
     getInwardOutwardReport,
-    getMonthlySummaryReport
+    getMonthlySummaryReport,
+    getClientFormatReport
 };

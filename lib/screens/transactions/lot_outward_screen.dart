@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
@@ -40,6 +39,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   List<Map<String, dynamic>> _availableSets = [];
   final List<Map<String, dynamic>> _selectedSets = [];
 
+  List<String> _allColours = [];
+  List<String> _currentLotColours = [];
+
   bool _isLoading = true;
   bool _isSaved = false;
   bool _isSaving = false;
@@ -58,6 +60,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     setState(() {
       _lotNames = _getValues(categories, 'Lot Name');
       _dias = _getValues(categories, 'dia');
+      _allColours = _getValues(categories, 'Colours');
       _parties = parties.map((m) => m['name'] as String).toList();
       _dcNumber = dc ?? 'ERR-GEN';
       _isLoading = false;
@@ -111,12 +114,20 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   Future<void> _onLotNoChanged(String? val) async {
     setState(() {
       _selectedLotNo = val;
+      _currentLotColours = []; // Clear current lot colours
       _availableSets = [];
       _selectedSets.clear();
     });
-    if (val != null && _selectedDia != null) {
-      final sets = await _api.getBalancedSets(val, _selectedDia!);
-      setState(() => _availableSets = sets);
+    if (val != null) {
+      // Load lot colours
+      final colours = await _api.getColoursByLot(val);
+      setState(() => _currentLotColours = colours);
+
+      // Load available sets
+      if (_selectedDia != null) {
+        final sets = await _api.getBalancedSets(val, _selectedDia!);
+        setState(() => _availableSets = sets);
+      }
     }
   }
 
@@ -137,21 +148,65 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     }
   }
 
-  void _toggleSetSelection(Map<String, dynamic> set, bool selected) {
+  void _toggleSetSelection(String setNo, bool selected) {
     setState(() {
       if (selected) {
-        // Add new set with default fields
+        // Find existing stock entries for this set
+        final setStock = _availableSets
+            .where((s) => s['set_no'].toString() == setNo)
+            .toList();
+
+        final List<Map<String, dynamic>> colours = [];
+        double setTotalWeight = 0;
+
+        // Requirement: "if 10 colour available automatically fill 10 colours"
+        // Use Master List (_allColours) + Lot Specific (_currentLotColours)
+        final combinedColours = {
+          ..._allColours,
+          ..._currentLotColours,
+        }.toList();
+
+        for (var lotCol in combinedColours) {
+          // Check if we have stock for this color in this set
+          final stockItem = setStock.firstWhere(
+            (s) =>
+                s['colour'].toString().trim().toLowerCase() ==
+                lotCol.trim().toLowerCase(),
+            orElse: () => {},
+          );
+
+          final w = (stockItem['weight'] as num?)?.toDouble() ?? 0.0;
+          setTotalWeight += w;
+
+          colours.add({
+            'colour': lotCol,
+            'weight': w,
+            'roll_weight': w,
+            'no_of_rolls': w > 0 ? 1 : 0,
+          });
+        }
+
+        // If for some reason _currentLotColours is empty, fall back to stock entries
+        if (colours.isEmpty) {
+          for (var entry in setStock) {
+            final w = (entry['weight'] as num?)?.toDouble() ?? 0.0;
+            setTotalWeight += w;
+            colours.add({
+              'colour': entry['colour'] ?? 'N/A',
+              'weight': w,
+              'roll_weight': w,
+              'no_of_rolls': 1,
+            });
+          }
+        }
+
         _selectedSets.add({
-          'set_no': set['set_no'].toString(),
-          'colour': set['colour'] ?? '',
-          'weight': (set['weight'] as num?)?.toDouble() ?? 0.0,
-          'roll_weight': 0.0,
-          'no_of_rolls': 1,
+          'set_no': setNo,
+          'total_weight': setTotalWeight,
+          'colours': colours,
         });
       } else {
-        _selectedSets.removeWhere(
-          (s) => s['set_no'] == set['set_no'].toString(),
-        );
+        _selectedSets.removeWhere((s) => s['set_no'].toString() == setNo);
       }
     });
   }
@@ -165,24 +220,34 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   // Summary calculation functions
   Map<String, double> _getColourTotals() {
     final Map<String, double> totals = {};
-    for (var s in _selectedSets) {
-      final colour = s['colour'].toString().trim().isEmpty
-          ? 'N/A'
-          : s['colour'].toString();
-      totals[colour] = (totals[colour] ?? 0) + (s['weight'] as double);
+    for (var set in _selectedSets) {
+      final colours = set['colours'] as List;
+      for (var col in colours) {
+        final name = col['colour'].toString().trim().isEmpty
+            ? 'N/A'
+            : col['colour'].toString();
+        totals[name] = (totals[name] ?? 0) + (col['weight'] as double);
+      }
     }
     return totals;
   }
 
   double _getTotalWeight() {
-    return _selectedSets.fold(0.0, (sum, s) => sum + (s['weight'] as double));
+    return _selectedSets.fold(
+      0.0,
+      (sum, set) => sum + (set['total_weight'] as double),
+    );
   }
 
   double _getTotalRollWeight() {
-    return _selectedSets.fold(
-      0.0,
-      (sum, s) => sum + (s['roll_weight'] as double),
-    );
+    double total = 0;
+    for (var set in _selectedSets) {
+      final colours = set['colours'] as List;
+      for (var col in colours) {
+        total += (col['roll_weight'] as double);
+      }
+    }
+    return total;
   }
 
   Future<void> _selectDateTime() async {
@@ -233,6 +298,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       _showError('Please select at least one set');
       return;
     }
+    if (_getTotalWeight() <= 0) {
+      _showError('Total weight must be greater than 0');
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -256,12 +325,19 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       'outTime': _outTime,
       'items': _selectedSets
           .map(
-            (s) => {
-              'colour': s['colour'],
-              'selected_weight': s['weight'],
-              'set_no': s['set_no'],
-              'roll_weight': s['roll_weight'],
-              'no_of_rolls': s['no_of_rolls'],
+            (set) => {
+              'set_no': set['set_no'],
+              'total_weight': set['total_weight'],
+              'colours': (set['colours'] as List)
+                  .map(
+                    (col) => {
+                      'colour': col['colour'],
+                      'weight': col['weight'],
+                      'roll_weight': col['roll_weight'],
+                      'no_of_rolls': col['no_of_rolls'],
+                    },
+                  )
+                  .toList(),
             },
           )
           .toList(),
@@ -282,10 +358,163 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         _showError('Failed to save to backend');
       }
     } catch (e) {
-      _showError(e.toString());
+      _showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Widget _buildSelectedSetsList() {
+    if (_selectedSets.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'SELECTED SET DETAILS (EDITABLE)',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        ..._selectedSets.asMap().entries.map((setEntry) {
+          final setIndex = setEntry.key;
+          final set = setEntry.value;
+          final List colours = set['colours'];
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  color: ColorPalette.primary.withOpacity(0.05),
+                  child: Row(
+                    children: [
+                      Text(
+                        'SET NO: ${set['set_no']}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: ColorPalette.primary,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(
+                          LucideIcons.trash2,
+                          color: Colors.red,
+                          size: 18,
+                        ),
+                        onPressed: () => _removeSet(setIndex),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(2.5), // Colour
+                      1: FlexColumnWidth(1.5), // Weight
+                      2: FlexColumnWidth(1.2), // Rolls
+                      3: FlexColumnWidth(1.5), // Roll Wt
+                    },
+                    children: [
+                      const TableRow(
+                        children: [
+                          _TableHeader('COLOUR'),
+                          _TableHeader('WT (kg)'),
+                          _TableHeader('ROLLS'),
+                          _TableHeader('ROLL WT'),
+                        ],
+                      ),
+                      ...colours.map((col) {
+                        return TableRow(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 4,
+                                horizontal: 2,
+                              ),
+                              child: Text(
+                                col['colour'],
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            _buildTableInput(col['weight'].toString(), (v) {
+                              setState(() {
+                                double val = double.tryParse(v) ?? 0.0;
+                                col['weight'] = val;
+                                col['roll_weight'] = val; // Same Weight Sync
+                                set['total_weight'] = colours.fold(
+                                  0.0,
+                                  (sum, c) => sum + (c['weight'] as double),
+                                );
+                              });
+                            }),
+                            _buildTableInput(
+                              col['no_of_rolls'].toString(),
+                              (v) => setState(
+                                () => col['no_of_rolls'] = int.tryParse(v) ?? 1,
+                              ),
+                            ),
+                            _buildTableInput(
+                              col['roll_weight'].toString(),
+                              (v) => setState(
+                                () => col['roll_weight'] =
+                                    double.tryParse(v) ?? 0.0,
+                              ),
+                              key: ValueKey(
+                                'rollwt_${col['colour']}_${col['roll_weight']}',
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildTableInput(
+    String value,
+    Function(String) onChanged, {
+    Key? key,
+  }) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.all(2.0),
+      child: TextFormField(
+        initialValue: value == '0.0' || value == '0' ? '' : value,
+        onChanged: onChanged,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 12),
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 8,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+        ),
+      ),
+    );
   }
 
   void _showPrintStickerDialog() {
@@ -293,153 +522,15 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Success'),
-        content: const Text(
-          'Outward saved. Do you want to print stickers for these rolls?',
-        ),
+        content: const Text('Outward saved successfully.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Later'),
-          ),
-          ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _printStickers();
+              Navigator.pop(context);
             },
-            child: const Text('Print Stickers'),
+            child: const Text('OK'),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _printStickers() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Sticker Previews',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _selectedSets.length,
-                itemBuilder: (context, idx) {
-                  final item = _selectedSets[idx];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 24),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.black, width: 2),
-                      color: Colors.white,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildStickerRow('LOT NO', _selectedLotNo ?? '-'),
-                        _buildStickerRow('Lot Name', _selectedLotName ?? '-'),
-                        _buildStickerRow('Dia', _selectedDia ?? '-'),
-                        _buildStickerRow('Colour', item['colour'] ?? '-'),
-                        _buildStickerRow(
-                          'Roll Wt',
-                          '${item['roll_weight']} kg',
-                        ),
-                        _buildStickerRow(
-                          'Date',
-                          DateFormat('dd-MM-yyyy').format(_outwardDateTime),
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.black),
-                                ),
-                                child: QrImageView(
-                                  data:
-                                      'LOT: ${_selectedLotNo ?? '-'}\nNAME: ${_selectedLotName ?? '-'}\nDIA: ${_selectedDia ?? '-'}\nCOL: ${item['colour'] ?? '-'}\nWT: ${item['roll_weight']}kg\nDT: ${DateFormat('dd-MM-yyyy').format(_outwardDateTime)}',
-                                  version: QrVersions.auto,
-                                  size: 100.0,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'SCAN FOR AUTH',
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Actual printing logic would use the 'printing' package
-                  },
-                  icon: const Icon(LucideIcons.printer),
-                  label: const Text('Print Now'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStickerRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label :',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ),
-          Text(value, style: const TextStyle(fontSize: 14)),
         ],
       ),
     );
@@ -685,19 +776,14 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           spacing: 8,
           children: sortedSetNos.map((setNo) {
             final isSelected = _selectedSets.any(
-              (sel) => sel['set_no'] == setNo.toString(),
-            );
-            // Find default data for this set no for display only
-            final defaultData = _availableSets.firstWhere(
-              (s) => s['set_no'].toString() == setNo.toString(),
-              orElse: () => {},
+              (sel) => sel['set_no'].toString() == setNo.toString(),
             );
 
             return ChoiceChip(
               label: Text('Set $setNo', style: const TextStyle(fontSize: 12)),
               selected: isSelected,
               onSelected: (selected) {
-                _toggleSetSelection(defaultData, selected);
+                _toggleSetSelection(setNo.toString(), selected);
               },
               selectedColor: ColorPalette.primary.withOpacity(0.2),
               labelStyle: TextStyle(
@@ -706,128 +792,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               ),
             );
           }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSelectedSetsList() {
-    if (_selectedSets.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'SELECTED SET DETAILS (EDITABLE)',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _selectedSets.length,
-          itemBuilder: (context, index) {
-            final item = _selectedSets[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: ColorPalette.primary, width: 4),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'SET NO: ${item['set_no']}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: ColorPalette.primary,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              LucideIcons.trash2,
-                              color: Colors.red,
-                              size: 18,
-                            ),
-                            onPressed: () => _removeSet(index),
-                          ),
-                        ],
-                      ),
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildItemEditField(
-                              'Colour',
-                              item['colour'],
-                              (v) => setState(() => item['colour'] = v),
-                              clearable: true,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildItemEditField(
-                              'Weight',
-                              item['weight'].toString(),
-                              (v) => setState(
-                                () =>
-                                    item['weight'] = double.tryParse(v) ?? 0.0,
-                              ),
-                              suffix: 'kg',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildItemEditField(
-                              'Roll Weight',
-                              item['roll_weight'].toString(),
-                              (v) => setState(
-                                () => item['roll_weight'] =
-                                    double.tryParse(v) ?? 0.0,
-                              ),
-                              suffix: 'kg',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildItemEditField(
-                              'No. of Rolls',
-                              item['no_of_rolls'].toString(),
-                              (v) => setState(
-                                () =>
-                                    item['no_of_rolls'] = int.tryParse(v) ?? 1,
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
         ),
       ],
     );
@@ -941,38 +905,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     );
   }
 
-  Widget _buildItemEditField(
-    String label,
-    String value,
-    Function(String) onChanged, {
-    bool clearable = false,
-    String? suffix,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextFormField(
-      initialValue: value == '0.0' || value == '0' ? '' : value,
-      onChanged: onChanged,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixText: suffix,
-        isDense: true,
-        border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        suffixIcon: clearable
-            ? IconButton(
-                icon: const Icon(Icons.clear, size: 14),
-                onPressed: () {
-                  // This is a bit tricky with initialValue.
-                  // Better would be controllers, but let's try calling onChanged with empty.
-                  onChanged('');
-                },
-              )
-            : null,
-      ),
-    );
-  }
-
   Widget _buildDropdown(
     String label,
     List<String> items,
@@ -1005,6 +937,27 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         overflow: TextOverflow.ellipsis,
         maxLines: maxLines,
+      ),
+    );
+  }
+}
+
+class _TableHeader extends StatelessWidget {
+  final String title;
+  const _TableHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(4.0),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: Colors.blueGrey.shade700,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
