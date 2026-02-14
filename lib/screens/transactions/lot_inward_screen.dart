@@ -13,6 +13,7 @@ import 'package:garments/dialogs/signature_pad_dialog.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:garments/widgets/app_drawer.dart';
+import '../../core/storage/storage_service.dart';
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -79,12 +80,20 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   List<String> _palletNos = [];
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _userRole;
 
   @override
   void initState() {
     super.initState();
     _inTime = DateFormat('hh:mm a').format(DateTime.now());
+    _loadUserRole();
     _loadMasterData();
+  }
+
+  Future<void> _loadUserRole() async {
+    final role = await StorageService().getRole();
+    setState(() => _userRole = role);
+    print('DEBUG: User Role loaded: $_userRole');
   }
 
   Future<void> _loadMasterData() async {
@@ -1850,16 +1859,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               "Lot Incharge",
               _lotInchargeSignature,
               (f) => setState(() => _lotInchargeSignature = f),
+              allowedRoles: ['lot_inward', 'admin'],
             ),
             _buildSigBox(
               "Authorized",
               _authorizedSignature,
               (f) => setState(() => _authorizedSignature = f),
+              allowedRoles: ['authorized', 'admin'],
             ),
             _buildSigBox(
               "MD",
               _mdSignature,
               (f) => setState(() => _mdSignature = f),
+              allowedRoles: ['md', 'admin'],
             ),
           ],
         ),
@@ -1928,16 +1940,30 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildSigBox(String label, XFile? file, Function(XFile?) onPick) {
+  Widget _buildSigBox(
+    String label,
+    XFile? file,
+    Function(XFile?) onPick, {
+    List<String> allowedRoles = const [],
+  }) {
+    final bool canSign = _userRole != null && allowedRoles.contains(_userRole);
+
     return Column(
       children: [
         GestureDetector(
-          onTap: () => _openSignaturePad(onPick),
+          onTap: () {
+            if (canSign) {
+              _openSignaturePad(onPick);
+            } else {
+              _showError('Only ${allowedRoles.join(' or ')} can sign here.');
+            }
+          },
           child: Container(
             width: 90,
             height: 50,
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+              color: canSign ? null : Colors.grey.shade100,
             ),
             child: file != null
                 ? (kIsWeb

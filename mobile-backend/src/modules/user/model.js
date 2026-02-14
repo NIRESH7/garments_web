@@ -24,6 +24,11 @@ const userSchema = mongoose.Schema(
             required: true,
             default: false,
         },
+        role: {
+            type: String,
+            enum: ['admin', 'md', 'lot_inward', 'authorized'],
+            default: 'admin',
+        },
         isVerified: {
             type: Boolean,
             default: false,

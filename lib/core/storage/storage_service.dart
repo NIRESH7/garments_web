@@ -5,9 +5,18 @@ class StorageService {
 
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
+  static const String _roleKey = 'user_role';
 
   Future<void> saveToken(String token) async {
     await _storage.write(key: _tokenKey, value: token);
+  }
+
+  Future<void> saveRole(String role) async {
+    await _storage.write(key: _roleKey, value: role);
+  }
+
+  Future<String?> getRole() async {
+    return await _storage.read(key: _roleKey);
   }
 
   Future<String?> getToken() async {

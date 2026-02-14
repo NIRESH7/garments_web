@@ -20,7 +20,9 @@ class MobileApiService {
       );
       if (response.statusCode == 200) {
         final token = response.data['token'];
+        final role = response.data['role'] ?? 'lot_inward'; // Default fallback
         await _storage.saveToken(token);
+        await _storage.saveRole(role);
         return true;
       }
       return false;
@@ -108,6 +110,7 @@ class MobileApiService {
     String? endDate,
     String? fromParty,
     String? lotName,
+    String? lotNo,
   }) async {
     try {
       final response = await _client.get(
@@ -117,6 +120,7 @@ class MobileApiService {
           if (endDate != null) 'endDate': endDate,
           if (fromParty != null) 'fromParty': fromParty,
           if (lotName != null) 'lotName': lotName,
+          if (lotNo != null) 'lotNo': lotNo,
         },
       );
       return response.data;
@@ -155,6 +159,8 @@ class MobileApiService {
     String? lotName,
     String? colour,
     String? dia,
+    String? startDate,
+    String? endDate,
   }) async {
     try {
       final response = await _client.get(
@@ -164,6 +170,8 @@ class MobileApiService {
           if (lotName != null) 'lotName': lotName,
           if (colour != null) 'colour': colour,
           if (dia != null) 'dia': dia,
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
         },
       );
       return response.data;
@@ -474,13 +482,13 @@ class MobileApiService {
     }
   }
 
-  Future<List<String>> getColoursByLot(String lotName) async {
+  Future<List<String>> getColoursByLot(String lotNo) async {
     try {
-      final group = await getItemGroupByName(lotName);
-      if (group != null) {
-        return List<String>.from(group['colours'] ?? []);
-      }
-      return [];
+      final response = await _client.get(
+        '${ApiConstants.inward}/colours',
+        queryParameters: {'lotNo': lotNo},
+      );
+      return List<String>.from(response.data);
     } catch (e) {
       return [];
     }

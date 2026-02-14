@@ -130,7 +130,7 @@ const createInward = asyncHandler(async (req, res) => {
 // @route   GET /api/inventory/inward
 // @access  Private
 const getInwards = asyncHandler(async (req, res) => {
-    const { startDate, endDate, fromParty, lotName } = req.query;
+    const { startDate, endDate, fromParty, lotName, lotNo } = req.query;
 
     let query = {};
     if (startDate || endDate) {
@@ -140,6 +140,7 @@ const getInwards = asyncHandler(async (req, res) => {
     }
     if (fromParty) query.fromParty = { $regex: new RegExp(fromParty, 'i') };
     if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
+    if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
 
     const inwards = await Inward.find(query).sort({ inwardDate: -1 });
     res.json(inwards);
@@ -198,6 +199,32 @@ const getBalancedSets = asyncHandler(async (req, res) => {
     const balancedSets = allSets.filter(s => !usedSetNumbers.has(s.set_no.toString()));
 
     res.json(balancedSets);
+});
+
+// @desc    Get All Colours for a Lot (from Inward)
+// @route   GET /api/inventory/inward/colours
+const getInwardColours = asyncHandler(async (req, res) => {
+    const { lotNo } = req.query;
+    const inwards = await Inward.find({ lotNo });
+
+    const colours = new Set();
+    inwards.forEach(inward => {
+        if (inward.storageDetails && inward.storageDetails.length > 0) {
+            inward.storageDetails.forEach(sd => {
+                sd.rows.forEach(row => {
+                    if (row.colour) colours.add(row.colour);
+                });
+            });
+        }
+        // Fallback to diaEntries if storageDetails is empty
+        if (inward.diaEntries && inward.diaEntries.length > 0) {
+            // diaEntries usually don't have colour explicitly unless matched with something else.
+            // But let's check if we missed anything. 
+            // In current schema, colours are in storageDetails.
+        }
+    });
+
+    res.json(Array.from(colours));
 });
 
 // @desc    Generate Inward Number (for UI display)
@@ -319,14 +346,17 @@ const getOutwards = asyncHandler(async (req, res) => {
 // @route   GET /api/inventory/reports/aging
 // @access  Private
 const getLotAgingReport = asyncHandler(async (req, res) => {
-    const { lotNo, lotName, colour, dia } = req.query;
+    const { lotNo, lotName, colour, dia, startDate, endDate } = req.query;
 
     let query = {};
     if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
     if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
-    // Note: Colour and Dia filters need to be applied after expanding diaEntries/storageDetails or by pre-filtering
-    // For simplicity with this structure, we'll filter after expansion or build a complex query.
-    // Let's filter after mapping for flexibility with the nested arrays.
+
+    if (startDate || endDate) {
+        query.inwardDate = {};
+        if (startDate) query.inwardDate.$gte = startDate;
+        if (endDate) query.inwardDate.$lte = endDate;
+    }
 
     const inwards = await Inward.find(query).sort({ inwardDate: 1 });
 
@@ -416,5 +446,6 @@ export {
     generateDcNumber,
     createOutward,
     getOutwards,
-    getLotAgingReport
+    getLotAgingReport,
+    getInwardColours
 };

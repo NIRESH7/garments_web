@@ -30,7 +30,25 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    _tabController.addListener(_handleTabChange);
     _loadAllData();
+  }
+
+  void _handleTabChange() {
+    if (!_tabController.indexIsChanging) {
+      // Only trigger when the transition is finished
+      setState(() {
+        _filters.clear();
+      });
+      _loadDataForTab(_tabController.index);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAllData() async {
@@ -160,6 +178,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           lotName: filters['lotName'],
           colour: filters['colour'],
           dia: filters['dia'],
+          startDate: filters['startDate'],
+          endDate: filters['endDate'],
         );
       } else if (index == 1) {
         // Aging Summary
@@ -188,6 +208,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           endDate: filters['endDate'],
           fromParty: filters['party'],
           lotName: filters['lotName'],
+          lotNo: filters['lotNo'],
         );
       } else if (index == 3) {
         // Outward
@@ -243,7 +264,6 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     );
   }
 
-  // --- 2. AGING SUMMARY --- (Headers: Lot No, Rolls, Weight, Total)
   Widget _buildAgingSummaryReport() {
     // Apply local date filter if needed for Summary
     final filters = _filters[1] ?? {};
@@ -259,21 +279,29 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         if (!_formatDate(item['inward_date']).contains(dateFilter)) continue;
       }
 
-      final lot = item['lot_number'] ?? 'N/A';
-      if (!summary.containsKey(lot)) {
-        summary[lot] = {'rolls': 0, 'weight': 0.0};
+      final lotNo = item['lot_number'] ?? 'N/A';
+      final lotName = item['lot_name'] ?? 'N/A';
+      
+      if (!summary.containsKey(lotNo)) {
+        summary[lotNo] = {
+          'lotNo': lotNo,
+          'lotName': lotName,
+          'rolls': 0,
+          'weight': 0.0
+        };
       }
-      summary[lot]['rolls'] += (item['rolls'] ?? 0) as int;
-      summary[lot]['weight'] += (item['weight'] ?? 0.0) as num;
+      summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
+      summary[lotNo]['weight'] += (item['weight'] ?? 0.0) as num;
     }
 
     return _buildReportTable(
-      headers: ['Lot Number', 'Total Rolls', 'Total Weight', 'Status'],
-      rows: summary.entries.map((e) {
+      headers: ['Lot Number', 'Lot Name', 'Total Rolls', 'Total Weight', 'Status'],
+      rows: summary.values.map((v) {
         return <String>[
-          e.key,
-          '${e.value['rolls']}',
-          '${e.value['weight'].toStringAsFixed(1)} Kg',
+          v['lotNo'],
+          v['lotName'],
+          '${v['rolls']}',
+          '${v['weight'].toStringAsFixed(1)} Kg',
           'Pending',
         ];
       }).toList(),
@@ -319,8 +347,47 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     );
   }
 
-  // --- 4. OUTWARD REPORT --- (Headers: Party, Lot Name, Date, DC No, Lot No, Process, Rolls, Wt)
+  // --- 4. OUTWARD REPORT --- (Headers: Party, Lot Name, Date, DC No, Lot No, Dia, Process, Rolls, Wt)
   Widget _buildOutwardReport() {
+    final filters = _filters[3] ?? {};
+    final diaFilter = filters['dia'];
+
+    if (diaFilter != null && diaFilter.toString().isNotEmpty) {
+      // Summary View when filtered by DIA
+      final Map<String, Map<String, dynamic>> summary = {};
+      for (var out in _outwardData) {
+        final dia = out['dia']?.toString() ?? '-';
+        if (!summary.containsKey(dia)) {
+          summary[dia] = {
+            'lots': <String>{},
+            'rolls': 0,
+            'weight': 0.0,
+          };
+        }
+        if (out['lotNo'] != null) {
+          summary[dia]!['lots'].add(out['lotNo'].toString());
+        }
+        final items = out['items'] as List? ?? [];
+        summary[dia]!['rolls'] += items.length;
+        summary[dia]!['weight'] += items.fold(
+          0.0,
+          (sum, i) => sum + (i['total_weight'] ?? 0),
+        );
+      }
+
+      return _buildReportTable(
+        headers: ['I.no', 'dia', 'roll', 'weight'],
+        rows: summary.entries.map((e) {
+          return <String>[
+            (e.value['lots'] as Set).join(', '),
+            e.key,
+            '${e.value['rolls']}',
+            '${(e.value['weight'] as num).toStringAsFixed(1)}',
+          ];
+        }).toList(),
+      );
+    }
+
     return _buildReportTable(
       headers: [
         'Party',
@@ -328,6 +395,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Date',
         'DC No',
         'Lot No',
+        'Dia',
         'Process',
         'Rolls',
         'Wt',
@@ -336,7 +404,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         final items = out['items'] as List? ?? [];
         final weight = items.fold(
           0.0,
-          (sum, i) => sum + (i['selected_weight'] ?? 0),
+          (sum, i) => sum + (i['total_weight'] ?? 0),
         );
         return <String>[
           out['partyName'] ?? '-',
@@ -344,6 +412,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           _formatDate(out['dateTime']),
           out['dcNo'] ?? '-',
           out['lotNo'] ?? '-',
+          out['dia']?.toString() ?? '-',
           out['process'] ?? '-',
           '${items.length}',
           weight.toStringAsFixed(1),
@@ -423,19 +492,33 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                     ),
                   )
                   .toList(),
-              rows: rows
-                  .map(
-                    (row) => DataRow(
-                      cells: row
-                          .map(
-                            (cell) => DataCell(
-                              Text(cell, style: const TextStyle(fontSize: 12)),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  )
-                  .toList(),
+              rows: rows.map((row) {
+                return DataRow(
+                  cells: row.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final cell = entry.value;
+                    final columnHeader = headers[index];
+
+                    Color? textColor;
+                    if (columnHeader == 'Status') {
+                      if (cell == 'Completed') textColor = Colors.green;
+                      if (cell == 'Pending') textColor = Colors.red;
+                    }
+
+                    return DataCell(
+                      Text(
+                        cell,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: textColor,
+                          fontWeight:
+                              textColor != null ? FontWeight.bold : null,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              }).toList(),
             ),
           ),
         ),
@@ -514,7 +597,7 @@ class _FilterDialogState extends State<_FilterDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if ([2, 3, 4].contains(widget.tabIndex)) ...[
+              if ([0, 2, 3, 4].contains(widget.tabIndex)) ...[
                 _buildDateRangePicker(
                   'startDate',
                   'Start Date',
@@ -540,9 +623,10 @@ class _FilterDialogState extends State<_FilterDialog> {
                 _buildTextField('lotName', 'Lot Name'),
               if ([
                 0,
+                2,
                 3,
                 4,
-              ].contains(widget.tabIndex)) // Lot No (Aging, Outward, Closing)
+              ].contains(widget.tabIndex)) // Lot No (Aging, Inward, Outward, Closing)
                 _buildTextField('lotNo', 'Lot No'),
               if (widget.tabIndex == 2) // Party (Inward)
                 _buildTextField('party', 'Party Name'),

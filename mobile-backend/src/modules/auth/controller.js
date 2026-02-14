@@ -18,6 +18,7 @@ const authUser = asyncHandler(async (req, res) => {
                 name: user.name,
                 email: user.email,
                 isAdmin: user.isAdmin,
+                role: user.role,
                 isVerified: user.isVerified,
                 token: generateToken(user._id),
             });

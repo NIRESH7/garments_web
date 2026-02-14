@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_constants.dart';
 
+import '../../services/inward_print_service.dart';
+
 class InwardDetailScreen extends StatelessWidget {
   final Map<String, dynamic> inward;
 
@@ -16,8 +18,14 @@ class InwardDetailScreen extends StatelessWidget {
         backgroundColor: Colors.green,
         actions: [
           IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: () => _printReport(context),
+            tooltip: 'Print Report',
+          ),
+          IconButton(
             icon: const Icon(Icons.share),
             onPressed: () => _shareDetails(context),
+            tooltip: 'Share Details',
           ),
         ],
       ),
@@ -142,6 +150,21 @@ class InwardDetailScreen extends StatelessWidget {
         }
         sb.writeln("");
       }
+
+      // Calculate Totals
+      int totalRolls = 0;
+      double totalWeight = 0.0;
+      for (var entry in entries) {
+        if (entry != null) {
+           totalRolls += (entry['recRoll'] as num?)?.toInt() ?? 0;
+           totalWeight += double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
+        }
+      }
+
+      sb.writeln("--------------------------------");
+      sb.writeln("Total Rolls: $totalRolls");
+      sb.writeln("Total Weight: ${totalWeight.toStringAsFixed(2)} Kg");
+      sb.writeln("--------------------------------");
 
       final whatsappUrl =
           "whatsapp://send?text=${Uri.encodeComponent(sb.toString())}";
@@ -649,5 +672,18 @@ class InwardDetailScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _printReport(BuildContext context) async {
+    try {
+      final service = InwardPrintService();
+      await service.printInwardReport(inward);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating report: $e')),
+        );
+      }
+    }
   }
 }

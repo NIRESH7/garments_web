@@ -10,6 +10,7 @@ import {
     createOutward,
     getOutwards,
     getLotAgingReport,
+    getInwardColours,
 } from './controller.js';
 
 import {
@@ -46,6 +47,7 @@ router.route('/inward')
 router.get('/inward/fifo', protect, getLotsFifo);
 router.get('/inward/balanced-sets', protect, getBalancedSets);
 router.get('/inward/generate-no', protect, generateInwardNumber);
+router.get('/inward/colours', protect, getInwardColours);
 
 // Outward
 router.route('/outward')

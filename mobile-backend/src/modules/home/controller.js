@@ -38,7 +38,7 @@ const getHomeData = asyncHandler(async (req, res) => {
         acc + curr.diaEntries.reduce((a, c) => a + (c.recWt || 0), 0), 0);
 
     const totalOutwardWeight = outwards.reduce((acc, curr) =>
-        acc + (curr.items ? curr.items.reduce((a, c) => a + (c.selected_weight || 0), 0) : 0), 0);
+        acc + (curr.items ? curr.items.reduce((a, c) => a + (c.total_weight || 0), 0) : 0), 0);
 
     res.json({
         user: userSummary,

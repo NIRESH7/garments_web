@@ -89,7 +89,7 @@ class OutwardDetailScreen extends StatelessWidget {
 
     double totalWeight = 0;
     for (var item in items) {
-      totalWeight += (item['selected_weight'] as num?)?.toDouble() ?? 0;
+      totalWeight += (item['total_weight'] as num?)?.toDouble() ?? 0;
     }
 
     return Card(
@@ -159,7 +159,7 @@ class OutwardDetailScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                '${item['selected_weight'] ?? 0} Kg',
+                '${item['total_weight'] ?? 0} Kg',
                 style: const TextStyle(
                   color: Colors.orange,
                   fontWeight: FontWeight.bold,
@@ -169,19 +169,42 @@ class OutwardDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSmallInfo('Colour', item['colour'] ?? 'N/A'),
-              ),
-              Expanded(
-                child: _buildSmallInfo(
-                  'Balance',
-                  '${item['balance_weight'] ?? 0} Kg',
+          if (item['colours'] != null && (item['colours'] as List).isNotEmpty)
+            Column(
+              children: (item['colours'] as List).map((col) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildSmallInfo('Colour', col['colour'] ?? 'N/A'),
+                      ),
+                      Expanded(
+                        child: _buildSmallInfo('Weight', '${col['weight'] ?? 0} Kg'),
+                      ),
+                      Expanded(
+                        child: _buildSmallInfo('Rolls', '${col['no_of_rolls'] ?? 0}'),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSmallInfo('Colour', item['colour'] ?? 'N/A'),
                 ),
-              ),
-            ],
-          ),
+                Expanded(
+                  child: _buildSmallInfo(
+                    'Balance',
+                    '${item['balance_weight'] ?? 0} Kg',
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
