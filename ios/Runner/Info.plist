@@ -49,5 +49,9 @@
 	<array>
 		<string>whatsapp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to scan QR/Barcodes for inward stickers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to photolibrary to pick signature images.</string>
 </dict>
 </plist>

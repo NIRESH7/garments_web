@@ -10,6 +10,7 @@ import '../screens/masters/dropdown_setup_screen.dart';
 import '../screens/masters/party_master_screen.dart';
 import '../screens/masters/item_master_screen.dart';
 import '../screens/masters/color_prediction_screen.dart';
+import '../screens/masters/stock_limit_master_screen.dart';
 
 // Transactions
 import '../screens/transactions/lot_inward_screen.dart';
@@ -24,6 +25,7 @@ import '../screens/reports/lot_aging_report.dart';
 import '../screens/reports/inward_outward_report.dart';
 import '../screens/reports/monthly_summary_report.dart';
 import '../screens/reports/client_format_report.dart';
+import '../screens/reports/godown_stock_report_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -128,6 +130,11 @@ class AppDrawer extends StatelessWidget {
                       "Colour Prediction",
                       const ColorPredictionScreen(),
                     ),
+                    _buildSubItem(
+                      context,
+                      "Stock Limit Setup",
+                      const StockLimitMasterScreen(),
+                    ),
                   ],
                 ),
 
@@ -199,6 +206,11 @@ class AppDrawer extends StatelessWidget {
                       context,
                       "Closing Stock",
                       const MonthlySummaryReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Godown Stock (Min/Max)",
+                      const GodownStockReportScreen(),
                     ),
                   ],
                 ),

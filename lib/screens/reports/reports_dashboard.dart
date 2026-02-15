@@ -7,6 +7,7 @@ import 'inward_outward_report.dart';
 import 'monthly_summary_report.dart';
 import 'format_reports_screen.dart';
 import 'client_format_report.dart';
+import 'godown_stock_report_screen.dart';
 
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
@@ -27,6 +28,19 @@ class ReportsDashboard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => const ClientFormatReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Godown Stock (Min/Max)',
+            subtitle: 'Alerts and replenishment needs',
+            icon: LucideIcons.alertTriangle,
+            color: Colors.redAccent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const GodownStockReportScreen(),
               ),
             ),
           ),

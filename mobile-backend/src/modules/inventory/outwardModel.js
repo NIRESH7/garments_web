@@ -36,6 +36,10 @@ const outwardSchema = mongoose.Schema(
         inTime: { type: String },
         outTime: { type: String },
         items: [outwardItemSchema],
+        lotInchargeSignature: { type: String },
+        authorizedSignature: { type: String },
+        lotInchargeSignTime: { type: Date },
+        authorizedSignTime: { type: Date },
     },
     {
         timestamps: true,

@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import Inward from './inwardModel.js';
 import Outward from './outwardModel.js';
+import StockLimit from '../master/stockLimitModel.js';
 
 // @desc    Get Overview Report (Stock Overview)
 // @route   GET /api/inventory/reports/overview
@@ -244,9 +245,104 @@ const getClientFormatReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
+// @desc    Get Godown Stock Report with Min/Max Indication
+// @route   GET /api/inventory/reports/godown-stock
+const getGodownStockReport = asyncHandler(async (req, res) => {
+    const { lotName, dia } = req.query;
+
+    const inwards = await Inward.find({});
+    const outwards = await Outward.find({});
+    const baseStockLimits = await StockLimit.find({});
+
+    let stockMap = {};
+
+    // 1. Process Inwards
+    inwards.forEach(i => {
+        i.diaEntries.forEach(entry => {
+            const key = `${i.lotName}_${entry.dia}`;
+            if (!stockMap[key]) {
+                stockMap[key] = {
+                    lotName: i.lotName,
+                    dia: entry.dia,
+                    currentWeight: 0,
+                    currentRolls: 0
+                };
+            }
+            stockMap[key].currentWeight += (entry.recWt || 0);
+            stockMap[key].currentRolls += (entry.recRoll || entry.roll || 0);
+        });
+    });
+
+    // 2. Process Outwards
+    outwards.forEach(o => {
+        const key = `${o.lotName}_${o.dia}`;
+        if (stockMap[key]) {
+            o.items.forEach(item => {
+                stockMap[key].currentWeight -= (item.total_weight || 0);
+                stockMap[key].currentRolls -= item.colours.reduce((acc, curr) => acc + (curr.no_of_rolls || 0), 0);
+            });
+        }
+    });
+
+    // 3. Integrate Stock Limits and Calculate Metrics
+    const report = [];
+
+    // We want to show all combinations that either have stock OR have a limit defined
+    const allKeys = new Set([...Object.keys(stockMap), ...baseStockLimits.map(l => `${l.lotName}_${l.dia}`)]);
+
+    allKeys.forEach(key => {
+        const [lName, lDia] = key.split('_');
+        const stockInfo = stockMap[key] || { currentWeight: 0, currentRolls: 0 };
+        const limitInfo = baseStockLimits.find(l => l.lotName === lName && l.dia === lDia) || {
+            minWeight: 0,
+            maxWeight: 0,
+            minRolls: 0,
+            maxRolls: 0,
+            manualAdjustment: 0
+        };
+
+        const totalCurrentWeight = stockInfo.currentWeight + (limitInfo.manualAdjustment || 0);
+
+        let status = 'NORMAL';
+        if (limitInfo.minWeight > 0 && totalCurrentWeight < limitInfo.minWeight) {
+            status = 'LOW STOCK';
+        } else if (limitInfo.maxWeight > 0 && totalCurrentWeight > limitInfo.maxWeight) {
+            status = 'HIGH STOCK';
+        }
+
+        const needWeight = Math.max(0, (limitInfo.maxWeight || 0) - totalCurrentWeight);
+        const needRolls = needWeight / 20;
+
+        report.push({
+            lotName: lName,
+            dia: lDia,
+            minWeight: limitInfo.minWeight,
+            maxWeight: limitInfo.maxWeight,
+            currentWeight: stockInfo.currentWeight,
+            outsideInput: limitInfo.manualAdjustment,
+            totalStock: totalCurrentWeight,
+            needWeight: needWeight,
+            needRolls: needRolls,
+            status: status
+        });
+    });
+
+    // Filter by query params if provided
+    let filteredReport = report;
+    if (lotName) {
+        filteredReport = filteredReport.filter(r => r.lotName.toLowerCase().includes(lotName.toLowerCase()));
+    }
+    if (dia) {
+        filteredReport = filteredReport.filter(r => r.dia === dia);
+    }
+
+    res.json(filteredReport);
+});
+
 export {
     getOverviewReport,
     getInwardOutwardReport,
     getMonthlySummaryReport,
-    getClientFormatReport
+    getClientFormatReport,
+    getGodownStockReport
 };

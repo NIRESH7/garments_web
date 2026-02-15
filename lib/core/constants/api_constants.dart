@@ -18,15 +18,19 @@ class ApiConstants {
   static const String parties = '/master/parties';
   static const String itemGroups = '/master/item-groups';
   static const String lots = '/master/lots';
+  static const String stockLimits = '/master/stock-limits';
 
   // Inventory
   static const String inward = '/inventory/inward';
+  static const String fifoRecommendation =
+      '/inventory/inward/fifo-recommendation';
   static const String outward = '/inventory/outward';
   static const String agingReport = '/inventory/reports/aging';
   static const String overviewReport = '/inventory/reports/overview';
   static const String inwardOutwardReport = '/inventory/reports/inward-outward';
   static const String monthlyReport = '/inventory/reports/monthly';
   static const String clientReport = '/inventory/reports/client';
+  static const String godownStockReport = '/inventory/reports/godown-stock';
 
   // Production
   static const String assignments = '/production/assignments';

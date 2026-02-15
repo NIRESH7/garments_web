@@ -3,6 +3,7 @@ import Category from './categoryModel.js';
 import Party from './partyModel.js';
 import ItemGroup from './itemGroupModel.js';
 import Lot from './lotModel.js';
+import StockLimit from './stockLimitModel.js';
 
 // --- CATEGORY & DROPDOWN HANDLERS ---
 
@@ -274,6 +275,24 @@ const deleteItemGroup = asyncHandler(async (req, res) => {
     }
 });
 
+// --- STOCK LIMIT HANDLERS ---
+const createStockLimit = asyncHandler(async (req, res) => {
+    const { lotName, dia, minWeight, maxWeight, minRolls, maxRolls, manualAdjustment } = req.body;
+
+    const limit = await StockLimit.findOneAndUpdate(
+        { lotName, dia },
+        { minWeight, maxWeight, minRolls, maxRolls, manualAdjustment },
+        { new: true, upsert: true }
+    );
+
+    res.status(201).json(limit);
+});
+
+const getStockLimits = asyncHandler(async (req, res) => {
+    const limits = await StockLimit.find({});
+    res.json(limits);
+});
+
 export {
     createCategory,
     getCategories,
@@ -290,4 +309,6 @@ export {
     deleteCategoryValue,
     createLot,
     getLots,
+    createStockLimit,
+    getStockLimits,
 };

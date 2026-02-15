@@ -14,6 +14,11 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:garments/widgets/app_drawer.dart';
 import '../../core/storage/storage_service.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 class LotInwardScreen extends StatefulWidget {
   const LotInwardScreen({super.key});
@@ -365,16 +370,61 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Future<void> _shareToWhatsApp(Map<String, dynamic> data) async {
     try {
-      String msg = "*Lot Inward Entry*\n";
-      msg += "Date: ${data['inwardDate']}\n";
-      msg += "Lot: ${data['lotName']} / ${data['lotNo']}\n";
-      msg += "Party: ${data['fromParty']}\n";
-      msg += "Quality: ${data['qualityStatus']}\n";
-      if (data['complaintText'] != null &&
-          data['complaintText'].toString().isNotEmpty) {
-        msg += "Complaint: ${data['complaintText']}\n";
+      final sb = StringBuffer();
+      sb.writeln("*LOT INWARD DETAILS*");
+      sb.writeln("");
+
+      sb.writeln("Inward No: ${data['inwardNo'] ?? 'N/A'}");
+      sb.writeln("Date: ${data['inwardDate']}");
+      sb.writeln("Party: ${data['fromParty'] ?? 'N/A'}");
+      sb.writeln(
+        "Lot: ${data['lotName'] ?? 'N/A'} / ${data['lotNo'] ?? 'N/A'}",
+      );
+      sb.writeln("");
+
+      sb.writeln("GSM Check: ${data['gsmStatus'] ?? 'OK'}");
+      sb.writeln("Shade Matching: ${data['shadeStatus'] ?? 'OK'}");
+      sb.writeln("Washing Check: ${data['washingStatus'] ?? 'OK'}");
+      sb.writeln("");
+
+      final entries = data['diaEntries'] as List<dynamic>? ?? [];
+      for (var entry in entries) {
+        final dia = entry['dia']?.toString();
+        final recRoll = entry['recRoll'] ?? 0;
+        final recWt = entry['recWt'] ?? 0.0;
+
+        if (dia != null) sb.writeln("DIA: $dia");
+        sb.writeln("Rolls: $recRoll");
+        sb.writeln(
+          "Received Weight: ${recWt is num ? recWt.toStringAsFixed(2) : recWt} Kg",
+        );
+        sb.writeln("");
       }
 
+      int totalRolls = 0;
+      double totalWeight = 0.0;
+      for (var entry in entries) {
+        totalRolls += (entry['recRoll'] as num?)?.toInt() ?? 0;
+        totalWeight += (entry['recWt'] as num?)?.toDouble() ?? 0.0;
+      }
+
+      sb.writeln("-----------------------");
+      sb.writeln("TOTAL SUMMARY");
+      sb.writeln("Total Rolls: $totalRolls");
+      sb.writeln("Total Weight: ${totalWeight.toStringAsFixed(2)} Kg");
+      sb.writeln("-----------------------");
+      sb.writeln("");
+
+      sb.writeln("Signatures:");
+      sb.writeln(
+        "Lot Incharge: ${data['lotInchargeSignature'] != null ? 'OK' : 'Missing'}",
+      );
+      sb.writeln(
+        "Authorized: ${data['authorizedSignature'] != null ? 'OK' : 'Missing'}",
+      );
+      sb.writeln("MD: ${data['mdSignature'] != null ? 'OK' : 'Missing'}");
+
+      final msg = sb.toString();
       final whatsappUrl = "whatsapp://send?text=${Uri.encodeComponent(msg)}";
       final url = Uri.parse(whatsappUrl);
 
@@ -847,49 +897,103 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Apply filter to final print list
-                        final filteredToPrint = stickers.where((s) {
-                          if (_modalFilterDia != null &&
-                              s['dia'] != _modalFilterDia) {
-                            return false;
-                          }
-                          if (_modalFilterColour != null &&
-                              s['colour'] != _modalFilterColour) {
-                            return false;
-                          }
-                          if (_modalFilterSet != null &&
-                              s['setNo'].toString() != _modalFilterSet) {
-                            return false;
-                          }
-                          return true;
-                        }).toList();
-                        _showError(
-                          "Printing not implemented yet for ${filteredToPrint.length} stickers",
-                        );
-                        Navigator.pop(ctx); // Close the modal after "printing"
-                        if (inwardData != null) _askToShare(inwardData);
-                      },
-                      icon: const Icon(Icons.print),
-                      label: const Text(
-                        'Print Now',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              // Apply filter to final print list
+                              final filteredToPrint = stickers.where((s) {
+                                if (_modalFilterDia != null &&
+                                    s['dia'] != _modalFilterDia) {
+                                  return false;
+                                }
+                                if (_modalFilterColour != null &&
+                                    s['colour'] != _modalFilterColour) {
+                                  return false;
+                                }
+                                if (_modalFilterSet != null &&
+                                    s['setNo'].toString() != _modalFilterSet) {
+                                  return false;
+                                }
+                                return true;
+                              }).toList();
+                              _showError(
+                                "Printing not implemented yet for ${filteredToPrint.length} stickers",
+                              );
+                              Navigator.pop(
+                                ctx,
+                              ); // Close the modal after "printing"
+                              if (inwardData != null) _askToShare(inwardData);
+                            },
+                            icon: const Icon(Icons.print),
+                            label: const Text(
+                              'Print Now',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0EA5E9),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0EA5E9),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final filteredToShare = stickers.where((s) {
+                                if (_modalFilterDia != null &&
+                                    s['dia'] != _modalFilterDia) {
+                                  return false;
+                                }
+                                if (_modalFilterColour != null &&
+                                    s['colour'] != _modalFilterColour) {
+                                  return false;
+                                }
+                                if (_modalFilterSet != null &&
+                                    s['setNo'].toString() != _modalFilterSet) {
+                                  return false;
+                                }
+                                return true;
+                              }).toList();
+
+                              if (filteredToShare.isEmpty) {
+                                _showError("No stickers to share");
+                                return;
+                              }
+
+                              _showShareOptions(context, filteredToShare);
+                            },
+                            icon: const Icon(Icons.share),
+                            label: const Text(
+                              'Share',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
@@ -913,6 +1017,211 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             ),
           ),
           Text(value, style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  void _showShareOptions(
+    BuildContext context,
+    List<Map<String, dynamic>> stickers,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Share Stickers',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              title: const Text('Share as PDF Document'),
+              subtitle: const Text('Best for high-quality printing'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _shareStickers(stickers, format: 'pdf');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.image, color: Colors.blue),
+              title: const Text('Share as Image (PNG)'),
+              subtitle: const Text('Best for quick viewing'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _shareStickers(stickers, format: 'image');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.message, color: Colors.green),
+              title: const Text('Share to WhatsApp'),
+              subtitle: const Text('Quick share via WhatsApp'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _shareStickers(stickers, format: 'whatsapp');
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareStickers(
+    List<Map<String, dynamic>> stickerList, {
+    required String format,
+  }) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final pdf = pw.Document();
+
+      // Page styling - 2 stickers per row, similar to a label sheet
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(20),
+          build: (pw.Context context) {
+            return [
+              pw.GridView(
+                crossAxisCount: 2,
+                childAspectRatio: 0.8,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                children: stickerList.map((item) {
+                  return pw.Container(
+                    padding: const pw.EdgeInsets.all(10),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(width: 1),
+                      color: PdfColors.white,
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        _buildPdfRow('LOT NO', item['lotNo']),
+                        _buildPdfRow('Lot Name', item['lotName']),
+                        _buildPdfRow('Dia', item['dia']),
+                        _buildPdfRow('Colour', item['colour']),
+                        _buildPdfRow('Set No', '#${item['setNo']}'),
+                        _buildPdfRow('Roll Wt', '${item['weight']} kg'),
+                        _buildPdfRow('Date', item['date']),
+                        pw.Spacer(),
+                        pw.Center(
+                          child: pw.Column(
+                            children: [
+                              pw.Container(
+                                width: 70,
+                                height: 70,
+                                child: pw.BarcodeWidget(
+                                  barcode: pw.Barcode.qrCode(),
+                                  data:
+                                      'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                                ),
+                              ),
+                              pw.SizedBox(height: 4),
+                              pw.Text(
+                                'SCAN FOR AUTH',
+                                style: pw.TextStyle(
+                                  fontSize: 7,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ];
+          },
+        ),
+      );
+
+      final pdfBytes = await pdf.save();
+      final directory = await getTemporaryDirectory();
+
+      if (format == 'pdf' || format == 'whatsapp') {
+        final filePath =
+            '${directory.path}/stickers_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        final file = File(filePath);
+        await file.writeAsBytes(pdfBytes);
+
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Inward Stickers - ${_selectedLotName ?? 'Details'}',
+          subject: 'Sticker Labels PDF',
+        );
+      } else if (format == 'image') {
+        final List<XFile> imagesToShare = [];
+
+        int pageIndex = 0;
+        // Rasterize the PDF pages to PNG
+        await for (var page in Printing.raster(pdfBytes, dpi: 300)) {
+          final imageBytes = await page.toPng();
+          final imgPath =
+              '${directory.path}/stickers_page_${pageIndex}_${DateTime.now().millisecondsSinceEpoch}.png';
+          final imgFile = File(imgPath);
+          await imgFile.writeAsBytes(imageBytes);
+          imagesToShare.add(XFile(imgPath));
+          pageIndex++;
+
+          // If many pages, maybe limit to avoid overwhelming share sheet?
+          // For now, let's share all as images.
+        }
+
+        if (imagesToShare.isNotEmpty) {
+          await Share.shareXFiles(
+            imagesToShare,
+            text: 'Inward Stickers - ${_selectedLotName ?? 'Images'}',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error sharing stickers: $e");
+      _showError("Failed to generate stickers for sharing: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  pw.Widget _buildPdfRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(
+            width: 55,
+            child: pw.Text(
+              '$label :',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+            ),
+          ),
+          pw.Text(
+            value,
+            style: const pw.TextStyle(fontSize: 10),
+            overflow: pw.TextOverflow.clip,
+          ),
         ],
       ),
     );

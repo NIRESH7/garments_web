@@ -86,9 +86,11 @@ class InwardDetailScreen extends StatelessWidget {
   Future<void> _shareDetails(BuildContext context) async {
     try {
       final sb = StringBuffer();
-      sb.writeln("*Inward Details*");
-      sb.writeln("Inward No: ${inward['inwardNo'] ?? 'N/A'}");
+      sb.writeln("*LOT INWARD DETAILS*");
+      sb.writeln("");
 
+      // Header Info
+      sb.writeln("Inward No: ${inward['inwardNo'] ?? 'N/A'}");
       String formattedDate = 'N/A';
       if (inward['inwardDate'] != null) {
         try {
@@ -104,7 +106,13 @@ class InwardDetailScreen extends StatelessWidget {
       sb.writeln(
         "Lot: ${inward['lotName'] ?? 'N/A'} / ${inward['lotNo'] ?? 'N/A'}",
       );
-      sb.writeln("--------------------------------");
+      sb.writeln("");
+
+      // Status info
+      sb.writeln("GSM Check: ${inward['gsmStatus'] ?? 'OK'}");
+      sb.writeln("Shade Matching: ${inward['shadeStatus'] ?? 'OK'}");
+      sb.writeln("Washing Check: ${inward['washingStatus'] ?? 'OK'}");
+      sb.writeln("");
 
       final entries = inward['diaEntries'] as List<dynamic>? ?? [];
       final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
@@ -113,15 +121,12 @@ class InwardDetailScreen extends StatelessWidget {
         if (entry == null) continue;
         final e = entry as Map<String, dynamic>;
         final dia = e['dia']?.toString();
-        final rate = double.tryParse(e['rate']?.toString() ?? '0') ?? 0;
         final recWt = double.tryParse(e['recWt']?.toString() ?? '0') ?? 0;
-        final value = rate * recWt;
+        final recRoll = e['recRoll'] ?? 0;
 
         if (dia != null) sb.writeln("DIA: $dia");
-        sb.writeln(
-          "Rolls: ${e['recRoll'] ?? 0} | Wt: ${recWt.toStringAsFixed(2)} Kg",
-        );
-        sb.writeln("Rate: $rate | Value: ${value.toStringAsFixed(2)}");
+        sb.writeln("Rolls: $recRoll");
+        sb.writeln("Received Weight: ${recWt.toStringAsFixed(2)} Kg");
 
         // Add Storage for this DIA
         if (dia != null && dia.isNotEmpty) {
@@ -156,15 +161,30 @@ class InwardDetailScreen extends StatelessWidget {
       double totalWeight = 0.0;
       for (var entry in entries) {
         if (entry != null) {
-           totalRolls += (entry['recRoll'] as num?)?.toInt() ?? 0;
-           totalWeight += double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
+          totalRolls += (entry['recRoll'] as num?)?.toInt() ?? 0;
+          totalWeight +=
+              double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
         }
       }
 
-      sb.writeln("--------------------------------");
+      sb.writeln("-----------------------");
+      sb.writeln("TOTAL SUMMARY");
       sb.writeln("Total Rolls: $totalRolls");
       sb.writeln("Total Weight: ${totalWeight.toStringAsFixed(2)} Kg");
-      sb.writeln("--------------------------------");
+      sb.writeln("-----------------------");
+      sb.writeln("");
+
+      // Signatures
+      sb.writeln("Signatures:");
+      sb.writeln(
+        "Lot Incharge: ${inward['lotInchargeSignature'] != null && inward['lotInchargeSignature'].toString().isNotEmpty ? 'OK' : 'Missing'}",
+      );
+      sb.writeln(
+        "Authorized: ${inward['authorizedSignature'] != null && inward['authorizedSignature'].toString().isNotEmpty ? 'OK' : 'Missing'}",
+      );
+      sb.writeln(
+        "MD: ${inward['mdSignature'] != null && inward['mdSignature'].toString().isNotEmpty ? 'OK' : 'Missing'}",
+      );
 
       final whatsappUrl =
           "whatsapp://send?text=${Uri.encodeComponent(sb.toString())}";
@@ -680,9 +700,9 @@ class InwardDetailScreen extends StatelessWidget {
       await service.printInwardReport(inward);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating report: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating report: $e')));
       }
     }
   }

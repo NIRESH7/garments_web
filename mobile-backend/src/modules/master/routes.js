@@ -15,46 +15,55 @@ import {
     deleteCategoryValue,
     createLot,
     getLots,
+    createStockLimit,
+    getStockLimits,
 } from './controller.js';
 import { protect, admin } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+router.use(protect);
+
 // Categories & Dropdown Setup
 router.route('/categories')
-    .post(protect, createCategory)
-    .get(protect, getCategories);
+    .post(createCategory)
+    .get(getCategories);
 
 router.route('/categories/:id')
-    .delete(protect, admin, deleteCategory);
+    .delete(deleteCategory);
 
 router.route('/categories/:id/values')
-    .post(protect, addCategoryValue);
+    .post(addCategoryValue);
 
 router.route('/categories/:id/values/:value')
-    .delete(protect, deleteCategoryValue);
+    .delete(deleteCategoryValue);
 
 // Party Master
 router.route('/parties')
-    .post(protect, createParty)
-    .get(protect, getParties);
+    .post(createParty)
+    .get(getParties);
 
 router.route('/parties/:id')
-    .put(protect, updateParty)
-    .delete(protect, deleteParty);
+    .put(updateParty)
+    .delete(deleteParty);
 
 // Item Group Master
 router.route('/item-groups')
-    .post(protect, createItemGroup)
-    .get(protect, getItemGroups);
+    .post(createItemGroup)
+    .get(getItemGroups);
 
 router.route('/item-groups/:id')
-    .put(protect, updateItemGroup)
-    .delete(protect, deleteItemGroup);
+    .put(updateItemGroup)
+    .delete(deleteItemGroup);
 
 // Lot Master
 router.route('/lots')
-    .post(protect, createLot)
-    .get(protect, getLots);
+    .post(createLot)
+    .get(getLots);
+
+// Stock Limits
+router.route('/stock-limits')
+    .post(createStockLimit)
+    .get(getStockLimits);
 
 export default router;

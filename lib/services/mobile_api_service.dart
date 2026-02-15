@@ -93,7 +93,26 @@ class MobileApiService {
 
   Future<bool> saveOutward(Map<String, dynamic> data) async {
     try {
-      final response = await _client.post(ApiConstants.outward, data: data);
+      final formData = FormData();
+
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          formData.files.add(
+            MapEntry(
+              entry.key,
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ),
+          );
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+        }
+      }
+
+      final response = await _client.post(ApiConstants.outward, data: formData);
       return response.statusCode == 201;
     } on DioException catch (e) {
       final errorMsg = e.response?.data != null && e.response?.data is Map
@@ -231,11 +250,44 @@ class MobileApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> getFifoRecommendation(
+    String lotName,
+    String dia,
+  ) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.fifoRecommendation,
+        queryParameters: {'lotName': lotName, 'dia': dia},
+      );
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<List<dynamic>> getClientFormatReport({String? fromParty}) async {
     try {
       final response = await _client.get(
         ApiConstants.clientReport,
         queryParameters: {if (fromParty != null) 'fromParty': fromParty},
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getGodownStockReport({
+    String? lotName,
+    String? dia,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.godownStockReport,
+        queryParameters: {
+          if (lotName != null) 'lotName': lotName,
+          if (dia != null) 'dia': dia,
+        },
       );
       return response.data;
     } catch (e) {
@@ -421,6 +473,24 @@ class MobileApiService {
   Future<bool> createLot(Map<String, dynamic> data) async {
     try {
       final response = await _client.post(ApiConstants.lots, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getStockLimits() async {
+    try {
+      final response = await _client.get(ApiConstants.stockLimits);
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> saveStockLimit(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(ApiConstants.stockLimits, data: data);
       return response.statusCode == 201;
     } catch (e) {
       return false;

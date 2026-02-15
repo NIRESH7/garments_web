@@ -3,7 +3,12 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
-
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../dialogs/signature_pad_dialog.dart';
+import '../../core/storage/storage_service.dart';
 import '../../widgets/custom_dropdown_field.dart';
 
 class LotOutwardScreen extends StatefulWidget {
@@ -46,10 +51,21 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   bool _isSaved = false;
   bool _isSaving = false;
 
+  XFile? _lotInchargeSignature;
+  XFile? _authorizedSignature;
+  String? _userRole;
+  bool _isScanned = false;
+
   @override
   void initState() {
     super.initState();
+    _loadUserRole();
     _loadInitialData();
+  }
+
+  Future<void> _loadUserRole() async {
+    final role = await StorageService().getRole();
+    setState(() => _userRole = role);
   }
 
   Future<void> _loadInitialData() async {
@@ -97,6 +113,18 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     }
   }
 
+  Future<void> _onLotNameChanged(String? val) async {
+    setState(() {
+      _selectedLotName = val;
+      _selectedLotNo = null;
+      _availableSets = [];
+      _selectedSets.clear();
+    });
+    if (val != null && _selectedDia != null) {
+      await _fetchFifoRecommendation();
+    }
+  }
+
   Future<void> _onDiaChanged(String? val) async {
     setState(() {
       _selectedDia = val;
@@ -108,6 +136,31 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     if (val != null) {
       final lots = await _api.getLotsFifo(dia: val);
       setState(() => _lotNos = lots);
+
+      if (_selectedLotName != null) {
+        await _fetchFifoRecommendation();
+      }
+    }
+  }
+
+  Future<void> _fetchFifoRecommendation() async {
+    if (_selectedLotName == null || _selectedDia == null) return;
+
+    try {
+      final rec = await _api.getFifoRecommendation(
+        _selectedLotName!,
+        _selectedDia!,
+      );
+      if (rec != null) {
+        final recLotNo = rec['lotNo'].toString();
+        // If the lot is not in current list, add it
+        if (!_lotNos.contains(recLotNo)) {
+          setState(() => _lotNos.add(recLotNo));
+        }
+        await _onLotNoChanged(recLotNo);
+      }
+    } catch (e) {
+      debugPrint('FIFO Error: $e');
     }
   }
 
@@ -146,6 +199,232 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         });
       }
     }
+  }
+
+  Future<void> _scanSticker() async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Scan Inward Sticker',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: MobileScanner(
+                onDetect: (capture) {
+                  final List<Barcode> barcodes = capture.barcodes;
+                  if (barcodes.isNotEmpty) {
+                    final String code = barcodes.first.displayValue ?? '';
+                    if (code.isNotEmpty) {
+                      Navigator.pop(ctx, code);
+                    }
+                  }
+                },
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Text(
+                'Align the QR code within the frame to scan',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      _processScannedCode(result);
+    }
+  }
+
+  void _processScannedCode(String code) {
+    try {
+      final lines = code.split('\n');
+      String? lotNo, lotName, dia, colour, setNo, weight;
+
+      for (var line in lines) {
+        final clean = line.trim();
+        if (clean.startsWith('LOT:'))
+          lotNo = clean.replaceFirst('LOT:', '').trim();
+        else if (clean.startsWith('NAME:'))
+          lotName = clean.replaceFirst('NAME:', '').trim();
+        else if (clean.startsWith('DIA:'))
+          dia = clean.replaceFirst('DIA:', '').trim();
+        else if (clean.startsWith('COL:'))
+          colour = clean.replaceFirst('COL:', '').trim();
+        else if (clean.startsWith('SET:'))
+          setNo = clean.replaceFirst('SET:', '').trim();
+        else if (clean.startsWith('WT:'))
+          weight = clean.replaceFirst('WT:', '').replaceAll('kg', '').trim();
+      }
+
+      if (lotNo == null || dia == null || setNo == null) {
+        _showError(
+          'Invalid QR Code format. Please scan a valid Inward Sticker.',
+        );
+        return;
+      }
+
+      _autoFillFromScan(lotNo, lotName, dia, colour, setNo, weight);
+    } catch (e) {
+      _showError('Failed to parse scan: $e');
+    }
+  }
+
+  Future<void> _autoFillFromScan(
+    String lotNo,
+    String? lotName,
+    String dia,
+    String? colour,
+    String setNo,
+    String? weight,
+  ) async {
+    // 1. Check if DIA exists
+    if (!_dias.contains(dia)) {
+      _showError('DIA $dia not found in master list');
+      return;
+    }
+
+    // 2. Set DIA and Load Lots
+    await _onDiaChanged(dia);
+
+    // 3. Set Lot Name if provided
+    if (lotName != null && _lotNames.contains(lotName)) {
+      setState(() => _selectedLotName = lotName);
+    }
+
+    // 4. Check if Lot No exists for this DIA
+    if (!_lotNos.contains(lotNo)) {
+      _showError('Lot No $lotNo is not available for DIA $dia');
+      return;
+    }
+
+    // 5. Select Lot No and Load Balanced Sets
+    await _onLotNoChanged(lotNo);
+
+    // 6. Check if Set No is in available stock
+    final bool setAvailable = _availableSets.any(
+      (s) => s['set_no'].toString() == setNo,
+    );
+
+    if (setAvailable) {
+      // Check if already selected
+      final isAlreadySelected = _selectedSets.any(
+        (s) => s['set_no'].toString() == setNo,
+      );
+      if (isAlreadySelected) {
+        _showError('Set $setNo is already selected');
+        return;
+      }
+
+      _toggleSetSelection(setNo, true);
+      setState(() => _isScanned = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully scanned and added Set $setNo ($colour)'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      _showError(
+        'Set $setNo is not available in stock or has already been issued',
+      );
+    }
+  }
+
+  Future<void> _openSignaturePad(Function(XFile?) onPick) async {
+    final XFile? result = await showDialog(
+      context: context,
+      builder: (context) => const SignaturePadDialog(),
+    );
+    if (result != null) {
+      onPick(result);
+    }
+  }
+
+  Widget _buildSigBox(
+    String label,
+    XFile? file,
+    Function(XFile?) onPick, {
+    List<String> allowedRoles = const [],
+  }) {
+    final bool canSign =
+        _userRole != null &&
+        (allowedRoles.isEmpty ||
+            allowedRoles.contains(_userRole) ||
+            _userRole == 'admin');
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            if (canSign) {
+              _openSignaturePad(onPick);
+            } else {
+              _showError('Only ${allowedRoles.join(' or ')} can sign here.');
+            }
+          },
+          child: Container(
+            width: 120,
+            height: 70,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+              color: canSign ? Colors.white : Colors.grey.shade50,
+            ),
+            child: file != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: kIsWeb
+                        ? Image.network(file.path, fit: BoxFit.contain)
+                        : Image.file(File(file.path), fit: BoxFit.contain),
+                  )
+                : const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.edit, color: Colors.grey, size: 24),
+                      Text(
+                        "Sign Here",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 
   void _toggleSetSelection(String setNo, bool selected) {
@@ -204,6 +483,12 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           'set_no': setNo,
           'total_weight': setTotalWeight,
           'colours': colours,
+          'rack_name': setStock.isNotEmpty
+              ? (setStock.first['rack_name'] ?? 'Not Assigned')
+              : 'Not Assigned',
+          'pallet_number': setStock.isNotEmpty
+              ? (setStock.first['pallet_number'] ?? 'Not Assigned')
+              : 'Not Assigned',
         });
       } else {
         _selectedSets.removeWhere((s) => s['set_no'].toString() == setNo);
@@ -306,6 +591,19 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       return;
     }
 
+    if (!_isScanned && kReleaseMode) {
+      // Allow bypass in debug if needed, but strict for user
+      _showError('Please scan the inward sticker to identify the roll');
+      return;
+    }
+
+    if (_lotInchargeSignature == null || _authorizedSignature == null) {
+      _showError(
+        'Mandatory: Both Lot Incharge and Authorized signatures required',
+      );
+      return;
+    }
+
     setState(() {
       _outTime = DateFormat('hh:mm a').format(DateTime.now());
       _isSaving = true;
@@ -341,6 +639,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             },
           )
           .toList(),
+      'lotInchargeSignature': _lotInchargeSignature,
+      'authorizedSignature': _authorizedSignature,
+      'lotInchargeSignTime': DateTime.now().toIso8601String(),
+      'authorizedSignTime': DateTime.now().toIso8601String(),
     };
 
     try {
@@ -362,6 +664,128 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Widget _buildSummarySection() {
+    final colourTotals = _getColourTotals();
+    final totalWeight = _getTotalWeight();
+    final totalRollWeight = _getTotalRollWeight();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'OUTWARD SUMMARY',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...colourTotals.entries.map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            e.key,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Text(
+                          '${e.value.toStringAsFixed(2)} kg',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 24),
+                _buildSummaryRow(
+                  'Overall Weight',
+                  '${totalWeight.toStringAsFixed(2)} kg',
+                  isMain: true,
+                ),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                  'Total Roll Wt',
+                  '${totalRollWeight.toStringAsFixed(2)} kg',
+                ),
+                const SizedBox(height: 4),
+                _buildSummaryRow('Total Sets', '${_selectedSets.length}'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, {bool isMain = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+            fontSize: isMain ? 15 : 13,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: isMain ? 16 : 14,
+            color: isMain ? ColorPalette.primary : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSignatureSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "MANDATORY SIGNATURES",
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildSigBox(
+              "Lot Incharge",
+              _lotInchargeSignature,
+              (f) => setState(() => _lotInchargeSignature = f),
+              allowedRoles: ['lot_inward', 'admin'],
+            ),
+            _buildSigBox(
+              "Authorized",
+              _authorizedSignature,
+              (f) => setState(() => _authorizedSignature = f),
+              allowedRoles: ['authorized', 'admin'],
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildSelectedSetsList() {
@@ -400,6 +824,24 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: ColorPalette.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'RACK: ${set['rack_name']}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'PALLET: ${set['pallet_number']}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade700,
                         ),
                       ),
                       const Spacer(),
@@ -556,6 +998,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(LucideIcons.scan),
+            tooltip: 'Scan Inward Sticker',
+            onPressed: _isSaved ? null : _scanSticker,
+          ),
+          IconButton(
             icon: const Icon(LucideIcons.mic),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -581,6 +1028,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               _buildSelectedSetsList(),
               const SizedBox(height: 24),
               if (_selectedSets.isNotEmpty) _buildSummarySection(),
+              const SizedBox(height: 24),
+              if (_selectedSets.isNotEmpty) _buildSignatureSection(),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
@@ -656,7 +1105,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                     'LOT NAME',
                     _lotNames,
                     _selectedLotName,
-                    (v) => setState(() => _selectedLotName = v),
+                    _onLotNameChanged,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -792,114 +1241,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               ),
             );
           }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSummarySection() {
-    final colourTotals = _getColourTotals();
-    final totalWeight = _getTotalWeight();
-    final totalRollWeight = _getTotalRollWeight();
-
-    return Card(
-      color: Colors.blueGrey.shade50,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(
-                  LucideIcons.listOrdered,
-                  size: 20,
-                  color: ColorPalette.primary,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'OUTWARD SUMMARY',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            // Colour-wise table
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'COLOUR',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'TOTAL WEIGHT',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            ...colourTotals.entries.map(
-              (e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(e.key, style: const TextStyle(fontSize: 14)),
-                    ),
-                    Text(
-                      '${e.value.toStringAsFixed(2)} kg',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 24),
-            // Totals
-            _buildSummaryRow(
-              'Overall Weight',
-              '${totalWeight.toStringAsFixed(2)} kg',
-              isMain: true,
-            ),
-            const SizedBox(height: 4),
-            _buildSummaryRow(
-              'Total Roll Wt',
-              '${totalRollWeight.toStringAsFixed(2)} kg',
-            ),
-            const SizedBox(height: 4),
-            _buildSummaryRow('Total Sets', '${_selectedSets.length}'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value, {bool isMain = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
-            fontSize: isMain ? 15 : 13,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: isMain ? 16 : 14,
-            color: isMain ? ColorPalette.primary : Colors.black87,
-          ),
         ),
       ],
     );

@@ -14,6 +14,7 @@ import '../assessment/item_assignment_list_screen.dart';
 import '../transactions/inward_list_screen.dart';
 import '../transactions/outward_list_screen.dart';
 import '../../widgets/app_drawer.dart';
+import '../reports/godown_stock_report_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -191,6 +192,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
     'total_inward_weight': '0.00',
     'total_outward_weight': '0.00',
     'total_assignments': 0,
+    'low_stock_count': 0,
   };
   String _userName = 'User';
   String _unreadCount = '0';
@@ -212,11 +214,24 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
         _unreadCount = (res['unreadNotificationsCount'] ?? 0).toString();
         _isLoading = false;
       });
+      _fetchStockAlerts();
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _fetchStockAlerts() async {
+    try {
+      final stockData = await _api.getGodownStockReport();
+      final lowStock = stockData
+          .where((d) => d['status'] == 'LOW STOCK')
+          .length;
+      setState(() {
+        _stats['low_stock_count'] = lowStock;
+      });
+    } catch (e) {}
   }
 
   @override
@@ -249,6 +264,10 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _buildStatsGrid(),
+              if (_stats['low_stock_count'] > 0) ...[
+                const SizedBox(height: 24),
+                _buildStockAlertBanner(),
+              ],
               const SizedBox(height: 40),
               _buildRecentInwards(),
               const SizedBox(height: 120),
@@ -424,6 +443,67 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
           color: Colors.purple,
         ),
       ].animate(interval: 50.ms).fadeIn().slideY(begin: 0.1),
+    );
+  }
+
+  Widget _buildStockAlertBanner() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.red.shade100),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              LucideIcons.alertTriangle,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_stats['low_stock_count']} Items Low in Stock',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF991B1B),
+                  ),
+                ),
+                const Text(
+                  'Replenishment required immediately.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              // Navigate to report
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const GodownStockReportScreen(),
+                ),
+              );
+            },
+            child: const Text(
+              'VIEW',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -6,6 +6,7 @@ import 'dropdown_setup_screen.dart';
 import 'item_master_screen.dart';
 import 'party_master_screen.dart';
 import 'color_prediction_screen.dart';
+import 'stock_limit_master_screen.dart';
 
 class MastersDashboard extends StatelessWidget {
   const MastersDashboard({super.key});
@@ -75,6 +76,18 @@ class MastersDashboard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => const ColorPredictionScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _MenuTile(
+            title: 'Stock Limit Setup',
+            subtitle: 'Set Min/Max stock for Lot/DIA',
+            icon: LucideIcons.barChart4,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const StockLimitMasterScreen(),
               ),
             ),
           ),
