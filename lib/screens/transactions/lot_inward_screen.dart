@@ -196,15 +196,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             if (v['gsm'] != null && v['gsm'].toString().isNotEmpty) {
               _colourGsmMap[valStr] = v['gsm'].toString();
             }
-            if (v['image'] != null && v['image'].toString().isNotEmpty) {
-              String imgPath = v['image'].toString();
-              // If it's a relative path (uploads/...), prepend base URL
-              if (!imgPath.startsWith('http') && !imgPath.startsWith('/')) {
-                imgPath = '${ApiConstants.serverUrl}/$imgPath';
+            if (v['photo'] != null && v['photo'].toString().isNotEmpty) {
+              String imgPath = v['photo'].toString();
+              // Normalize image path: if it's a server path (starts with uploads or /uploads), prepend server URL
+              if (!imgPath.startsWith('http')) {
+                if (imgPath.startsWith('/uploads')) {
+                  imgPath = '${ApiConstants.serverUrl}$imgPath';
+                } else if (imgPath.startsWith('uploads')) {
+                  imgPath = '${ApiConstants.serverUrl}/$imgPath';
+                }
               }
-              // If it starts with uploads/, it likely needs base URL without extra slash if base has it, but usually safe to join.
-              // Actually, best to check ApiConstants.
-
               _colourImages[valStr] = imgPath;
               print('DEBUG: Image found for $valStr: $imgPath');
             }
@@ -596,35 +597,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     } else {
       _showError("Failed to Save. Check if all required fields are filled.");
     }
-  }
-
-  void _showPrintStickerDialog(Map<String, dynamic> inwardData) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Saved Successfully"),
-        content: const Text(
-          "Do you want to print stickers for the received rolls?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              // Ask for WhatsApp share after declining print
-              _askToShare(inwardData);
-            },
-            child: const Text("No"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _printStickers(inwardData);
-            },
-            child: const Text("Print Stickers"),
-          ),
-        ],
-      ),
-    );
   }
 
   void _askToShare(Map<String, dynamic> inwardData) {
@@ -2012,52 +1984,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     _buildGridCell(
                       "",
                       120,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildSmallDropdown(
-                              r.colour,
-                              _colours,
-                              (v) => setState(() => r.colour = v),
-                              hint: "Colour",
-                              itemImages: _colourImages,
-                            ),
-                          ),
-                          if (r.colour != null &&
-                              _colourImages.containsKey(r.colour))
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4.0),
-                              child: GestureDetector(
-                                onTap: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctx) => Dialog(
-                                      child: Image.network(
-                                        _colourImages[r.colour]!,
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                    image: DecorationImage(
-                                      image: NetworkImage(
-                                        _colourImages[r.colour]!,
-                                      ),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                      child: _buildSmallDropdown(
+                        r.colour,
+                        _colours,
+                        (v) => setState(() => r.colour = v),
+                        hint: "Colour",
+                        itemImages: _colourImages,
                       ),
                     ),
                     ...List.generate(sets, (i) {

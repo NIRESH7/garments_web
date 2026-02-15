@@ -10,6 +10,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../dialogs/signature_pad_dialog.dart';
 import '../../core/storage/storage_service.dart';
 import '../../widgets/custom_dropdown_field.dart';
+import '../../core/constants/api_constants.dart';
 
 class LotOutwardScreen extends StatefulWidget {
   const LotOutwardScreen({super.key});
@@ -46,6 +47,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
   List<String> _allColours = [];
   List<String> _currentLotColours = [];
+  Map<String, String> _colourImages = {};
 
   bool _isLoading = true;
   bool _isSaved = false;
@@ -98,6 +100,17 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             String? val;
             if (v is Map) {
               val = (v['name'] ?? v['value'] ?? '').toString();
+              if (v['photo'] != null && v['photo'].toString().isNotEmpty) {
+                String imgPath = v['photo'].toString();
+                if (!imgPath.startsWith('http')) {
+                  if (imgPath.startsWith('/uploads')) {
+                    imgPath = '${ApiConstants.serverUrl}$imgPath';
+                  } else if (imgPath.startsWith('uploads')) {
+                    imgPath = '${ApiConstants.serverUrl}/$imgPath';
+                  }
+                }
+                _colourImages[val] = imgPath;
+              }
             } else if (v != null) {
               val = v.toString();
             }
@@ -884,12 +897,37 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                                 vertical: 4,
                                 horizontal: 2,
                               ),
-                              child: Text(
-                                col['colour'],
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              child: Row(
+                                children: [
+                                  if (_colourImages.containsKey(col['colour']))
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      margin: const EdgeInsets.only(right: 6),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        image: DecorationImage(
+                                          image: NetworkImage(
+                                            _colourImages[col['colour']]!,
+                                          ),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      col['colour'],
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             _buildTableInput(col['weight'].toString(), (v) {
