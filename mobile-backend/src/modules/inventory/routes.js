@@ -12,6 +12,8 @@ import {
     getLotAgingReport,
     getInwardColours,
     getFifoRecommendation,
+    updateInwardComplaint,
+    getQualityAuditReport,
 } from './controller.js';
 
 import {
@@ -20,6 +22,7 @@ import {
     getMonthlySummaryReport,
     getClientFormatReport,
     getGodownStockReport,
+    getShadeCardReport,
 } from './reportController.js';
 
 import { protect } from '../../middleware/authMiddleware.js';
@@ -51,6 +54,7 @@ router.get('/inward/balanced-sets', protect, getBalancedSets);
 router.get('/inward/generate-no', protect, generateInwardNumber);
 router.get('/inward/colours', protect, getInwardColours);
 router.get('/inward/fifo-recommendation', protect, getFifoRecommendation);
+router.put('/inward/:id/complaint-solution', protect, updateInwardComplaint);
 
 // Outward
 router.route('/outward')
@@ -66,8 +70,10 @@ router.get('/outward/generate-dc', protect, generateDcNumber);
 router.get('/reports/client', getClientFormatReport);
 router.get('/reports/godown-stock', getGodownStockReport);
 router.get('/reports/aging', protect, getLotAgingReport);
+router.get('/reports/quality-audit', protect, getQualityAuditReport);
 router.get('/reports/overview', protect, getOverviewReport);
 router.get('/reports/inward-outward', protect, getInwardOutwardReport);
 router.get('/reports/monthly', protect, getMonthlySummaryReport);
+router.get('/reports/shade-card', protect, getShadeCardReport);
 
 export default router;

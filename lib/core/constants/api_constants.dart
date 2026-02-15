@@ -1,7 +1,7 @@
 class ApiConstants {
   static const String baseUrl =
-      'http://localhost:5001/api'; // Update to your production IP
-  static const String serverUrl = 'http://localhost:5001';
+      'http://10.100.247.146:5001/api'; // Update to your production IP
+  static const String serverUrl = 'http://10.100.247.146:5001';
 
   // Auth
   static const String login = '/auth/login';
@@ -24,6 +24,7 @@ class ApiConstants {
   static const String inward = '/inventory/inward';
   static const String fifoRecommendation =
       '/inventory/inward/fifo-recommendation';
+  static const String qualityAuditReport = '/inventory/reports/quality-audit';
   static const String outward = '/inventory/outward';
   static const String agingReport = '/inventory/reports/aging';
   static const String overviewReport = '/inventory/reports/overview';
@@ -31,6 +32,7 @@ class ApiConstants {
   static const String monthlyReport = '/inventory/reports/monthly';
   static const String clientReport = '/inventory/reports/client';
   static const String godownStockReport = '/inventory/reports/godown-stock';
+  static const String shadeCardReport = '/inventory/reports/shade-card';
 
   // Production
   static const String assignments = '/production/assignments';
@@ -40,6 +42,9 @@ class ApiConstants {
 
   static const String colorPredict = '/color-predict';
   static const String colorPredictFromImage = '/color-predict/from-image';
+
+  // Notifications
+  static const String notifications = '/notifications';
 
   // Upload
   static const String upload = '/upload';

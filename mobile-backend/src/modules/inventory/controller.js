@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import Inward from './inwardModel.js';
 import Outward from './outwardModel.js';
+import Notification from '../notification/model.js';
 
 // --- INWARD HANDLERS ---
 
@@ -179,6 +180,15 @@ const createInward = asyncHandler(async (req, res) => {
 
             await inward.save();
             console.log("Merge complete and saved.");
+
+            // Create notification
+            await Notification.create({
+                user: req.user._id,
+                title: 'Inward Updated',
+                body: `Inward Lot ${cleanLotNo} (${cleanLotName}) updated with new entries.`,
+                type: 'info'
+            }).catch(err => console.error('Notification failed:', err));
+
             return res.status(201).json(inward); // Return 201 for Flutter app success
         }
 
@@ -227,6 +237,14 @@ const createInward = asyncHandler(async (req, res) => {
             authorizedSignature: finalAuthorizedSignature,
             mdSignature: finalMdSignature,
         });
+
+        // Create notification
+        await Notification.create({
+            user: req.user._id,
+            title: 'New Inward Created',
+            body: `New Inward processed for Lot ${lotNo} (${lotName}).`,
+            type: 'success'
+        }).catch(err => console.error('Notification failed:', err));
 
         res.status(201).json(inward);
     } catch (error) {
@@ -549,6 +567,14 @@ const createOutward = asyncHandler(async (req, res) => {
         authorizedSignTime: authorizedSignTime,
     });
 
+    // Create notification
+    await Notification.create({
+        user: req.user._id,
+        title: 'New Outward Created',
+        body: `Outward entry processed for DC ${dcNo} (Lot: ${lotNo}).`,
+        type: 'success'
+    }).catch(err => console.error('Notification failed:', err));
+
     res.status(201).json(outward);
 });
 
@@ -667,6 +693,49 @@ const getLotAgingReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
+// @desc    Update complaint solution for Inward
+// @route   PUT /api/inventory/inward/:id/complaint-solution
+const updateInwardComplaint = asyncHandler(async (req, res) => {
+    const inward = await Inward.findById(req.params.id);
+
+    if (inward) {
+        inward.complaintReply = req.body.complaintReply || inward.complaintReply;
+        inward.complaintResolution = req.body.complaintResolution || inward.complaintResolution;
+        inward.complaintFindDate = req.body.complaintFindDate || inward.complaintFindDate;
+        inward.complaintCompletionDate = req.body.complaintCompletionDate || inward.complaintCompletionDate;
+        inward.complaintArrestLotNo = req.body.complaintArrestLotNo || inward.complaintArrestLotNo;
+        inward.isComplaintCleared = req.body.isComplaintCleared !== undefined ? req.body.isComplaintCleared : inward.isComplaintCleared;
+
+        const updatedInward = await inward.save();
+        res.json(updatedInward);
+    } else {
+        res.status(404);
+        throw new Error('Inward not found');
+    }
+});
+
+// @desc    Get Quality & Complaint Audit Report
+// @route   GET /api/inventory/reports/quality-audit
+const getQualityAuditReport = asyncHandler(async (req, res) => {
+    const { lotNo, isCleared } = req.query;
+
+    let query = {
+        $or: [
+            { qualityStatus: 'Not OK' },
+            { gsmStatus: 'Not OK' },
+            { shadeStatus: 'Not OK' },
+            { washingStatus: 'Not OK' },
+            { complaintText: { $exists: true, $ne: '' } }
+        ]
+    };
+
+    if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
+    if (isCleared !== undefined) query.isComplaintCleared = isCleared === 'true';
+
+    const report = await Inward.find(query).sort({ inwardDate: -1 });
+    res.json(report);
+});
+
 export {
     createInward,
     getInwards,
@@ -679,4 +748,6 @@ export {
     getLotAgingReport,
     getInwardColours,
     getFifoRecommendation,
+    updateInwardComplaint,
+    getQualityAuditReport,
 };

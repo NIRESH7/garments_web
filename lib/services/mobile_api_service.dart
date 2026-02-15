@@ -32,9 +32,22 @@ class MobileApiService {
   }
 
   // --- Home ---
-  Future<Map<String, dynamic>> getHomeDashboard() async {
+  Future<Map<String, dynamic>> getHomeDashboard({
+    String? startDate,
+    String? endDate,
+    String? lotName,
+    String? dia,
+  }) async {
     try {
-      final response = await _client.get(ApiConstants.home);
+      final response = await _client.get(
+        ApiConstants.home,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (lotName != null) 'lotName': lotName,
+          if (dia != null) 'dia': dia,
+        },
+      );
       return response.data;
     } catch (e) {
       rethrow;
@@ -265,6 +278,40 @@ class MobileApiService {
     }
   }
 
+  Future<bool> updateComplaintSolution(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.inward}/$id/complaint-solution',
+        data: data,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getQualityAuditReport({
+    String? lotNo,
+    bool? isCleared,
+  }) async {
+    try {
+      final Map<String, dynamic> params = {};
+      if (lotNo != null) params['lotNo'] = lotNo;
+      if (isCleared != null) params['isCleared'] = isCleared.toString();
+
+      final response = await _client.get(
+        ApiConstants.qualityAuditReport,
+        queryParameters: params,
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<List<dynamic>> getClientFormatReport({String? fromParty}) async {
     try {
       final response = await _client.get(
@@ -289,6 +336,15 @@ class MobileApiService {
           if (dia != null) 'dia': dia,
         },
       );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getShadeCardReport() async {
+    try {
+      final response = await _client.get(ApiConstants.shadeCardReport);
       return response.data;
     } catch (e) {
       return [];
@@ -630,6 +686,35 @@ class MobileApiService {
     } catch (e) {
       print('Color detect error: $e');
       return null;
+    }
+  }
+
+  // --- Notifications ---
+  Future<List<dynamic>> getNotifications() async {
+    try {
+      final response = await _client.get(ApiConstants.notifications);
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> markNotificationAsRead(String id) async {
+    try {
+      final response = await _client.put('${ApiConstants.notifications}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> clearAllNotifications() async {
+    try {
+      // Assuming a bulk delete or mark all as read endpoint
+      final response = await _client.put('${ApiConstants.notifications}/clear');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
     }
   }
 }

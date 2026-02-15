@@ -2,6 +2,8 @@ import asyncHandler from 'express-async-handler';
 import Inward from './inwardModel.js';
 import Outward from './outwardModel.js';
 import StockLimit from '../master/stockLimitModel.js';
+import Category from '../master/categoryModel.js';
+import ItemGroup from '../master/itemGroupModel.js';
 
 // @desc    Get Overview Report (Stock Overview)
 // @route   GET /api/inventory/reports/overview
@@ -339,10 +341,42 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
     res.json(filteredReport);
 });
 
+// @desc    Get Shade Card Report (Grouped by Item Group)
+// @route   GET /api/inventory/reports/shade-card
+const getShadeCardReport = asyncHandler(async (req, res) => {
+    const itemGroups = await ItemGroup.find({});
+    const categories = await Category.find({});
+
+    // Find the 'Colour' category
+    const colourCategory = categories.find(c => c.name.toLowerCase().includes('colour'));
+    const colorValues = colourCategory ? colourCategory.values : [];
+
+    const report = itemGroups.map(group => {
+        const enrichedColours = (group.colours || []).map(colourName => {
+            const detail = colorValues.find(v => v.name.toLowerCase() === colourName.toLowerCase());
+            return {
+                name: colourName,
+                gsm: detail ? detail.gsm : group.gsm, // Priority to category detail gsm if exists
+                photo: detail ? detail.photo : null
+            };
+        });
+
+        return {
+            groupName: group.groupName,
+            items: group.itemNames,
+            gsm: group.gsm,
+            colours: enrichedColours
+        };
+    });
+
+    res.json(report);
+});
+
 export {
     getOverviewReport,
     getInwardOutwardReport,
     getMonthlySummaryReport,
     getClientFormatReport,
-    getGodownStockReport
+    getGodownStockReport,
+    getShadeCardReport
 };

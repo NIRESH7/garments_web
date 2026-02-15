@@ -1,0 +1,224 @@
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import '../core/constants/api_constants.dart';
+
+class OutwardPrintService {
+  Future<void> printOutwardReport(Map<String, dynamic> outward) async {
+    final pdf = await _buildPdf(outward);
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Lot_Outward_${outward['dcNo']}',
+    );
+  }
+
+  Future<pw.MemoryImage?> _loadNetImage(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    try {
+      String url = path;
+      if (!url.startsWith('http')) {
+        url = url.startsWith('/') ? url.substring(1) : url;
+        url = '${ApiConstants.serverUrl}/$url';
+      }
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (e) {
+      print('Error loading image for Outward PDF: $e');
+    }
+    return null;
+  }
+
+  Future<pw.Document> _buildPdf(Map<String, dynamic> outward) async {
+    final pdf = pw.Document();
+
+    final font = pw.Font.helvetica();
+    final boldFont = pw.Font.helveticaBold();
+
+    // Fetch signatures
+    final inchargeImg = await _loadNetImage(
+      outward['lotInchargeSignature']?.toString(),
+    );
+    final authImg = await _loadNetImage(
+      outward['authorizedSignature']?.toString(),
+    );
+
+    final items = outward['items'] as List<dynamic>? ?? [];
+
+    // Process items for table: Aggregate by color across all sets
+    final Map<String, Map<String, dynamic>> colorSummary = {};
+    double totalWeight = 0;
+    int totalRolls = 0;
+
+    for (var set in items) {
+      final colours = set['colours'] as List<dynamic>? ?? [];
+      for (var col in colours) {
+        final name = col['colour']?.toString() ?? 'N/A';
+        final wt = (col['weight'] as num?)?.toDouble() ?? 0;
+        final r = (col['no_of_rolls'] as num?)?.toInt() ?? 0;
+
+        if (!colorSummary.containsKey(name)) {
+          colorSummary[name] = {'colour': name, 'weight': 0.0, 'rolls': 0};
+        }
+        colorSummary[name]!['weight'] += wt;
+        colorSummary[name]!['rolls'] += r;
+        totalWeight += wt;
+        totalRolls += r;
+      }
+    }
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildHeader(outward, boldFont),
+              pw.SizedBox(height: 20),
+              _buildTable(
+                colorSummary.values.toList(),
+                totalWeight,
+                totalRolls,
+                font,
+                boldFont,
+              ),
+              pw.SizedBox(height: 30),
+              // Signatures Section
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  _buildSigBox('Lot Incharge', inchargeImg, boldFont),
+                  _buildSigBox('Authorized', authImg, boldFont),
+                ],
+              ),
+              pw.Spacer(),
+              _buildFooter(boldFont),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _buildHeader(Map<String, dynamic> outward, pw.Font boldFont) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'LOT OUTWARD REPORT (DC)',
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 18,
+                color: PdfColors.orange,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text('Party: ${outward['partyName'] ?? 'N/A'}'),
+            pw.Text('Lot Name: ${outward['lotName'] ?? 'N/A'}'),
+            pw.Text('Lot No: ${outward['lotNo'] ?? 'N/A'}'),
+            pw.Text('DIA: ${outward['dia'] ?? 'N/A'}'),
+          ],
+        ),
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              'DC No: ${outward['dcNo'] ?? 'N/A'}',
+              style: pw.TextStyle(font: boldFont, fontSize: 14),
+            ),
+            pw.Text(
+              'Date: ${outward['dateTime'] != null ? DateFormat('dd-MM-yyyy').format(DateTime.parse(outward['dateTime'])) : 'N/A'}',
+            ),
+            pw.Text('Vehicle: ${outward['vehicleNo'] ?? 'N/A'}'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildTable(
+    List<Map<String, dynamic>> summary,
+    double totalWt,
+    int totalRolls,
+    pw.Font font,
+    pw.Font boldFont,
+  ) {
+    return pw.Table.fromTextArray(
+      headers: ['Colour', 'Total Rolls', 'Total Weight (Kg)'],
+      data: [
+        ...summary.map(
+          (row) => [
+            row['colour'],
+            row['rolls'].toString(),
+            row['weight'].toStringAsFixed(2),
+          ],
+        ),
+        // Total Row
+        ['TOTAL', totalRolls.toString(), totalWt.toStringAsFixed(2)],
+      ],
+      headerStyle: pw.TextStyle(
+        font: boldFont,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.orange),
+      cellStyle: pw.TextStyle(font: font, fontSize: 10),
+      cellAlignment: pw.Alignment.center,
+      border: pw.TableBorder.all(color: PdfColors.grey400),
+    );
+  }
+
+  pw.Widget _buildSigBox(String label, pw.MemoryImage? img, pw.Font boldFont) {
+    return pw.Column(
+      children: [
+        pw.Container(
+          height: 60,
+          width: 100,
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+          ),
+          child: img != null
+              ? pw.Image(img, fit: pw.BoxFit.contain)
+              : pw.Center(
+                  child: pw.Text(
+                    'Missing',
+                    style: const pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.grey,
+                    ),
+                  ),
+                ),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 10)),
+      ],
+    );
+  }
+
+  pw.Widget _buildFooter(pw.Font boldFont) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(
+          'Generated by Garments App',
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
+        ),
+        pw.Text(
+          'Software Copy - Authorized Signature',
+          style: pw.TextStyle(font: boldFont, fontSize: 8),
+        ),
+      ],
+    );
+  }
+}

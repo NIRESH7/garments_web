@@ -48,6 +48,13 @@ const inwardSchema = mongoose.Schema(
         storageDetails: {
             type: Object, // Placeholder for the second page of the form
         },
+        // Complaint Solution Fields
+        complaintReply: { type: String },
+        complaintResolution: { type: String }, // ACCEPT or RETURN
+        complaintFindDate: { type: Date },
+        complaintCompletionDate: { type: Date },
+        complaintArrestLotNo: { type: String },
+        isComplaintCleared: { type: Boolean, default: false },
     },
     {
         timestamps: true,

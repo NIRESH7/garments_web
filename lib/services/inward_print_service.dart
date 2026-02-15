@@ -3,7 +3,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import 'inward_data_processor.dart';
+import '../core/constants/api_constants.dart';
 
 class InwardPrintService {
   Future<Uint8List> generatePdfBytes(Map<String, dynamic> inward) async {
@@ -20,6 +22,24 @@ class InwardPrintService {
     );
   }
 
+  Future<pw.MemoryImage?> _loadNetImage(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    try {
+      String url = path;
+      if (!url.startsWith('http')) {
+        url = url.startsWith('/') ? url.substring(1) : url;
+        url = '${ApiConstants.serverUrl}/$url';
+      }
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (e) {
+      print('Error loading image for PDF: $e');
+    }
+    return null;
+  }
+
   Future<pw.Document> _buildPdf(Map<String, dynamic> inward) async {
     final pdf = pw.Document();
 
@@ -31,9 +51,19 @@ class InwardPrintService {
     final rows = data['rows'] as List<Map<String, dynamic>>;
     final totals = data['totals'] as Map<String, dynamic>;
 
+    // Fetch signatures
+    final inchargeImg = await _loadNetImage(
+      inward['lotInchargeSignature']?.toString(),
+    );
+    final authImg = await _loadNetImage(
+      inward['authorizedSignature']?.toString(),
+    );
+    final mdImg = await _loadNetImage(inward['mdSignature']?.toString());
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -41,6 +71,16 @@ class InwardPrintService {
               _buildHeader(inward, boldFont),
               pw.SizedBox(height: 20),
               _buildTable(dias, rows, totals, font, boldFont),
+              pw.SizedBox(height: 30),
+              // Signatures Section
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  _buildSigBox('Lot Incharge', inchargeImg, boldFont),
+                  _buildSigBox('Authorized', authImg, boldFont),
+                  _buildSigBox('MD', mdImg, boldFont),
+                ],
+              ),
               pw.Spacer(),
               _buildFooter(boldFont),
             ],
@@ -48,8 +88,36 @@ class InwardPrintService {
         },
       ),
     );
-    
+
     return pdf;
+  }
+
+  pw.Widget _buildSigBox(String label, pw.MemoryImage? img, pw.Font boldFont) {
+    return pw.Column(
+      children: [
+        pw.Container(
+          height: 60,
+          width: 100,
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+          ),
+          child: img != null
+              ? pw.Image(img, fit: pw.BoxFit.contain)
+              : pw.Center(
+                  child: pw.Text(
+                    'Missing',
+                    style: const pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.grey,
+                    ),
+                  ),
+                ),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 10)),
+      ],
+    );
   }
 
   pw.Widget _buildHeader(Map<String, dynamic> inward, pw.Font boldFont) {
@@ -70,7 +138,9 @@ class InwardPrintService {
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
-            pw.Text('Date: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(inward['inwardDate']))}'),
+            pw.Text(
+              'Date: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(inward['inwardDate']))}',
+            ),
             pw.Text('Lot No: ${inward['lotNo']}'),
             pw.Text('Ref/DC: ${inward['partyDcNo'] ?? 'N/A'}'),
           ],
@@ -86,14 +156,6 @@ class InwardPrintService {
     pw.Font font,
     pw.Font boldFont,
   ) {
-    // Headers: Colour, [Dia 1], [Dia 2]..., Total Rolls, Total Weight
-    // For each Dia column, we might want sub-columns (Rolls | Wt) or just stack them?
-    // The user sample shows distinct columns for each DIA.
-    // Let's assume typical Matrix: 30 DIA, 32 DIA, etc.
-    // Each DIA cell needs to show Rolls & Weight? Or just Weight?
-    // Sample says: "30 DIA", "32 DIA".
-    // Under 30 DIA: "5 / 96.315" (Rolls / Weight).
-    
     final headers = [
       'Colour',
       ...dias.map((d) => '$d DIA'),
@@ -108,9 +170,9 @@ class InwardPrintService {
           return [
             row['colour'],
             ...dias.map((dia) {
-               final cell = row['data'][dia] ?? {'rolls': 0, 'weight': 0.0};
-               if (cell['rolls'] == 0 && cell['weight'] == 0) return '-';
-               return '${cell['rolls']} / ${cell['weight'].toStringAsFixed(2)}';
+              final cell = row['data'][dia] ?? {'rolls': 0, 'weight': 0.0};
+              if (cell['rolls'] == 0 && cell['weight'] == 0) return '-';
+              return '${cell['rolls']} / ${cell['weight'].toStringAsFixed(2)}';
             }),
             row['totalRolls'].toString(),
             row['totalWeight'].toStringAsFixed(2),
@@ -120,12 +182,12 @@ class InwardPrintService {
         [
           'TOTAL',
           ...dias.map((dia) {
-             final t = totals[dia] ?? {'rolls': 0, 'weight': 0.0};
-             return '${t['rolls']} / ${t['weight'].toStringAsFixed(2)}';
+            final t = totals[dia] ?? {'rolls': 0, 'weight': 0.0};
+            return '${t['rolls']} / ${t['weight'].toStringAsFixed(2)}';
           }),
           totals['grandTotalRolls'].toString(),
           totals['grandTotalWeight'].toStringAsFixed(2),
-        ]
+        ],
       ],
       headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -139,10 +201,15 @@ class InwardPrintService {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        pw.Text('Generated by Garments App', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
-        pw.Text('Authorized Signature', style: pw.TextStyle(font: boldFont)),
+        pw.Text(
+          'Generated by Garments App',
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey),
+        ),
+        pw.Text(
+          'Software Copy - Authorized Signature',
+          style: pw.TextStyle(font: boldFont, fontSize: 8),
+        ),
       ],
     );
   }
-
 }

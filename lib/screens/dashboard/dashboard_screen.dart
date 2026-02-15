@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/constants/api_constants.dart';
 import '../../services/mobile_api_service.dart';
 import '../masters/masters_dashboard.dart';
 import '../transactions/lot_inward_screen.dart';
@@ -11,8 +11,7 @@ import '../reports/reports_dashboard.dart';
 import '../auth/login_screen.dart';
 import '../dashboard/notifications_screen.dart';
 import '../assessment/item_assignment_list_screen.dart';
-import '../transactions/inward_list_screen.dart';
-import '../transactions/outward_list_screen.dart';
+import '../transactions/lot_complaint_solution_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
 
@@ -170,6 +169,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
               },
             ),
+            const SizedBox(height: 16),
+            _TransactionTile(
+              title: 'Complaint Solution',
+              subtitle: 'Resolve and clear quality issues',
+              icon: LucideIcons.shieldCheck,
+              color: Colors.blueAccent,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LotComplaintSolutionScreen(),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -186,6 +201,12 @@ class _DynamicDataHomeTab extends StatefulWidget {
 
 class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
   final _api = MobileApiService();
+  Map<String, dynamic> _summary = {
+    'opening': {'weight': '0.00', 'rolls': 0},
+    'inward': {'weight': '0.00', 'rolls': 0},
+    'outward': {'weight': '0.00', 'rolls': 0},
+    'closing': {'weight': '0.00', 'rolls': 0},
+  };
   List<dynamic> _recentInwards = [];
   Map<String, dynamic> _stats = {
     'total_lots': 0,
@@ -195,7 +216,13 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
     'low_stock_count': 0,
   };
   String _userName = 'User';
+  String? _avatarUrl;
   String _unreadCount = '0';
+  DateTime? _startDate = DateTime.now().subtract(const Duration(days: 30));
+  DateTime? _endDate = DateTime.now();
+  String? _lotNameFilter;
+  String? _diaFilter;
+
   bool _isLoading = true;
 
   @override
@@ -205,12 +232,20 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
   }
 
   Future<void> _fetchStats() async {
+    setState(() => _isLoading = true);
     try {
-      final res = await _api.getHomeDashboard();
+      final res = await _api.getHomeDashboard(
+        startDate: _startDate?.toIso8601String(),
+        endDate: _endDate?.toIso8601String(),
+        lotName: _lotNameFilter,
+        dia: _diaFilter,
+      );
       setState(() {
         _stats = res['metrics'] ?? _stats;
+        _summary = res['summary'] ?? _summary;
         _recentInwards = res['recentInwards'] ?? [];
         _userName = res['user']?['name'] ?? 'User';
+        _avatarUrl = res['user']?['avatar'];
         _unreadCount = (res['unreadNotificationsCount'] ?? 0).toString();
         _isLoading = false;
       });
@@ -218,6 +253,9 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
   }
@@ -234,6 +272,24 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
     } catch (e) {}
   }
 
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
+      _fetchStats();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -247,24 +303,45 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
             children: [
               _buildHeader(context),
               const SizedBox(height: 32),
-              const Text(
-                'Inventory Overview',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: ColorPalette.textPrimary,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Stock Summary',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: ColorPalette.textPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.filter),
+                    onPressed: _showFilterDialog,
+                    color: ColorPalette.primary,
+                  ),
+                ],
+              ),
+              if (_startDate != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Chip(
+                    label: Text(
+                      '${_startDate!.day}/${_startDate!.month} - ${_endDate!.day}/${_endDate!.month}',
+                    ),
+                    onDeleted: () {
+                      setState(() {
+                        _startDate = null;
+                        _endDate = null;
+                      });
+                      _fetchStats();
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Real-time metrics from your manufacturing process',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : _buildStatsGrid(),
-              if (_stats['low_stock_count'] > 0) ...[
+                  : _buildStockSummaryGrid(),
+              if ((_stats['low_stock_count'] ?? 0) > 0) ...[
                 const SizedBox(height: 24),
                 _buildStockAlertBanner(),
               ],
@@ -300,11 +377,23 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
                 shape: BoxShape.circle,
                 boxShadow: ColorPalette.softShadow,
               ),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 24,
-                backgroundImage: NetworkImage(
-                  'https://i.pravatar.cc/150?u=deepak',
-                ),
+                backgroundColor: ColorPalette.primary.withOpacity(0.1),
+                backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                    ? NetworkImage(
+                        '${ApiConstants.serverUrl}${_avatarUrl!.startsWith('/') ? '' : '/'}$_avatarUrl',
+                      )
+                    : null,
+                child: _avatarUrl == null || _avatarUrl!.isEmpty
+                    ? Text(
+                        _userName.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: ColorPalette.primary,
+                        ),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(width: 12),
@@ -409,40 +498,102 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
     );
   }
 
-  Widget _buildStatsGrid() {
+  void _showFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Filter Dashboard'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Select Date Range'),
+              trailing: const Icon(LucideIcons.calendar),
+              subtitle: _startDate != null
+                  ? Text(
+                      '${_startDate!.day}/${_startDate!.month} to ${_endDate!.day}/${_endDate!.month}',
+                    )
+                  : null,
+              onTap: () {
+                Navigator.pop(context);
+                _selectDateRange();
+              },
+            ),
+            const Divider(),
+            TextField(
+              decoration: const InputDecoration(labelText: 'Lot Name'),
+              onChanged: (val) => _lotNameFilter = val,
+            ),
+            TextField(
+              decoration: const InputDecoration(labelText: 'DIA'),
+              onChanged: (val) => _diaFilter = val,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _lotNameFilter = null;
+                _diaFilter = null;
+                _startDate = null;
+                _endDate = null;
+              });
+              Navigator.pop(context);
+              _fetchStats();
+            },
+            child: const Text('Reset'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _fetchStats();
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockSummaryGrid() {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
-      childAspectRatio: 1.1,
+      childAspectRatio: 0.9,
       children: [
-        _StatCard(
-          title: 'Total Lots',
-          value: _stats['total_lots'].toString(),
-          icon: LucideIcons.package,
-          color: ColorPalette.primary,
+        _StockCard(
+          title: 'Opening Stock',
+          weight: _summary['opening']['weight'],
+          rolls: _summary['opening']['rolls'],
+          color: Colors.blue,
+          icon: LucideIcons.box,
         ),
-        _StatCard(
-          title: 'Stock Weight',
-          value: '${_stats['total_inward_weight']} Kg',
-          icon: LucideIcons.layers,
+        _StockCard(
+          title: 'Inward',
+          weight: _summary['inward']['weight'],
+          rolls: _summary['inward']['rolls'],
           color: ColorPalette.success,
+          icon: LucideIcons.arrowDownCircle,
         ),
-        _StatCard(
-          title: 'Dispatched',
-          value: '${_stats['total_outward_weight']} Kg',
-          icon: LucideIcons.truck,
-          color: Colors.orange,
+        _StockCard(
+          title: 'Outward',
+          weight: _summary['outward']['weight'],
+          rolls: _summary['outward']['rolls'],
+          color: ColorPalette.error,
+          icon: LucideIcons.arrowUpCircle,
         ),
-        _StatCard(
-          title: 'Assignments',
-          value: _stats['total_assignments'].toString(),
-          icon: LucideIcons.clipboardCheck,
-          color: Colors.purple,
+        _StockCard(
+          title: 'Closing Stock',
+          weight: _summary['closing']['weight'],
+          rolls: _summary['closing']['rolls'],
+          color: Colors.indigo,
+          icon: LucideIcons.layers,
         ),
-      ].animate(interval: 50.ms).fadeIn().slideY(begin: 0.1),
+      ],
     );
   }
 
@@ -474,7 +625,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${_stats['low_stock_count']} Items Low in Stock',
+                  '${_stats['low_stock_count'] ?? 0} Items Low in Stock',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF991B1B),
@@ -581,59 +732,85 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String title, value;
-  final IconData icon;
+class _StockCard extends StatelessWidget {
+  final String title;
+  final dynamic weight;
+  final dynamic rolls;
   final Color color;
-  const _StatCard({
+  final IconData icon;
+
+  const _StockCard({
     required this.title,
-    required this.value,
-    required this.icon,
+    required this.weight,
+    required this.rolls,
     required this.color,
+    required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: ColorPalette.softShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: ColorPalette.textPrimary,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Icon(icon, color: color, size: 18),
               ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  title.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade400,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
+          ),
+          const Spacer(),
+          Text(
+            '$weight Kg',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: ColorPalette.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$rolls Rolls',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

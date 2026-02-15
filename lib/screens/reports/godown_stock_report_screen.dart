@@ -6,9 +6,7 @@ import '../../widgets/custom_dropdown_field.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
-import 'dart:typed_data';
 
 class GodownStockReportScreen extends StatefulWidget {
   const GodownStockReportScreen({super.key});

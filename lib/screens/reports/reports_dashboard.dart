@@ -8,6 +8,8 @@ import 'monthly_summary_report.dart';
 import 'format_reports_screen.dart';
 import 'client_format_report.dart';
 import 'godown_stock_report_screen.dart';
+import 'quality_audit_report_screen.dart';
+import 'shade_card_report_screen.dart';
 
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
@@ -20,6 +22,19 @@ class ReportsDashboard extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         children: [
           _ReportCard(
+            title: 'Shade Card Module',
+            subtitle: 'Lot & Item grouped color cards',
+            icon: LucideIcons.palette,
+            color: Colors.indigo,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ShadeCardReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
             title: 'Client Format Report',
             subtitle: 'Professional stock status summary',
             icon: LucideIcons.fileText,
@@ -28,6 +43,19 @@ class ReportsDashboard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => const ClientFormatReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Quality Audit & Complaints',
+            subtitle: 'Pictures and signatures of lot issues',
+            icon: LucideIcons.checkCircle2,
+            color: Colors.red.shade700,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const QualityAuditReportScreen(),
               ),
             ),
           ),
