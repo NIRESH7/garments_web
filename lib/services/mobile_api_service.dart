@@ -289,7 +289,7 @@ class MobileApiService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      return false;
+      throw e;
     }
   }
 

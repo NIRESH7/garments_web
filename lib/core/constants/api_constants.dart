@@ -1,7 +1,7 @@
 class ApiConstants {
   static const String baseUrl =
-      'http://10.100.247.146:5001/api'; // Update to your production IP
-  static const String serverUrl = 'http://10.100.247.146:5001';
+      'http://localhost:5001/api'; // Update to your production IP
+  static const String serverUrl = 'http://localhost:5001';
 
   // Auth
   static const String login = '/auth/login';

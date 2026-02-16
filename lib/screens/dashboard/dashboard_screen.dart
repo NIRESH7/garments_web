@@ -111,14 +111,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _showTransactionsMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          shrinkWrap: true,
           children: [
             Container(
               width: 40,

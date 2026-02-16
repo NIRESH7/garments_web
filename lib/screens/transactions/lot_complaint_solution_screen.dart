@@ -57,9 +57,14 @@ class _LotComplaintSolutionScreenState
 
           if (match['complaintFindDate'] != null) {
             _findDate = DateTime.parse(match['complaintFindDate']);
+          } else {
+            _findDate = DateTime.now();
           }
+          
           if (match['complaintCompletionDate'] != null) {
             _completionDate = DateTime.parse(match['complaintCompletionDate']);
+          } else {
+            _completionDate = DateTime.now();
           }
         });
       } else {
@@ -101,6 +106,16 @@ class _LotComplaintSolutionScreenState
             content: Text('Complaint solution saved successfully'),
           ),
         );
+        setState(() {
+          _foundInward = null;
+          _lotNoController.clear();
+          _replyController.clear();
+          _arrestLotController.clear();
+          _resolution = null;
+          _isCleared = false;
+          _findDate = null;
+          _completionDate = null;
+        });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to save solution')),
