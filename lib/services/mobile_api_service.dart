@@ -599,6 +599,18 @@ class MobileApiService {
     }
   }
 
+  Future<List<dynamic>> getLotDetails(String lotName, String lotNo) async {
+    try {
+      final response = await _client.get(
+        '${ApiConstants.inward}/lot-details',
+        queryParameters: {'lotName': lotName, 'lotNo': lotNo},
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>?> getPartyDetails(String name) async {
     try {
       final parties = await getParties();

@@ -93,6 +93,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _inTime = DateFormat('hh:mm a').format(DateTime.now());
     _loadUserRole();
     _loadMasterData();
+    
+    // Add listener for Lot Number to check for existing lot
+    _lotNumberController.addListener(() {
+      // Debounce could be added here if needed, but for now direct call on loose focus or simple delay if typing fast?
+      // Actually, let's just call it. Backend calls are cheap enough or user pauses.
+      // Better: only call if length > 0.
+      if (_lotNumberController.text.isNotEmpty && _selectedLotName != null) {
+         // To avoid too many calls, maybe we can rely on focus node or just simple debouncing?
+         // For simplicity now, let's call it.
+         _checkExistingLot();
+      }
+    });
   }
 
   Future<void> _loadUserRole() async {
@@ -253,6 +265,50 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
+  Future<void> _checkExistingLot() async {
+    final name = _selectedLotName;
+    final no = _lotNumberController.text.trim();
+
+    if (name != null && name.isNotEmpty && no.isNotEmpty) {
+      // Don't clear rows immediately, wait for API response
+      // But if we are fundamentally changing lot, we might want to?
+      // User case: "First time receive 5 colors... After 2 days same lot... DIA details automatic ah varum"
+      // This implies we should PRE-FILL the rows with the DIAs from the previous lot.
+      
+      try {
+        final details = await _api.getLotDetails(name, no);
+        if (details.isNotEmpty) {
+          setState(() {
+            _rows.clear();
+            for (var d in details) {
+              final row = InwardRow();
+              row.dia = d['dia'];
+              // Don't set current rec/rolls, only previous
+              row.prevRecRolls = (d['existingRecRolls'] as num).toInt();
+              row.prevRecWt = (d['existingRecWt'] as num).toDouble();
+              _rows.add(row);
+            }
+            if (_rows.isEmpty) {
+              _rows.add(InwardRow());
+            }
+          });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Found existing lot details. Rows auto-populated.'),
+                backgroundColor: Colors.blue,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        print('Error fetching lot details: $e');
+      }
+    }
+  }
+
   Future<void> _onLotNameChanged(String? val) async {
     setState(() {
       _selectedLotName = val;
@@ -261,6 +317,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
 
     if (val != null) {
+      // Trigger check for existing lot
+      _checkExistingLot();
+      
       final group = await _api.getItemGroupByName(val);
       setState(() {
         if (group != null) {
@@ -1620,22 +1679,50 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           // REC. ROLL
           _buildTableCell(
             width: 100,
-            child: Text(
-              '${row.recRoll}',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF64748B),
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${row.recRoll}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                if (row.prevRecRolls > 0)
+                  Text(
+                    '(Prev: ${row.prevRecRolls})',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
             ),
           ),
           // REC. WT
           _buildTableCell(
             width: 100,
-            child: _buildTableInput(row.recWeight, (v) {
-              row.recWeight = double.tryParse(v) ?? 0;
-              _updateRowMath(row);
-            }),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildTableInput(row.recWeight, (v) {
+                  row.recWeight = double.tryParse(v) ?? 0;
+                  _updateRowMath(row);
+                }),
+                if (row.prevRecWt > 0)
+                  Text(
+                    '(Prev: ${row.prevRecWt.toStringAsFixed(1)})',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
           ),
           // RATE
           _buildTableCell(
@@ -2445,10 +2532,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       try {
         final mainRow = _rows.firstWhere((r) => r.dia == dia);
         double totalRecWeight = 0;
+        int totalRecRolls = 0;
         for (var sRow in diaData.rows) {
           totalRecWeight += sRow.totalWeight;
+          // Count non-empty weights as rolls
+          totalRecRolls += sRow.setWeights.where((w) => w.trim().isNotEmpty).length;
         }
         mainRow.recWeight = totalRecWeight;
+        mainRow.recRoll = totalRecRolls;
         // Also update other math like difference and loss%
         _updateRowMath(mainRow);
       } catch (e) {
@@ -2629,6 +2720,10 @@ class InwardRow {
   double rate = 0;
   double difference = 0;
   double lossPercent = 0;
+  
+  // Previous totals for recurring lots
+  double prevRecWt = 0;
+  int prevRecRolls = 0;
 
   // New Getter for Value
   double get value => rate * recWeight;

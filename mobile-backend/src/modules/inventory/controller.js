@@ -764,6 +764,42 @@ const getQualityAuditReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
+// @desc    Get Lot Details for Auto-population
+// @route   GET /api/inventory/inward/lot-details
+// @access  Private
+const getLotDetails = asyncHandler(async (req, res) => {
+    const { lotName, lotNo } = req.query;
+
+    if (!lotName || !lotNo) {
+        return res.status(400).json({ message: 'Lot Name and Lot No are required' });
+    }
+
+    const cleanLotNo = lotNo.toString().trim();
+    const cleanLotName = lotName.toString().trim();
+
+    // Escape regex special characters just in case
+    const escapedLotNo = cleanLotNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedLotName = cleanLotName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const inward = await Inward.findOne({
+        lotNo: { $regex: new RegExp(`^\\s*${escapedLotNo}\\s*$`, 'i') },
+        lotName: { $regex: new RegExp(`^\\s*${escapedLotName}\\s*$`, 'i') }
+    });
+
+    if (inward) {
+        // Calculate existing totals per DIA
+        const diaDetails = inward.diaEntries.map(entry => ({
+            dia: entry.dia,
+            existingRecRolls: entry.recRoll || entry.roll || 0,
+            existingRecWt: entry.recWt || 0
+        }));
+
+        res.json(diaDetails);
+    } else {
+        res.json([]);
+    }
+});
+
 export {
     createInward,
     getInwards,
@@ -778,4 +814,5 @@ export {
     getFifoRecommendation,
     updateInwardComplaint,
     getQualityAuditReport,
+    getLotDetails,
 };
