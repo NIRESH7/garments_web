@@ -5,6 +5,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const ProviderScope(child: TextileLotManagementApp()));
 }
 

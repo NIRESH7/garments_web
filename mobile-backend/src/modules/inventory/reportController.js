@@ -356,7 +356,7 @@ const getShadeCardReport = asyncHandler(async (req, res) => {
             const detail = colorValues.find(v => v.name.toLowerCase() === colourName.toLowerCase());
             return {
                 name: colourName,
-                gsm: detail ? detail.gsm : group.gsm, // Priority to category detail gsm if exists
+                gsm: (detail && detail.gsm) ? detail.gsm : group.gsm, // Priority to category detail gsm if exists
                 photo: detail ? detail.photo : null
             };
         });

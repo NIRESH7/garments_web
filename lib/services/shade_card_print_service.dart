@@ -10,9 +10,6 @@ class ShadeCardPrintService {
     final font = await PdfGoogleFonts.robotoRegular();
     final boldFont = await PdfGoogleFonts.robotoBold();
 
-    // Grouping everything into one large list for grid layout if needed,
-    // or keep group headers. User said group by Lot Name & Item.
-
     for (var group in groups) {
       final String groupName = group['groupName'] ?? 'No Lot';
       final List items = group['items'] ?? [];
@@ -38,19 +35,24 @@ class ShadeCardPrintService {
 
         colorWidgets.add(
           pw.Container(
-            width: 120,
-            padding: const pw.EdgeInsets.all(8),
+            width: 140, // Slightly wider for better text fit
+            margin: const pw.EdgeInsets.all(5),
             decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey300),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+              color: PdfColors.white,
+              border: pw.Border.all(color: PdfColors.grey200, width: 1),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(12)),
             ),
             child: pw.Column(
+              mainAxisSize: pw.MainAxisSize.min,
               children: [
                 pw.Container(
-                  height: 100,
-                  width: 100,
+                  height: 120,
+                  width: double.infinity,
                   decoration: pw.BoxDecoration(
-                    color: PdfColors.white,
+                    color: PdfColors.grey100,
+                    borderRadius: const pw.BorderRadius.vertical(
+                      top: pw.Radius.circular(11),
+                    ),
                     image: netImage != null
                         ? pw.DecorationImage(
                             image: netImage,
@@ -59,17 +61,54 @@ class ShadeCardPrintService {
                         : null,
                   ),
                   child: netImage == null
-                      ? pw.Center(child: pw.Text('No Image'))
+                      ? pw.Center(
+                          child: pw.Text(
+                            'NO IMAGE',
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: 8,
+                              color: PdfColors.grey400,
+                            ),
+                          ),
+                        )
                       : null,
                 ),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  color['name'] ?? 'Unknown',
-                  style: pw.TextStyle(font: boldFont, fontSize: 10),
-                ),
-                pw.Text(
-                  'GSM: ${color['gsm'] ?? 'N/A'}',
-                  style: pw.TextStyle(font: font, fontSize: 8),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(8),
+                  child: pw.Column(
+                    children: [
+                      pw.Text(
+                        (color['name'] ?? 'Unknown').toUpperCase(),
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          font: boldFont,
+                          fontSize: 10,
+                          color: PdfColors.black,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColors.indigo50,
+                          borderRadius: pw.BorderRadius.all(
+                            pw.Radius.circular(4),
+                          ),
+                        ),
+                        child: pw.Text(
+                          'GSM: ${color['gsm'] ?? group['gsm'] ?? 'N/A'}',
+                          style: pw.TextStyle(
+                            font: font,
+                            fontSize: 9,
+                            color: PdfColors.indigo,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -80,43 +119,115 @@ class ShadeCardPrintService {
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
+          margin: const pw.EdgeInsets.all(40),
           header: (context) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                'SHADE CARD REPORT',
-                style: pw.TextStyle(
-                  font: boldFont,
-                  fontSize: 18,
-                  color: PdfColors.indigo,
-                ),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'SHADE CARD MODULE',
+                        style: pw.TextStyle(
+                          font: boldFont,
+                          fontSize: 24,
+                          color: PdfColors.indigo900,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      pw.Container(
+                        height: 3,
+                        width: 100,
+                        margin: const pw.EdgeInsets.only(top: 4),
+                        color: PdfColors.indigo,
+                      ),
+                    ],
+                  ),
+                  pw.Text(
+                    'DATE: ${DateTime.now().day}-${DateTime.now().month}-${DateTime.now().year}',
+                    style: pw.TextStyle(font: font, fontSize: 10),
+                  ),
+                ],
               ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Lot Name: $groupName',
-                style: pw.TextStyle(font: boldFont, fontSize: 14),
+              pw.SizedBox(height: 30),
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'LOT NAME / GROUP',
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 10,
+                            color: PdfColors.grey700,
+                          ),
+                        ),
+                        pw.Text(
+                          groupName,
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 16,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'MAPPED ITEMS',
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 10,
+                            color: PdfColors.grey700,
+                          ),
+                        ),
+                        pw.Text(
+                          items.isNotEmpty ? items.join(', ') : 'None',
+                          style: pw.TextStyle(font: font, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              pw.Text(
-                'Items: ${items.join(', ')}',
-                style: pw.TextStyle(
-                  font: font,
-                  fontSize: 12,
-                  color: PdfColors.grey700,
-                ),
-              ),
-              pw.SizedBox(height: 16),
-              pw.Divider(color: PdfColors.grey),
-              pw.SizedBox(height: 16),
+              pw.SizedBox(height: 20),
+              pw.Divider(thickness: 1, color: PdfColors.grey300),
+              pw.SizedBox(height: 20),
             ],
           ),
+          footer: (context) => pw.Container(
+            alignment: pw.Alignment.centerRight,
+            padding: const pw.EdgeInsets.only(top: 10),
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey),
+            ),
+          ),
           build: (context) => [
-            pw.Wrap(spacing: 20, runSpacing: 20, children: colorWidgets),
+            pw.Wrap(
+              spacing: 15,
+              runSpacing: 15,
+              alignment: pw.WrapAlignment.start,
+              children: colorWidgets,
+            ),
           ],
         ),
       );
     }
 
-    await Printing.layoutPdf(onLayout: (format) => pdf.save());
+    await Printing.layoutPdf(
+      onLayout: (format) => pdf.save(),
+      name: 'ShadeCardReport_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    );
   }
 }
