@@ -57,6 +57,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   XFile? _authorizedSignature;
   String? _userRole;
   bool _isScanned = false;
+  int _activeSetIndex = 0;
 
   @override
   void initState() {
@@ -443,6 +444,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   void _toggleSetSelection(String setNo, bool selected) {
     setState(() {
       if (selected) {
+        // ... (existing logic to add set)
+        
         // Find existing stock entries for this set
         final setStock = _availableSets
             .where((s) => s['set_no'].toString() == setNo)
@@ -475,6 +478,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             'weight': w,
             'roll_weight': w,
             'no_of_rolls': w > 0 ? 1 : 0,
+            'isChecked': false,
           });
         }
 
@@ -488,6 +492,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               'weight': w,
               'roll_weight': w,
               'no_of_rolls': 1,
+              'isChecked': false,
             });
           }
         }
@@ -503,8 +508,12 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               ? (setStock.first['pallet_number'] ?? 'Not Assigned')
               : 'Not Assigned',
         });
+        _activeSetIndex = _selectedSets.length - 1;
       } else {
         _selectedSets.removeWhere((s) => s['set_no'].toString() == setNo);
+        if (_activeSetIndex >= _selectedSets.length) {
+          _activeSetIndex = _selectedSets.isEmpty ? 0 : _selectedSets.length - 1;
+        }
       }
     });
   }
@@ -512,6 +521,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   void _removeSet(int index) {
     setState(() {
       _selectedSets.removeAt(index);
+      if (_activeSetIndex >= _selectedSets.length) {
+        _activeSetIndex = _selectedSets.isEmpty ? 0 : _selectedSets.length - 1;
+      }
     });
   }
 
@@ -639,6 +651,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             (set) => {
               'set_no': set['set_no'],
               'total_weight': set['total_weight'],
+              'rack_name': set['rack_name'],
+              'pallet_number': set['pallet_number'],
               'colours': (set['colours'] as List)
                   .map(
                     (col) => {
@@ -804,169 +818,236 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   Widget _buildSelectedSetsList() {
     if (_selectedSets.isEmpty) return const SizedBox.shrink();
 
+    // Ensure index is valid
+    if (_activeSetIndex >= _selectedSets.length) {
+      _activeSetIndex = 0;
+    }
+
+    final activeSet = _selectedSets[_activeSetIndex];
+    final colours = activeSet['colours'] as List;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'SELECT SET NO (UNIQUE)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _selectedSets.asMap().entries.map((entry) {
+              final index = entry.key;
+              final set = entry.value;
+              final isSelected = index == _activeSetIndex;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(
+                    'Set ${set['set_no']}',
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  selected: isSelected,
+                  onSelected: (bool selected) {
+                    if (selected) {
+                      setState(() => _activeSetIndex = index);
+                    }
+                  },
+                  selectedColor: Colors.lightBlue.shade100,
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: isSelected
+                          ? Colors.lightBlue
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
         const Text(
           'SELECTED SET DETAILS (EDITABLE)',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 8),
-        ..._selectedSets.asMap().entries.map((setEntry) {
-          final setIndex = setEntry.key;
-          final set = setEntry.value;
-          final List colours = set['colours'];
-
-          return Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.lightBlue.shade50.withOpacity(0.5),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(12),
+              topRight: Radius.circular(12),
             ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  color: ColorPalette.primary.withOpacity(0.05),
-                  child: Row(
-                    children: [
-                      Text(
-                        'SET NO: ${set['set_no']}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: ColorPalette.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        'RACK: ${set['rack_name']}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'PALLET: ${set['pallet_number']}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(
-                          LucideIcons.trash2,
-                          color: Colors.red,
-                          size: 18,
-                        ),
-                        onPressed: () => _removeSet(setIndex),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
+          ),
+          child: Row(
+            children: [
+              Text(
+                'SET NO: ${activeSet['set_no']}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.lightBlue,
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Table(
-                    columnWidths: const {
-                      0: FlexColumnWidth(2.5), // Colour
-                      1: FlexColumnWidth(1.5), // Weight
-                      2: FlexColumnWidth(1.2), // Rolls
-                      3: FlexColumnWidth(1.5), // Roll Wt
-                    },
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'RACK: ${activeSet['rack_name']}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'PALLET: ${activeSet['pallet_number']}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(
+                  LucideIcons.trash2,
+                  color: Colors.red,
+                  size: 18,
+                ),
+                onPressed: () => _removeSet(_activeSetIndex),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+        ),
+        Card(
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(12),
+              bottomRight: Radius.circular(12),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(2.5), // Colour
+                1: FlexColumnWidth(1.5), // Weight
+                2: FlexColumnWidth(1.2), // Rolls
+                3: FlexColumnWidth(1.5), // Roll Wt
+              },
+              children: [
+                const TableRow(
+                  children: [
+                    _TableHeader('COLOUR'),
+                    _TableHeader('WT (kg)'),
+                    _TableHeader('ROLLS'),
+                    _TableHeader('ROLL WT'),
+                  ],
+                ),
+                ...colours.map((col) {
+                  return TableRow(
                     children: [
-                      const TableRow(
-                        children: [
-                          _TableHeader('COLOUR'),
-                          _TableHeader('WT (kg)'),
-                          _TableHeader('ROLLS'),
-                          _TableHeader('ROLL WT'),
-                        ],
-                      ),
-                      ...colours.map((col) {
-                        return TableRow(
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 2,
+                        ),
+                        child: Row(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 4,
-                                horizontal: 2,
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Checkbox(
+                                value: col['isChecked'] ?? false,
+                                onChanged: (val) {
+                                  setState(() {
+                                    col['isChecked'] = val;
+                                  });
+                                },
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: Row(
-                                children: [
-                                  if (_colourImages.containsKey(col['colour']))
-                                    Container(
-                                      width: 20,
-                                      height: 20,
-                                      margin: const EdgeInsets.only(right: 6),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: Colors.grey.shade300,
-                                        ),
-                                        image: DecorationImage(
-                                          image: NetworkImage(
-                                            _colourImages[col['colour']]!,
-                                          ),
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    ),
-                                  Expanded(
-                                    child: Text(
-                                      col['colour'],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (_colourImages.containsKey(col['colour']))
+                              Container(
+                                width: 20,
+                                height: 20,
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
                                   ),
-                                ],
+                                  image: DecorationImage(
+                                    image: NetworkImage(
+                                      _colourImages[col['colour']]!,
+                                    ),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
                               ),
-                            ),
-                            _buildTableInput(col['weight'].toString(), (v) {
-                              setState(() {
-                                double val = double.tryParse(v) ?? 0.0;
-                                col['weight'] = val;
-                                col['roll_weight'] = val; // Same Weight Sync
-                                set['total_weight'] = colours.fold(
-                                  0.0,
-                                  (sum, c) => sum + (c['weight'] as double),
-                                );
-                              });
-                            }),
-                            _buildTableInput(
-                              col['no_of_rolls'].toString(),
-                              (v) => setState(
-                                () => col['no_of_rolls'] = int.tryParse(v) ?? 1,
-                              ),
-                            ),
-                            _buildTableInput(
-                              col['roll_weight'].toString(),
-                              (v) => setState(
-                                () => col['roll_weight'] =
-                                    double.tryParse(v) ?? 0.0,
-                              ),
-                              key: ValueKey(
-                                'rollwt_${col['colour']}_${col['roll_weight']}',
+                            Expanded(
+                              child: Text(
+                                col['colour'],
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
-                        );
+                        ),
+                      ),
+                      _buildTableInput(col['weight'].toString(), (v) {
+                        setState(() {
+                          double val = double.tryParse(v) ?? 0.0;
+                          col['weight'] = val;
+                          col['roll_weight'] = val;
+                          activeSet['total_weight'] = colours.fold(
+                            0.0,
+                            (sum, c) => sum + (c['weight'] as double),
+                          );
+                        });
                       }),
+                      _buildTableInput(
+                        col['no_of_rolls'].toString(),
+                        (v) => setState(
+                          () => col['no_of_rolls'] = int.tryParse(v) ?? 1,
+                        ),
+                      ),
+                      _buildTableInput(
+                        col['roll_weight'].toString(),
+                        (v) => setState(
+                          () => col['roll_weight'] = double.tryParse(v) ?? 0.0,
+                        ),
+                        key: ValueKey(
+                          'rollwt_${col['colour']}_${col['roll_weight']}',
+                        ),
+                      ),
                     ],
-                  ),
-                ),
+                  );
+                }),
               ],
             ),
-          );
-        }),
+          ),
+        ),
       ],
     );
   }

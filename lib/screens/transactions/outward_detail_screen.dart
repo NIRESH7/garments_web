@@ -86,16 +86,21 @@ class OutwardDetailScreen extends StatelessWidget {
 
       for (var set in items) {
         final setNo = set['set_no'] ?? 'N/A';
+        final rack = set['rack_name'] ?? 'N/A';
+        final pallet = set['pallet_number'] ?? 'N/A';
         final colours = set['colours'] as List<dynamic>? ?? [];
+
+        sb.writeln("Set $setNo (Rack: $rack, Pallet: $pallet)");
         for (var col in colours) {
           final cName = col['colour'] ?? 'N/A';
           final cWt = (col['weight'] as num?)?.toDouble() ?? 0.0;
           final cR = (col['no_of_rolls'] as num?)?.toInt() ?? 0;
 
-          sb.writeln("Set $setNo - $cName: $cWt Kg ($cR Rolls)");
+          sb.writeln("  - $cName: $cWt Kg ($cR Rolls)");
           grandTotalWeight += cWt;
           grandTotalRolls += cR;
         }
+        sb.writeln("");
       }
 
       sb.writeln("");
@@ -369,6 +374,28 @@ class OutwardDetailScreen extends StatelessWidget {
                   color: Colors.orange,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                'RACK: ${item['rack_name'] ?? 'Not Assigned'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'PALLET: ${item['pallet_number'] ?? 'Not Assigned'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade600,
                 ),
               ),
             ],

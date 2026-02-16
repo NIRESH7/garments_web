@@ -123,10 +123,10 @@ const createInward = asyncHandler(async (req, res) => {
                         console.log(`  Updating storage for DIA: ${newStorage.dia}`);
                         // Merge Racks & Pallets
                         const combinedRacks = [...(existingStorage.racks || []), ...(newStorage.racks || [])];
-                        existingStorage.racks = [...new Set(combinedRacks.filter(Boolean))];
+                        existingStorage.racks = combinedRacks;
 
                         const combinedPallets = [...(existingStorage.pallets || []), ...(newStorage.pallets || [])];
-                        existingStorage.pallets = [...new Set(combinedPallets.filter(Boolean))];
+                        existingStorage.pallets = combinedPallets;
 
                         // Merge Rows (Colours)
                         if (!existingStorage.rows) existingStorage.rows = [];
@@ -439,8 +439,8 @@ const getFifoRecommendation = asyncHandler(async (req, res) => {
                                         availableSet = {
                                             lotNo,
                                             lotName: inw.lotName,
-                                            rackName: sd.racks && sd.racks[i] ? sd.racks[i] : 'N/A',
-                                            palletNumber: sd.pallets && sd.pallets[i] ? sd.pallets[i] : 'N/A',
+                                            rackName: sd.racks && sd.racks[i] ? sd.racks[i] : 'Not Assigned',
+                                            palletNumber: sd.pallets && sd.pallets[i] ? sd.pallets[i] : 'Not Assigned',
                                             balanceWeight: balance
                                         };
                                         console.log(`  Found FIFO Lot: ${lotNo} with Set: ${setNo}`);
@@ -489,7 +489,7 @@ const generateDcNumber = asyncHandler(async (req, res) => {
 // @route   POST /api/inventory/outward
 // @access  Private
 const createOutward = asyncHandler(async (req, res) => {
-    const {
+    let {
         lotName,
         dateTime,
         dia,
@@ -503,6 +503,32 @@ const createOutward = asyncHandler(async (req, res) => {
         items,
         dc_number,
     } = req.body;
+
+    // Parse items if it's a JSON string (common with multipart/form-data)
+    console.log('[DEBUG] createOutward raw items type:', typeof items);
+
+    if (typeof items === 'string') {
+        try {
+            console.log('[DEBUG] items is string, parsing...');
+            items = JSON.parse(items);
+            req.body.items = items;
+            console.log('[DEBUG] Parsed items successfully. Is Array?', Array.isArray(items));
+        } catch (e) {
+            console.error('[DEBUG] Items parsing error:', e);
+            res.status(400);
+            throw new Error('Invalid items format');
+        }
+    } else if (!items) {
+        console.log('[DEBUG] items is falsy, setting to empty array');
+        items = [];
+        req.body.items = items;
+    }
+
+    if (!Array.isArray(items)) {
+        console.error('[DEBUG] Items is NOT an array. Type:', typeof items, 'Value:', items);
+        res.status(400);
+        throw new Error('Items must be an array of sets');
+    }
 
     const dcNo = dc_number || `DC-${Date.now()}`;
 
@@ -554,6 +580,8 @@ const createOutward = asyncHandler(async (req, res) => {
         items: items.map(item => ({
             set_no: item.set_no,
             total_weight: item.total_weight || 0,
+            rack_name: item.rack_name,
+            pallet_number: item.pallet_number,
             colours: item.colours.map(c => ({
                 colour: c.colour,
                 weight: c.weight || 0,

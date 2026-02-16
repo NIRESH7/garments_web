@@ -11,6 +11,8 @@ const outwardItemSchema = mongoose.Schema({
     set_no: { type: String, required: true },
     colours: [outwardColourSchema],
     total_weight: { type: Number, required: true },
+    rack_name: { type: String },
+    pallet_number: { type: String },
 });
 
 const outwardSchema = mongoose.Schema(
