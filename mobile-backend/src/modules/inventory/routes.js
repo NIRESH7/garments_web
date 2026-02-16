@@ -23,6 +23,7 @@ import {
     getClientFormatReport,
     getGodownStockReport,
     getShadeCardReport,
+    getLotAgingSummaryReport,
 } from './reportController.js';
 
 import { protect } from '../../middleware/authMiddleware.js';
@@ -75,5 +76,6 @@ router.get('/reports/overview', protect, getOverviewReport);
 router.get('/reports/inward-outward', protect, getInwardOutwardReport);
 router.get('/reports/monthly', protect, getMonthlySummaryReport);
 router.get('/reports/shade-card', protect, getShadeCardReport);
+router.get('/reports/aging-summary', protect, getLotAgingSummaryReport);
 
 export default router;

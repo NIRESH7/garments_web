@@ -42,6 +42,7 @@ import masterRoutes from './modules/master/routes.js';
 import inventoryRoutes from './modules/inventory/routes.js';
 import productionRoutes from './modules/production/routes.js';
 import colorPredictRoutes from './modules/color-predict/routes.js';
+import companyRoutes from './modules/company/routes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -60,6 +61,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/production', productionRoutes);
 app.use('/api/color-predict', colorPredictRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/company', companyRoutes);
 
 const __dirname = path.resolve();
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

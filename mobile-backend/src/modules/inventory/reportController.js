@@ -372,11 +372,51 @@ const getShadeCardReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
+// @desc    Get Lot Aging Summary (Bucketed)
+// @route   GET /api/inventory/reports/aging-summary
+const getLotAgingSummaryReport = asyncHandler(async (req, res) => {
+    const inwards = await Inward.find({}).sort({ inwardDate: 1 });
+
+    const summary = {
+        '0-15 Days': { rolls: 0, weight: 0 },
+        '16-30 Days': { rolls: 0, weight: 0 },
+        '31-45 Days': { rolls: 0, weight: 0 },
+        '45+ Days': { rolls: 0, weight: 0 },
+    };
+
+    const now = new Date();
+
+    inwards.forEach(inward => {
+        const age = Math.ceil((now - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24));
+
+        let bucket = '45+ Days';
+        if (age <= 15) bucket = '0-15 Days';
+        else if (age <= 30) bucket = '16-30 Days';
+        else if (age <= 45) bucket = '31-45 Days';
+
+        const totalRolls = inward.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
+        const totalWt = inward.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
+
+        summary[bucket].rolls += totalRolls;
+        summary[bucket].weight += totalWt;
+    });
+
+    // Format for frontend table
+    const report = Object.keys(summary).map(key => ({
+        range: key,
+        rolls: summary[key].rolls,
+        weight: summary[key].weight.toFixed(2)
+    }));
+
+    res.json(report);
+});
+
 export {
     getOverviewReport,
     getInwardOutwardReport,
     getMonthlySummaryReport,
     getClientFormatReport,
     getGodownStockReport,
-    getShadeCardReport
+    getShadeCardReport,
+    getLotAgingSummaryReport
 };
