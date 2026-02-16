@@ -121,8 +121,10 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
                 'LOT',
                 'DIA',
                 'STOCK (Kg)',
-                'LIMIT (Min/Max)',
+                'MIN',
+                'MAX',
                 'NEED WT',
+                'NEED ROLL',
                 'STATUS',
               ],
               data: _reportData.map((item) {
@@ -130,8 +132,10 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
                   item['lotName'],
                   item['dia'],
                   '${item['currentWeight'].toStringAsFixed(1)}${item['outsideInput'] != 0 ? ' (+${item['outsideInput']})' : ''}',
-                  '${item['minWeight']} / ${item['maxWeight']}',
+                  '${item['minWeight']}',
+                  '${item['maxWeight']}',
                   '${item['needWeight'].toStringAsFixed(1)}',
+                  '${(item['needWeight'] / 20).toStringAsFixed(1)}',
                   item['status'],
                 ];
               }).toList(),
@@ -299,13 +303,25 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
               ),
               DataColumn(
                 label: Text(
-                  'LIMIT',
+                  'MIN',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'MAX',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
               DataColumn(
                 label: Text(
                   'NEED WT',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'NEED ROLL',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -365,30 +381,32 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
                   ),
                   DataCell(
                     Text(
-                      'Min: ${item['minWeight']}\nMax: ${item['maxWeight']}',
+                      '${item['minWeight']}',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
                   DataCell(
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${item['needWeight'].toStringAsFixed(1)} kg',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: ColorPalette.primary,
-                          ),
-                        ),
-                        Text(
-                          '${item['needRolls'].toStringAsFixed(1)} Rolls',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      '${item['maxWeight']}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      '${item['needWeight'].toStringAsFixed(1)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: ColorPalette.primary,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      '${(item['needWeight'] / 20).toStringAsFixed(1)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                      ),
                     ),
                   ),
                   DataCell(
