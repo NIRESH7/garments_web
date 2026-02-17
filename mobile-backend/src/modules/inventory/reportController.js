@@ -411,6 +411,114 @@ const getLotAgingSummaryReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
+// @desc    Get Rack and Pallet Wise Stock Report
+// @route   GET /api/inventory/reports/rack-pallet
+const getRackPalletStockReport = asyncHandler(async (req, res) => {
+    const { rackName, palletNo, lotName } = req.query;
+
+    console.log(`Getting Rack/Pallet Stock Report. Filters: lotName=${lotName}, rack=${rackName}, pallet=${palletNo}`);
+
+    // Fetch all inwards to be safe, filter in memory
+    const inwards = await Inward.find({}).sort({ inwardDate: -1 });
+    const outwards = await Outward.find({});
+
+    // 1. Create a map for used sets (Lot + Dia + SetNo)
+    const usedSetsMap = new Set();
+    outwards.forEach(o => {
+        if (o.items) {
+            o.items.forEach(item => {
+                // Use a consistent key format
+                const key = `${o.lotNo}_${o.dia}_${item.set_no}`.toLowerCase();
+                usedSetsMap.add(key);
+            });
+        }
+    });
+
+    let stockReport = [];
+
+    // 2. Flatten Inward storageDetails into individual sets
+    inwards.forEach(inw => {
+        // storageDetails can be an array OR just exists as an object
+        const storageDetails = inw.storageDetails;
+        if (storageDetails && Array.isArray(storageDetails) && storageDetails.length > 0) {
+            storageDetails.forEach(sd => {
+                const dia = sd.dia;
+                if (sd.rows && Array.isArray(sd.rows)) {
+                    sd.rows.forEach(row => {
+                        const colour = row.colour;
+                        if (row.setWeights && Array.isArray(row.setWeights)) {
+                            row.setWeights.forEach((weight, index) => {
+                                const setNo = (index + 1).toString();
+                                const rack = sd.racks && sd.racks[index] ? sd.racks[index] : 'N/A';
+                                const pallet = sd.pallets && sd.pallets[index] ? sd.pallets[index] : 'N/A';
+
+                                // Check if this set is already dispatched
+                                const setKey = `${inw.lotNo}_${dia}_${setNo}`.toLowerCase();
+                                if (!usedSetsMap.has(setKey)) {
+                                    stockReport.push({
+                                        rackName: rack,
+                                        palletNo: pallet,
+                                        lotName: inw.lotName,
+                                        lotNo: inw.lotNo,
+                                        dia: dia,
+                                        colour: colour,
+                                        weight: parseFloat(weight) || 0,
+                                        setNo: setNo,
+                                        inwardDate: inw.inwardDate,
+                                        inwardNo: inw.inwardNo
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+
+    console.log(`Initial stock count: ${stockReport.length}`);
+
+    // 3. Apply filters
+    if (rackName && rackName !== 'All') {
+        const searchRack = rackName.toLowerCase();
+        stockReport = stockReport.filter(s =>
+            s.rackName && s.rackName.toString().toLowerCase().includes(searchRack)
+        );
+    }
+    if (palletNo && palletNo !== 'All') {
+        const searchPallet = palletNo.toLowerCase();
+        stockReport = stockReport.filter(s =>
+            s.palletNo && s.palletNo.toString().toLowerCase().includes(searchPallet)
+        );
+    }
+    if (lotName && lotName !== 'All') {
+        const searchLot = lotName.toLowerCase();
+        stockReport = stockReport.filter(s =>
+            (s.lotName && s.lotName.toString().toLowerCase().includes(searchLot)) ||
+            (s.lotNo && s.lotNo.toString().toLowerCase().includes(searchLot))
+        );
+    }
+
+    console.log(`Final filtered count: ${stockReport.length}`);
+
+    // Sort by Rack and then Pallet
+    stockReport.sort((a, b) => {
+        const rackA = (a.rackName || '').toString().toLowerCase();
+        const rackB = (b.rackName || '').toString().toLowerCase();
+        if (rackA < rackB) return -1;
+        if (rackA > rackB) return 1;
+
+        const palA = (a.palletNo || '').toString().toLowerCase();
+        const palB = (b.palletNo || '').toString().toLowerCase();
+        if (palA < palB) return -1;
+        if (palA > palB) return 1;
+
+        return 0;
+    });
+
+    res.json(stockReport);
+});
+
 export {
     getOverviewReport,
     getInwardOutwardReport,
@@ -418,5 +526,6 @@ export {
     getClientFormatReport,
     getGodownStockReport,
     getShadeCardReport,
-    getLotAgingSummaryReport
+    getLotAgingSummaryReport,
+    getRackPalletStockReport
 };

@@ -25,6 +25,7 @@ import {
     getGodownStockReport,
     getShadeCardReport,
     getLotAgingSummaryReport,
+    getRackPalletStockReport,
 } from './reportController.js';
 
 import { protect } from '../../middleware/authMiddleware.js';
@@ -79,5 +80,6 @@ router.get('/reports/inward-outward', protect, getInwardOutwardReport);
 router.get('/reports/monthly', protect, getMonthlySummaryReport);
 router.get('/reports/shade-card', protect, getShadeCardReport);
 router.get('/reports/aging-summary', protect, getLotAgingSummaryReport);
+router.get('/reports/rack-pallet', protect, getRackPalletStockReport);
 
 export default router;

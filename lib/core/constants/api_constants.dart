@@ -33,6 +33,7 @@ class ApiConstants {
   static const String clientReport = '/inventory/reports/client';
   static const String godownStockReport = '/inventory/reports/godown-stock';
   static const String shadeCardReport = '/inventory/reports/shade-card';
+  static const String rackPalletStockReport = '/inventory/reports/rack-pallet';
 
   // Production
   static const String assignments = '/production/assignments';

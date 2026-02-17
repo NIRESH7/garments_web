@@ -26,6 +26,7 @@ import '../screens/reports/inward_outward_report.dart';
 import '../screens/reports/monthly_summary_report.dart';
 import '../screens/reports/client_format_report.dart';
 import '../screens/reports/godown_stock_report_screen.dart';
+import '../screens/reports/rack_pallet_report_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -211,6 +212,11 @@ class AppDrawer extends StatelessWidget {
                       context,
                       "Godown Stock (Min/Max)",
                       const GodownStockReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Rack & Pallet Wise Report",
+                      RackPalletReportScreen(),
                     ),
                   ],
                 ),

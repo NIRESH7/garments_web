@@ -11,6 +11,8 @@ import 'godown_stock_report_screen.dart';
 import 'quality_audit_report_screen.dart';
 import 'shade_card_report_screen.dart';
 
+import 'rack_pallet_report_screen.dart';
+
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
 
@@ -21,6 +23,19 @@ class ReportsDashboard extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          _ReportCard(
+            title: 'Rack & Pallet Wise Report',
+            subtitle: 'Stock grouping by storage location',
+            icon: LucideIcons.box,
+            color: Colors.brown,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => RackPalletReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           _ReportCard(
             title: 'Shade Card Module',
             subtitle: 'Lot & Item grouped color cards',

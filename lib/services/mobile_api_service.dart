@@ -351,6 +351,26 @@ class MobileApiService {
     }
   }
 
+  Future<List<dynamic>> getRackPalletStockReport({
+    String? rackName,
+    String? palletNo,
+    String? lotName,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.rackPalletStockReport,
+        queryParameters: {
+          if (rackName != null) 'rackName': rackName,
+          if (palletNo != null) 'palletNo': palletNo,
+          if (lotName != null) 'lotName': lotName,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
   // --- Production ---
   Future<List<dynamic>> getAssignments() async {
     try {
