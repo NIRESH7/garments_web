@@ -358,7 +358,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       //   row.recWeight = row.deliveredWeight;
       // }
 
-      row.recRoll = row.rolls;
+      // row.recRoll = row.rolls; // Removed: recRoll should only be updated from storage details
       row.difference = double.parse(
         (row.deliveredWeight - row.recWeight).toStringAsFixed(3),
       );

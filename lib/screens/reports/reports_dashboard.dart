@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
-import 'overview_report.dart';
-import 'lot_aging_report.dart';
-import 'inward_outward_report.dart';
+// import 'overview_report.dart';
+// import 'lot_aging_report.dart';
+// import 'inward_outward_report.dart';
 import 'monthly_summary_report.dart';
 import 'format_reports_screen.dart';
 import 'client_format_report.dart';
@@ -88,6 +88,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+/*
           _ReportCard(
             title: 'Stock Overview',
             subtitle: 'Lot name, rolls, and weights',
@@ -127,6 +128,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+*/
           _ReportCard(
             title: 'Monthly Summary',
             subtitle: 'Opening, closing, and movements',

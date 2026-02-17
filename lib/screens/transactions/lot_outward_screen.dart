@@ -215,160 +215,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     }
   }
 
-  Future<void> _scanSticker() async {
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(ctx).size.height * 0.8,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Scan Inward Sticker',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: MobileScanner(
-                onDetect: (capture) {
-                  final List<Barcode> barcodes = capture.barcodes;
-                  if (barcodes.isNotEmpty) {
-                    final String code = barcodes.first.displayValue ?? '';
-                    if (code.isNotEmpty) {
-                      Navigator.pop(ctx, code);
-                    }
-                  }
-                },
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Text(
-                'Align the QR code within the frame to scan',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result != null) {
-      _processScannedCode(result);
-    }
-  }
-
-  void _processScannedCode(String code) {
-    try {
-      final lines = code.split('\n');
-      String? lotNo, lotName, dia, colour, setNo, weight;
-
-      for (var line in lines) {
-        final clean = line.trim();
-        if (clean.startsWith('LOT:'))
-          lotNo = clean.replaceFirst('LOT:', '').trim();
-        else if (clean.startsWith('NAME:'))
-          lotName = clean.replaceFirst('NAME:', '').trim();
-        else if (clean.startsWith('DIA:'))
-          dia = clean.replaceFirst('DIA:', '').trim();
-        else if (clean.startsWith('COL:'))
-          colour = clean.replaceFirst('COL:', '').trim();
-        else if (clean.startsWith('SET:'))
-          setNo = clean.replaceFirst('SET:', '').trim();
-        else if (clean.startsWith('WT:'))
-          weight = clean.replaceFirst('WT:', '').replaceAll('kg', '').trim();
-      }
-
-      if (lotNo == null || dia == null || setNo == null) {
-        _showError(
-          'Invalid QR Code format. Please scan a valid Inward Sticker.',
-        );
-        return;
-      }
-
-      _autoFillFromScan(lotNo, lotName, dia, colour, setNo, weight);
-    } catch (e) {
-      _showError('Failed to parse scan: $e');
-    }
-  }
-
-  Future<void> _autoFillFromScan(
-    String lotNo,
-    String? lotName,
-    String dia,
-    String? colour,
-    String setNo,
-    String? weight,
-  ) async {
-    // 1. Check if DIA exists
-    if (!_dias.contains(dia)) {
-      _showError('DIA $dia not found in master list');
-      return;
-    }
-
-    // 2. Set DIA and Load Lots
-    await _onDiaChanged(dia);
-
-    // 3. Set Lot Name if provided
-    if (lotName != null && _lotNames.contains(lotName)) {
-      setState(() => _selectedLotName = lotName);
-    }
-
-    // 4. Check if Lot No exists for this DIA
-    if (!_lotNos.contains(lotNo)) {
-      _showError('Lot No $lotNo is not available for DIA $dia');
-      return;
-    }
-
-    // 5. Select Lot No and Load Balanced Sets
-    await _onLotNoChanged(lotNo);
-
-    // 6. Check if Set No is in available stock
-    final bool setAvailable = _availableSets.any(
-      (s) => s['set_no'].toString() == setNo,
-    );
-
-    if (setAvailable) {
-      // Check if already selected
-      final isAlreadySelected = _selectedSets.any(
-        (s) => s['set_no'].toString() == setNo,
-      );
-      if (isAlreadySelected) {
-        _showError('Set $setNo is already selected');
-        return;
-      }
-
-      _toggleSetSelection(setNo, true);
-      setState(() => _isScanned = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Successfully scanned and added Set $setNo ($colour)'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      _showError(
-        'Set $setNo is not available in stock or has already been issued',
-      );
-    }
-  }
-
   Future<void> _openSignaturePad(Function(XFile?) onPick) async {
     final XFile? result = await showDialog(
       context: context,
@@ -613,12 +459,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       return;
     }
     if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (!_isScanned && kReleaseMode) {
-      // Allow bypass in debug if needed, but strict for user
-      _showError('Please scan the inward sticker to identify the roll');
       return;
     }
 
@@ -1116,11 +956,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.scan),
-            tooltip: 'Scan Inward Sticker',
-            onPressed: _isSaved ? null : _scanSticker,
-          ),
           IconButton(
             icon: const Icon(LucideIcons.mic),
             onPressed: () {
