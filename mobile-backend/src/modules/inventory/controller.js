@@ -753,7 +753,9 @@ const getQualityAuditReport = asyncHandler(async (req, res) => {
             { gsmStatus: 'Not OK' },
             { shadeStatus: 'Not OK' },
             { washingStatus: 'Not OK' },
-            { complaintText: { $exists: true, $ne: '' } }
+            { complaintText: { $exists: true, $ne: '' } },
+            { complaintResolution: { $exists: true, $ne: '' } },
+            { complaintReply: { $exists: true, $ne: '' } }
         ]
     };
 
@@ -800,6 +802,15 @@ const getLotDetails = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Get Distinct Lot Numbers from Inward
+// @route   GET /api/inventory/inward/distinct-lots
+const getDistinctLots = asyncHandler(async (req, res) => {
+    const lots = await Inward.distinct('lotNo');
+    // Map to object structure expected by frontend [{ lotNumber: '...' }]
+    const result = lots.filter(l => l).map(l => ({ lotNumber: l }));
+    res.json(result);
+});
+
 export {
     createInward,
     getInwards,
@@ -815,4 +826,6 @@ export {
     updateInwardComplaint,
     getQualityAuditReport,
     getLotDetails,
+    getDistinctLots,
 };
+

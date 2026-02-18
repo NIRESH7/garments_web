@@ -15,6 +15,7 @@ import {
     updateInwardComplaint,
     getQualityAuditReport,
     getLotDetails,
+    getDistinctLots,
 } from './controller.js';
 
 import {
@@ -59,6 +60,7 @@ router.get('/inward/colours', protect, getInwardColours);
 router.get('/inward/fifo-recommendation', protect, getFifoRecommendation);
 router.put('/inward/:id/complaint-solution', protect, updateInwardComplaint);
 router.get('/inward/lot-details', protect, getLotDetails);
+router.get('/inward/distinct-lots', protect, getDistinctLots);
 
 // Outward
 router.route('/outward')

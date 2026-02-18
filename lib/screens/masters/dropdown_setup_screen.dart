@@ -28,6 +28,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     'Item Name',
     'Lot Name',
     'GSM',
+    'Size',
+    'Efficiency',
     'Dyeing',
     'Process',
     'Party Name',
@@ -62,6 +64,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         'Item Name': ['Item Name', 'ItemName', 'item name'],
         'Lot Name': ['Lot Name', 'LotName', 'lot name'],
         'GSM': ['GSM', 'Gsm', 'gsm'],
+        'Size': ['Size', 'Sizes', 'size'],
+        'Efficiency': ['Efficiency', 'Eff', 'efficiency'],
         'Rack Name': ['Rack Name', 'Rack', 'racks'],
         'Pallet No': ['Pallet No', 'Pallet', 'pallets'],
       };

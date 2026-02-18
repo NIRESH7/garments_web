@@ -17,6 +17,9 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
 
   String? _selectedItem, _selectedSize, _selectedDia, _selectedEfficiency;
   final _dozenWeightController = TextEditingController();
+  final _layLengthController = TextEditingController();
+  final _layPcsController = TextEditingController();
+  final _wastePercentageController = TextEditingController();
 
   List<String> _items = [], _sizes = [], _dias = [], _efficiencies = [];
   bool _isLoading = true;
@@ -40,6 +43,15 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       }
       _isLoading = false;
     });
+  }
+
+  void _onEfficiencyChanged(String? val) {
+    setState(() => _selectedEfficiency = val);
+    if (val != null) {
+      final eff = double.tryParse(val.replaceAll('%', '').trim()) ?? 0;
+      final waste = 100 - eff;
+      _wastePercentageController.text = waste.toStringAsFixed(2);
+    }
   }
 
   List<String> _getValues(List<dynamic> categories, String name) {
@@ -78,6 +90,9 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       'dia': _selectedDia,
       'efficiency': efficiencyValue,
       'dozenWeight': double.tryParse(_dozenWeightController.text) ?? 0.0,
+      'layLength': double.tryParse(_layLengthController.text) ?? 0.0,
+      'layPcs': int.tryParse(_layPcsController.text) ?? 0,
+      'wastePercentage': double.tryParse(_wastePercentageController.text) ?? 0.0,
     };
 
     final success = await _api.createAssignment(data);
@@ -148,7 +163,7 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                         _buildDropdown(
                           _efficiencies,
                           _selectedEfficiency,
-                          (v) => setState(() => _selectedEfficiency = v),
+                          _onEfficiencyChanged,
                           'Efficiency (%)',
                         ),
                         const SizedBox(height: 20),
@@ -164,6 +179,53 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                               color: ColorPalette.textMuted,
                             ),
                             helperText: 'Manual override supported',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Lay Length & Lay Pcs Row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildFieldLabel('Lay Length'),
+                                  TextField(
+                                    controller: _layLengthController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(hintText: '0.00'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildFieldLabel('Lay Pcs'),
+                                  TextField(
+                                    controller: _layPcsController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(hintText: '0'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Waste Percentage
+                        _buildFieldLabel('Waste % (100 - Eff)'),
+                        TextField(
+                          controller: _wastePercentageController,
+                          readOnly: true, // Auto-calculated
+                          decoration: const InputDecoration(
+                            hintText: '0.00',
+                            filled: true,
+                            fillColor: Color(0xFFF1F5F9), // Light grey
                           ),
                         ),
                       ],

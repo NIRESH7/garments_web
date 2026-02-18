@@ -28,6 +28,21 @@ const assignmentSchema = mongoose.Schema(
             required: true,
             default: 0.0,
         },
+        layLength: {
+            type: Number,
+            required: true,
+            default: 0.0,
+        },
+        layPcs: {
+            type: Number,
+            required: true,
+            default: 0,
+        },
+        wastePercentage: {
+            type: Number,
+            required: true,
+            default: 0.0,
+        },
     },
     {
         timestamps: true,

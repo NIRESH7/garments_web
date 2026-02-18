@@ -1121,54 +1121,67 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     try {
       final pdf = pw.Document();
+      final pageFormat = PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
 
-      // Page styling - 2 stickers per row, similar to a label sheet
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(20),
-          build: (pw.Context context) {
-            return [
-              pw.GridView(
-                crossAxisCount: 2,
-                childAspectRatio: 0.8,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                children: stickerList.map((item) {
-                  return pw.Container(
-                    padding: const pw.EdgeInsets.all(10),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(width: 1),
-                      color: PdfColors.white,
-                    ),
-                    child: pw.Column(
+      for (var item in stickerList) {
+        pdf.addPage(
+          pw.Page(
+            pageFormat: pageFormat,
+            margin: const pw.EdgeInsets.all(2), // Minimal margin for small sticker
+            build: (pw.Context context) {
+              return pw.Container(
+                width: double.infinity,
+                height: double.infinity,
+                padding: const pw.EdgeInsets.all(2),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(width: 1),
+                  color: PdfColors.white,
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Layout: Left side Details, Right side QR (or top/bottom)
+                    // Trying side-by-side to save vertical space
+                    pw.Row(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _buildPdfRow('LOT NO', item['lotNo']),
-                        _buildPdfRow('Lot Name', item['lotName']),
-                        _buildPdfRow('Dia', item['dia']),
-                        _buildPdfRow('Colour', item['colour']),
-                        _buildPdfRow('Set No', '#${item['setNo']}'),
-                        _buildPdfRow('Roll Wt', '${item['weight']} kg'),
-                        _buildPdfRow('Date', item['date']),
-                        pw.Spacer(),
-                        pw.Center(
+                        // Details Column
+                        pw.Expanded(
+                          flex: 3,
                           child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
+                              _buildPdfRow('LOT', item['lotNo'], fontSize: 6),
+                              _buildPdfRow('Name', item['lotName'], fontSize: 6),
+                              _buildPdfRow('Dia', item['dia'], fontSize: 6),
+                              _buildPdfRow('Col', item['colour'], fontSize: 6),
+                              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
+                              _buildPdfRow('Wt', '${item['weight']} kg', fontSize: 6, isBoldValue: true),
+                              _buildPdfRow('Dt', item['date'], fontSize: 5),
+                            ],
+                          ),
+                        ),
+                        // QR Column
+                        pw.Expanded(
+                          flex: 2,
+                          child: pw.Column(
+                            mainAxisAlignment: pw.MainAxisAlignment.center,
+                            children: [
+                              pw.SizedBox(height: 4),
                               pw.Container(
-                                width: 70,
-                                height: 70,
+                                width: 40,
+                                height: 40,
                                 child: pw.BarcodeWidget(
                                   barcode: pw.Barcode.qrCode(),
                                   data:
                                       'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
                                 ),
                               ),
-                              pw.SizedBox(height: 4),
+                              pw.SizedBox(height: 2),
                               pw.Text(
-                                'SCAN FOR AUTH',
+                                'SCAN',
                                 style: pw.TextStyle(
-                                  fontSize: 7,
+                                  fontSize: 5,
                                   fontWeight: pw.FontWeight.bold,
                                 ),
                               ),
@@ -1177,13 +1190,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         ),
                       ],
                     ),
-                  );
-                }).toList(),
-              ),
-            ];
-          },
-        ),
-      );
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
 
       final pdfBytes = await pdf.save();
       final directory = await getTemporaryDirectory();
@@ -1236,22 +1249,29 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
-  pw.Widget _buildPdfRow(String label, String value) {
+  pw.Widget _buildPdfRow(String label, String value, {double fontSize = 10, bool isBoldValue = false}) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 55,
+            width: 30, // Reduced width for small label
             child: pw.Text(
-              '$label :',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              '$label:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fontSize),
             ),
           ),
-          pw.Text(
-            value,
-            style: const pw.TextStyle(fontSize: 10),
-            overflow: pw.TextOverflow.clip,
+          pw.Expanded(
+            child: pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: fontSize,
+                fontWeight: isBoldValue ? pw.FontWeight.bold : pw.FontWeight.normal,
+              ),
+              maxLines: 2,
+              overflow: pw.TextOverflow.clip,
+            ),
           ),
         ],
       ),

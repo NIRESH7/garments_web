@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/constants/api_constants.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:intl/intl.dart';
 
 class QualityAuditReportScreen extends StatefulWidget {
   const QualityAuditReportScreen({super.key});
@@ -159,19 +160,19 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (item['complaintText'] != null &&
-                    item['complaintText'].toString().isNotEmpty) ...[
-                  const Text(
-                    'Complaint Detail:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item['complaintText'],
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                // Complaint Detail
+                const Text(
+                  'Complaint Detail:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  (item['complaintText'] != null && item['complaintText'].toString().isNotEmpty)
+                      ? item['complaintText']
+                      : 'None',
+                  style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 12),
 
                 // Pictures Grid
                 const Text(
@@ -213,6 +214,8 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
                   ),
                 ),
 
+                _buildResolutionDetails(item),
+                
                 const Divider(height: 32),
 
                 // Signatures
@@ -303,6 +306,88 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(fontSize: 9)),
       ],
+    );
+  }
+
+  Widget _buildResolutionDetails(Map<String, dynamic> item) {
+    if (item['complaintResolution'] == null && item['complaintReply'] == null) {
+      return const SizedBox.shrink();
+    }
+
+    final resolution = item['complaintResolution'] ?? 'Pending';
+    final reply = item['complaintReply'] ?? 'No reply recorded.';
+    final arrestLot = item['complaintArrestLotNo'];
+    
+    String findDateStr = 'N/A';
+    if (item['complaintFindDate'] != null) {
+      findDateStr = DateFormat('dd-MM-yyyy').format(DateTime.parse(item['complaintFindDate']));
+    }
+    
+    String completionDateStr = 'N/A';
+    if (item['complaintCompletionDate'] != null) {
+      completionDateStr = DateFormat('dd-MM-yyyy').format(DateTime.parse(item['complaintCompletionDate']));
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.checkSquare, size: 16, color: Colors.blue),
+              const SizedBox(width: 8),
+              const Text(
+                'COMPLAINT RESOLUTION',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Colors.blue,
+                ),
+              ),
+            ],
+          ),
+          const Divider(color: Colors.blue, height: 16),
+          _buildDetailRow('Complaint Find Date:', findDateStr),
+          _buildDetailRow('Result / Reply:', reply),
+          _buildDetailRow('Accept / Return:', resolution),
+          _buildDetailRow('Completion Date:', completionDateStr),
+          if (arrestLot != null && arrestLot.toString().isNotEmpty)
+            _buildDetailRow('Complaint Arrest Lot No:', arrestLot),
+            
+          _buildDetailRow('Complaint Cleared?', (item['isComplaintCleared'] == true) ? 'Yes - Resolved' : 'No - Pending'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black87),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

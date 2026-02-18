@@ -12,6 +12,7 @@ import '../auth/login_screen.dart';
 import '../dashboard/notifications_screen.dart';
 import '../assessment/item_assignment_list_screen.dart';
 import '../transactions/lot_complaint_solution_screen.dart';
+import '../transactions/cutting_order_entry_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
 
@@ -182,6 +183,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const LotComplaintSolutionScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _TransactionTile(
+              title: 'Cutting Order Entry',
+              subtitle: 'Plan and record cutting orders',
+              icon: LucideIcons.scissors,
+              color: Colors.orangeAccent,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CuttingOrderEntryScreen(),
                   ),
                 );
               },

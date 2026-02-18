@@ -437,7 +437,7 @@ class MobileApiService {
   Future<List<dynamic>> getCategories() async {
     try {
       final response = await _client.get(ApiConstants.categories);
-      return response.data;
+      return response.data ?? [];
     } catch (e) {
       return [];
     }
@@ -540,7 +540,16 @@ class MobileApiService {
   Future<List<dynamic>> getLots() async {
     try {
       final response = await _client.get(ApiConstants.lots);
-      return response.data;
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getDistinctLots() async {
+    try {
+      final response = await _client.get('${ApiConstants.inward}/distinct-lots');
+      return response.data ?? [];
     } catch (e) {
       return [];
     }
@@ -746,6 +755,37 @@ class MobileApiService {
       final response = await _client.put('${ApiConstants.notifications}/clear');
       return response.statusCode == 200;
     } catch (e) {
+      return false;
+    }
+  }
+
+  // --- Generic Generic API Helpers ---
+  Future<dynamic> get(String url, {Map<String, dynamic>? queryParameters}) async {
+    final response = await _client.get(url, queryParameters: queryParameters);
+    return response.data;
+  }
+
+  Future<dynamic> post(String url, dynamic data) async {
+    final response = await _client.post(url, data: data);
+    return response.data;
+  }
+
+  Future<dynamic> put(String url, dynamic data) async {
+    final response = await _client.put(url, data: data);
+    return response.data;
+  }
+
+  Future<dynamic> delete(String url) async {
+    final response = await _client.delete(url);
+    return response.data;
+  }
+
+  Future<bool> saveCuttingOrder(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(ApiConstants.cuttingOrders, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      print('Save Cutting Order Error: $e');
       return false;
     }
   }

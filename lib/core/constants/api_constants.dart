@@ -37,6 +37,7 @@ class ApiConstants {
 
   // Production
   static const String assignments = '/production/assignments';
+  static const String cuttingOrders = '/production/cutting-orders';
 
   // User
   static const String profile = '/users/profile';
