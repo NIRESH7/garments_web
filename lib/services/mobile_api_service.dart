@@ -640,6 +640,26 @@ class MobileApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> checkFifoViolation(
+    String currentLotNo,
+    String dia,
+    String setNo,
+  ) async {
+    try {
+      final response = await _client.get(
+        '${ApiConstants.outward}/check-fifo',
+        queryParameters: {
+          'currentLotNo': currentLotNo,
+          'dia': dia,
+          'setNo': setNo,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getPartyDetails(String name) async {
     try {
       final parties = await getParties();

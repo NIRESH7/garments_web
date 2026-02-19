@@ -15,7 +15,9 @@ import {
     updateInwardComplaint,
     getQualityAuditReport,
     getLotDetails,
+    getLotDetails,
     getDistinctLots,
+    checkFifoViolation,
 } from './controller.js';
 
 import {
@@ -71,6 +73,7 @@ router.route('/outward')
     .get(protect, getOutwards);
 
 router.get('/outward/generate-dc', protect, generateDcNumber);
+router.get('/outward/check-fifo', protect, checkFifoViolation);
 
 // Reports
 router.get('/reports/client', getClientFormatReport);

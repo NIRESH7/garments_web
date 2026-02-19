@@ -809,6 +809,140 @@ const getDistinctLots = asyncHandler(async (req, res) => {
     // Map to object structure expected by frontend [{ lotNumber: '...' }]
     const result = lots.filter(l => l).map(l => ({ lotNumber: l }));
     res.json(result);
+    res.json(result);
+});
+
+// @desc    Check for FIFO Violation (Set availability in previous lots)
+// @route   GET /api/inventory/outward/check-fifo
+const checkFifoViolation = asyncHandler(async (req, res) => {
+    const { dia, setNo, rack, pallet } = req.query;
+
+    if (!dia || !setNo) {
+        res.status(400);
+        throw new Error('Dia and Set Number are required');
+    }
+
+    console.log(`[FIFO Check] Checking for Dia: ${dia}, Set: ${setNo}, Rack: ${rack}, Pallet: ${pallet}`);
+
+    // 1. Find all Inwards with this Dia, sorted by Date (Oldest first)
+    // We need to look for ANY lot that has this combination available.
+    // Logic: 
+    // - Iterate through all lots (oldest to newest).
+    // - If we find a lot that contains this specific Set No (mapped to Rack/Pallet if provided, or just Set No uniqueness within Dia)
+    // - AND that set is NOT yet outwarded (balance > 0).
+    // - Then that is the "Current FIFO Lot" for this Set.
+
+    // However, the requirement is slightly more specific: 
+    // "if I previously skipped an earlier lot and try to process a later lot... trigger notification... This Dia, Set Number... already available in a previous lot."
+
+    // This implies we aren't just looking for "Is this set available ANYWHERE?".
+    // We are looking for "Is this set available in an OLDER lot than the one I am currently working on?".
+    // BUT, the current screen `_toggleSetSelection` doesn't pass the "Current Lot Date" or "Current Lot ID" easily to compare "Older".
+    // AND the user selects "Lot Number" at the top of the screen.
+    // SO, we know the "Current Selected Lot".
+
+    // Revised Logic:
+    // 1. Get the "Current Lot" (from query params - I need to add `currentLotNo` to request).
+    // 2. Find the Inward Date of the Current Lot.
+    // 3. Find all Lots OLDER than Current Lot (same Dia).
+    // 4. Check if the requested Set (Set No) exists and is available in any of those OLDER lots.
+
+    const { currentLotNo } = req.query;
+    if (!currentLotNo) {
+        // If no current lot is specified (rare), we can't compare "older". 
+        // But maybe we just check ALL lots? 
+        // Let's assume user ALWAYS selects a Lot No first.
+        res.status(400);
+        throw new Error('Current Lot Number is required');
+    }
+
+    const currentInward = await Inward.findOne({ lotNo: currentLotNo });
+    if (!currentInward) {
+        // Current lot not found? Can't do FIFO check against non-existent ref.
+        return res.json({ violation: false });
+    }
+
+    // Find all lots OLDER than current lot
+    const olderInwards = await Inward.find({
+        'diaEntries.dia': dia,
+        inwardDate: { $lt: currentInward.inwardDate },
+        lotNo: { $ne: currentLotNo } // Exclude self just in case date is identical
+    }).sort({ inwardDate: 1 });
+
+    for (const oldLot of olderInwards) {
+        // Check if Set exists in this Old Lot
+        // We need to check if it was INWARDED
+        let setInOldLot = false;
+
+        if (oldLot.storageDetails && oldLot.storageDetails.length > 0) {
+            oldLot.storageDetails.forEach(sd => {
+                if (sd.dia === dia) {
+                    sd.rows.forEach(row => {
+                        // Check matching set index? 
+                        // Logic: Set No 1 = Index 0.
+                        // User passes setNo (string "1").
+                        const setIdx = parseInt(setNo) - 1;
+                        if (setIdx >= 0 && setIdx < row.setWeights.length) {
+                            // This old lot HAS this set number.
+                            // Check if Rack/Pallet matches? 
+                            // User requirement: "This Dia, Set Number, Rack, and Pallet Number are already available..."
+                            // This implies the Exact Same Physical Item (if Set No is unique globally or per Dia).
+                            // If Set 1 is in Lot A (Rack A) and Set 1 is in Lot B (Rack B)... are they the same?
+                            // Usually Set No resets per Lot? Or is it unique per Dia?
+                            // "Select Set No (Unique)" in UI suggests unique per Lot.
+                            // If Set 1 in Lot A and Set 1 in Lot B are different physical bundles, why block?
+                            // "skipped an earlier lot... try to process a later lot"
+                            // This means I should consume Lot A's Set 1 before Lot B's Set 1?
+                            // YES. Standard FIFO. Consume Oldest Lot first.
+                            // So if Lot A has a "Set 1" available, I shouldn't take "Set 1" from Lot B?
+                            // Or simply, if Lot A has ANY stock, I should exhaust it?
+                            // The prompt specifically says: "This Dia, Set Number, Rack, and Pallet Number are already available"
+                            // This phrasing is tricky. It sounds like specific item duplication.
+                            // BUT "skipped earlier lot" implies general FIFO.
+                            // I will assume: If "Set <N>" exists in Older Lot and is NOT Outwarded, BLOCK.
+                            // It doesn't matter if Rack matches. If Old Lot has a Set <N>, use it.
+
+                            // WAIT, usually Set 1 in Lot A is totally different fabric from Set 1 in Lot B.
+                            // Unless it's "Same Dia" logic where sets are interchangeable?
+                            // Let's stick to the prompt's implied logic: 
+                            // Check if Older Lot has this Set Number available.
+
+                            setInOldLot = true;
+                        }
+                    });
+                }
+            });
+        }
+
+        if (setInOldLot) {
+            // Check if it's already used (Outwarded)
+            const oldLotOutward = await Outward.find({ lotNo: oldLot.lotNo, dia });
+            let isUsed = false;
+            oldLotOutward.forEach(out => {
+                if (out.items) {
+                    out.items.forEach(item => {
+                        if (item.set_no && item.set_no.toString() === setNo.toString()) {
+                            isUsed = true;
+                        }
+                    });
+                }
+            });
+
+            if (!isUsed) {
+                // VIOLATION FOUND!
+                // Old Lot has this Set, and it's not used.
+                return res.json({
+                    violation: true,
+                    lotNo: oldLot.lotNo,
+                    lotName: oldLot.lotName,
+                    inwardDate: oldLot.inwardDate,
+                    message: `FIFO Violation: Set ${setNo} is available in older Lot ${oldLot.lotNo}. Please use that first.`
+                });
+            }
+        }
+    }
+
+    res.json({ violation: false });
 });
 
 export {
@@ -827,5 +961,7 @@ export {
     getQualityAuditReport,
     getLotDetails,
     getDistinctLots,
+    getDistinctLots,
+    checkFifoViolation,
 };
 

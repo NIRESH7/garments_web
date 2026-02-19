@@ -58,12 +58,24 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   String? _userRole;
   bool _isScanned = false;
   int _activeSetIndex = 0;
+  bool _isValidating = false;
+  
+  // Scan / Manual Toggle
+  bool _isManual = true;
+  MobileScannerController? _scannerController;
 
   @override
   void initState() {
     super.initState();
     _loadUserRole();
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _scannerController?.dispose();
+    _vehicleController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserRole() async {
@@ -287,11 +299,44 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     );
   }
 
-  void _toggleSetSelection(String setNo, bool selected) {
-    setState(() {
-      if (selected) {
-        // ... (existing logic to add set)
+  Future<void> _toggleSetSelection(String setNo, bool selected) async {
+    if (selected) {
+      if (_selectedLotNo == null || _selectedDia == null) return;
+      
+      // FIFO VALIDATION
+      setState(() => _isValidating = true);
+      final violation = await _api.checkFifoViolation(
+        _selectedLotNo!,
+        _selectedDia!,
+        setNo,
+      );
+      setState(() => _isValidating = false);
+
+      if (violation != null && violation['violation'] == true) {
+        if (!mounted) return;
         
+        final msg = violation['message'] ?? 
+            'This Dia, Set Number, Rack, and Pallet Number are already available in a previous lot.';
+            
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('FIFO Violation', style: TextStyle(color: Colors.red)),
+            content: Text(msg),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return; // Prevent selection
+      }
+
+      if (!mounted) return;
+
+      setState(() {
         // Find existing stock entries for this set
         final setStock = _availableSets
             .where((s) => s['set_no'].toString() == setNo)
@@ -355,13 +400,16 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               : 'Not Assigned',
         });
         _activeSetIndex = _selectedSets.length - 1;
-      } else {
+      });
+    } else {
+      setState(() {
         _selectedSets.removeWhere((s) => s['set_no'].toString() == setNo);
         if (_activeSetIndex >= _selectedSets.length) {
-          _activeSetIndex = _selectedSets.isEmpty ? 0 : _selectedSets.length - 1;
+          _activeSetIndex =
+              _selectedSets.isEmpty ? 0 : _selectedSets.length - 1;
         }
-      }
-    });
+      });
+    }
   }
 
   void _removeSet(int index) {
@@ -957,6 +1005,27 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         ),
         actions: [
           IconButton(
+            icon: Icon(_isManual ? LucideIcons.scanLine : LucideIcons.mousePointer2),
+            tooltip: _isManual ? 'Switch to Scan' : 'Switch to Manual',
+            onPressed: () {
+              setState(() {
+                _isManual = !_isManual;
+                if (!_isManual) {
+                  // Initialize scanner when switching to scan mode
+                  _scannerController ??= MobileScannerController(
+                    detectionSpeed: DetectionSpeed.noDuplicates,
+                    facing: CameraFacing.back,
+                    torchEnabled: false,
+                  );
+                  _scannerController?.start();
+                } else {
+                  // Stop scanner when switching to manual
+                  _scannerController?.stop();
+                }
+              });
+            },
+          ),
+          IconButton(
             icon: const Icon(LucideIcons.mic),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -975,7 +1044,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             children: [
               _buildDCSection(),
               const SizedBox(height: 16),
-              _buildMainForm(),
+
+              
+              const SizedBox(height: 16),
+
+              if (_isManual) _buildMainForm() else _buildScanSection(),
               const SizedBox(height: 24),
               _buildSetSelectionSection(),
               const SizedBox(height: 24),
@@ -1234,6 +1307,84 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         maxLines: maxLines,
       ),
     );
+  }
+
+  Widget _buildScanSection() {
+    return Column(
+      children: [
+        Container(
+          height: 300,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: MobileScanner(
+              controller: _scannerController,
+              onDetect: (capture) {
+                final List<Barcode> barcodes = capture.barcodes;
+                for (final barcode in barcodes) {
+                  final String? code = barcode.rawValue;
+                   if (code != null && code.isNotEmpty) {
+                    _handleScannedCode(code);
+                    break; // Handle first valid code
+                  }
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Point camera at a Lot QR/Barcode',
+          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      ],
+    );
+  }
+
+  void _handleScannedCode(String code) {
+    // Vibrate or sound could be added here
+    debugPrint('Scanned Code: $code');
+    
+    // Logic: Treat code as Lot Number
+    // 1. Check if this Lot Number exists in _lotNos (or ANY Lot No if we want to be smarter)
+    // For now, we only have _lotNos loaded if Dia is selected. 
+    // This might be a limitation. Ideally, scanning should select Lot Name and Dia too.
+    
+    // If we assume the code IS the Lot Number:
+    bool found = false;
+    
+    // Case 1: Dia is already selected, check if code is in the filtered list
+    if (_selectedDia != null && _lotNos.contains(code)) {
+      found = true;
+    } 
+    
+    // Case 2: Global search (if we had all lots). 
+    // Since we don't have all lots loaded, we might need an API call to "find lot details".
+    // For this iteration, let's assume the user selects Dia first OR we just try to set it.
+    
+    if (found) {
+       setState(() {
+        _selectedLotNo = code;
+        _isManual = true; // Switch back to manual to show details
+      });
+      _onLotNoChanged(code); // Load details
+       ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lot Found: $code'), backgroundColor: Colors.green),
+      );
+    } else {
+       // Optional: Trigger an API search if not found in local filtered list?
+       // For now, just show error
+       ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lot No "$code" not found in current list. Select Correct DIA first?'), 
+          backgroundColor: Colors.orange
+        ),
+      );
+    }
   }
 }
 
