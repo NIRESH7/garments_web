@@ -583,7 +583,6 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     try {
       final service = _printService;
       // ignore: unnecessary_null_comparison
-      if (service == null) throw Exception("ReportPrintService is not initialized");
 
       final pdfBytes = await service.generateReportPdf(
         title: data['title'],
@@ -618,7 +617,6 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       try {
         final service = _printService;
         // ignore: unnecessary_null_comparison
-        if (service == null) throw Exception("ReportPrintService is not initialized");
 
         final pdfBytes = await service.generateReportPdf(
           title: data['title'],

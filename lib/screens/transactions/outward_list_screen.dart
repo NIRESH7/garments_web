@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 import 'outward_detail_screen.dart';
+import 'lot_outward_screen.dart';
 
 class OutwardListScreen extends StatefulWidget {
   const OutwardListScreen({super.key});
@@ -109,7 +110,95 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
                           ),
                         ],
                       ),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        onSelected: (value) async {
+                          if (value == 'edit') {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    LotOutwardScreen(editOutward: item),
+                              ),
+                            );
+                            _fetchOutwards();
+                          } else if (value == 'delete') {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Confirm Delete'),
+                                content: const Text(
+                                  'Are you sure you want to delete this outward entry?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                    ),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true) {
+                              final success = await _api.deleteOutward(
+                                item['_id'],
+                              );
+                              if (success) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Outward entry deleted'),
+                                    ),
+                                  );
+                                }
+                                _fetchOutwards();
+                              } else {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Failed to delete entry'),
+                                    ),
+                                  );
+                                }
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 20),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 20, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                       onTap: () async {
                         await Navigator.push(
                           context,

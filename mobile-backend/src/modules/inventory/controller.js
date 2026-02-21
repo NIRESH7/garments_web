@@ -626,6 +626,94 @@ const getOutwards = asyncHandler(async (req, res) => {
     res.json(outwards);
 });
 
+// @desc    Delete an outward entry
+// @route   DELETE /api/inventory/outward/:id
+// @access  Private
+const deleteOutward = asyncHandler(async (req, res) => {
+    const outward = await Outward.findById(req.params.id);
+
+    if (outward) {
+        await outward.deleteOne();
+        res.json({ message: 'Outward entry removed' });
+    } else {
+        res.status(404);
+        throw new Error('Outward entry not found');
+    }
+});
+
+// @desc    Update an outward entry
+// @route   PUT /api/inventory/outward/:id
+// @access  Private
+const updateOutward = asyncHandler(async (req, res) => {
+    const outward = await Outward.findById(req.params.id);
+
+    if (outward) {
+        let {
+            lotName,
+            dateTime,
+            dia,
+            lotNo,
+            partyName,
+            process,
+            address,
+            vehicleNo,
+            inTime,
+            outTime,
+            items,
+            dcNo
+        } = req.body;
+
+        if (typeof items === 'string') {
+            items = JSON.parse(items);
+        }
+
+        outward.lotName = lotName || outward.lotName;
+        outward.dateTime = dateTime || outward.dateTime;
+        outward.dia = dia || outward.dia;
+        outward.lotNo = lotNo || outward.lotNo;
+        outward.partyName = partyName || outward.partyName;
+        outward.process = process || outward.process;
+        outward.address = address || outward.address;
+        outward.vehicleNo = vehicleNo || outward.vehicleNo;
+        outward.inTime = inTime || outward.inTime;
+        outward.outTime = outTime || outward.outTime;
+        outward.dcNo = dcNo || outward.dcNo;
+
+        if (items) {
+            outward.items = items.map(item => ({
+                set_no: item.set_no,
+                total_weight: item.total_weight || 0,
+                rack_name: item.rack_name,
+                pallet_number: item.pallet_number,
+                colours: item.colours.map(c => ({
+                    colour: c.colour,
+                    weight: c.weight || 0,
+                    no_of_rolls: c.no_of_rolls || 0,
+                    roll_weight: c.roll_weight || 0
+                }))
+            }));
+        }
+
+        if (req.files) {
+            if (req.files.lotInchargeSignature) {
+                outward.lotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
+                outward.lotInchargeSignTime = new Date();
+            }
+            if (req.files.authorizedSignature) {
+                outward.authorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
+                outward.authorizedSignTime = new Date();
+            }
+        }
+
+        const updatedOutward = await outward.save();
+        res.json(updatedOutward);
+    } else {
+        res.status(404);
+        throw new Error('Outward entry not found');
+    }
+});
+
+
 // @desc    Get Lot Aging Report
 // @route   GET /api/inventory/reports/aging
 // @access  Private
@@ -954,13 +1042,14 @@ export {
     generateDcNumber,
     createOutward,
     getOutwards,
+    deleteOutward,
+    updateOutward,
     getLotAgingReport,
     getInwardColours,
     getFifoRecommendation,
     updateInwardComplaint,
     getQualityAuditReport,
     getLotDetails,
-    getDistinctLots,
     getDistinctLots,
     checkFifoViolation,
 };

@@ -18,6 +18,7 @@ import '../screens/transactions/lot_outward_screen.dart';
 import '../screens/transactions/inward_list_screen.dart';
 import '../screens/transactions/outward_list_screen.dart';
 import '../screens/assessment/item_assignment_list_screen.dart';
+import '../screens/transactions/cutting_order_entry_screen.dart';
 
 // Reports
 import '../screens/reports/overview_report.dart';
@@ -168,6 +169,19 @@ class AppDrawer extends StatelessWidget {
                       context,
                       "Item Assignments",
                       const ItemAssignmentListScreen(),
+                    ),
+                  ],
+                ),
+
+                // Production Group
+                ExpansionTile(
+                  leading: const Icon(LucideIcons.factory),
+                  title: const Text("Production"),
+                  children: [
+                    _buildSubItem(
+                      context,
+                      "Cutting Plan & Lot Setup",
+                      const CuttingOrderEntryScreen(),
                     ),
                   ],
                 ),

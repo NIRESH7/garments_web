@@ -185,6 +185,51 @@ class MobileApiService {
     }
   }
 
+  Future<bool> deleteOutward(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.outward}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> updateOutward(String id, Map<String, dynamic> data) async {
+    try {
+      final formData = FormData();
+
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          formData.files.add(
+            MapEntry(
+              entry.key,
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ),
+          );
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+        }
+      }
+
+      final response = await _client.put(
+        '${ApiConstants.outward}/$id',
+        data: formData,
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data != null && e.response?.data is Map
+          ? (e.response?.data['message'] ?? e.message)
+          : e.message;
+      throw Exception(errorMsg);
+    } catch (e) {
+      throw Exception('Failed to update outward: $e');
+    }
+  }
+
   // --- Reports ---
   Future<List<dynamic>> getLotAgingReport({
     String? lotNo,
@@ -548,7 +593,9 @@ class MobileApiService {
 
   Future<List<dynamic>> getDistinctLots() async {
     try {
-      final response = await _client.get('${ApiConstants.inward}/distinct-lots');
+      final response = await _client.get(
+        '${ApiConstants.inward}/distinct-lots',
+      );
       return response.data ?? [];
     } catch (e) {
       return [];
@@ -780,7 +827,10 @@ class MobileApiService {
   }
 
   // --- Generic Generic API Helpers ---
-  Future<dynamic> get(String url, {Map<String, dynamic>? queryParameters}) async {
+  Future<dynamic> get(
+    String url, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
     final response = await _client.get(url, queryParameters: queryParameters);
     return response.data;
   }
@@ -802,10 +852,70 @@ class MobileApiService {
 
   Future<bool> saveCuttingOrder(Map<String, dynamic> data) async {
     try {
-      final response = await _client.post(ApiConstants.cuttingOrders, data: data);
+      final response = await _client.post(
+        ApiConstants.cuttingOrders,
+        data: data,
+      );
       return response.statusCode == 201;
     } catch (e) {
       print('Save Cutting Order Error: $e');
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getCuttingOrders() async {
+    try {
+      final response = await _client.get(ApiConstants.cuttingOrders);
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCuttingOrderById(String id) async {
+    try {
+      final response = await _client.get('${ApiConstants.cuttingOrders}/$id');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getFifoAllocation(
+    String itemName,
+    String size,
+    double dozen,
+    String dia,
+    double dozenWeight,
+  ) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.fifoAllocation,
+        queryParameters: {
+          'itemName': itemName,
+          'size': size,
+          'dozen': dozen,
+          'dia': dia,
+          'dozenWeight': dozenWeight,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> saveLotAllocation(
+    String planId,
+    List<Map<String, dynamic>> lotAllocations,
+  ) async {
+    try {
+      final response = await _client.post(
+        '${ApiConstants.allocateLots}/$planId/allocate',
+        data: {'lotAllocations': lotAllocations},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
       return false;
     }
   }

@@ -9,6 +9,8 @@ import {
     getCuttingOrders,
     getCuttingOrderById,
     deleteCuttingOrder,
+    getFifoAllocation,
+    saveLotAllocation,
 } from './cuttingOrderController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -21,15 +23,20 @@ router
 
 router.route('/assignments/:id').delete(protect, deleteAssignment);
 
+router.get('/cutting-orders/fifo-allocation', protect, getFifoAllocation);
+
 router
     .route('/cutting-orders')
     .post(protect, createCuttingOrder)
     .get(protect, getCuttingOrders);
 
+router.post('/cutting-orders/:id/allocate', protect, saveLotAllocation);
+
 router
     .route('/cutting-orders/:id')
     .get(protect, getCuttingOrderById)
     .delete(protect, deleteCuttingOrder);
+
 
 export default router;
 

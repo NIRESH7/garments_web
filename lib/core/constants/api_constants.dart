@@ -1,9 +1,8 @@
 class ApiConstants {
-  static const String baseUrl =
-      'http://localhost:5001/api'; // Update to your production IP
-  static const String serverUrl = 'http://localhost:5001';
-
-  // Auth
+static const String baseUrl =
+      'https://garments-backend-9gsw.onrender.com/api'; // Update to your production IP
+  static const String serverUrl =
+      'https://garments-backend-9gsw.onrender.com';  // Auth
   static const String login = '/auth/login';
   static const String register = '/auth/register';
   static const String verifyOtp = '/auth/verify-otp';
@@ -38,6 +37,10 @@ class ApiConstants {
   // Production
   static const String assignments = '/production/assignments';
   static const String cuttingOrders = '/production/cutting-orders';
+  static const String fifoAllocation =
+      '/production/cutting-orders/fifo-allocation';
+  static const String allocateLots =
+      '/production/cutting-orders'; // will append /:id/allocate
 
   // User
   static const String profile = '/users/profile';

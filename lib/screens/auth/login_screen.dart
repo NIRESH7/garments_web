@@ -57,23 +57,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Logo
               Container(
-                    width: 64,
-                    height: 64,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
-                      gradient: ColorPalette.dashboardGradient,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: ColorPalette.primary.withOpacity(0.3),
+                          color: ColorPalette.primary.withOpacity(0.15),
                           blurRadius: 15,
                           offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      LucideIcons.factory,
-                      color: Colors.white,
-                      size: 32,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.asset(
+                        'assets/images/app_logo.png',
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   )
                   .animate()
@@ -87,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 32),
 
               Text(
-                'Textile Lot\nManagement',
+                'Om Vinayaka\nApp',
                 style: Theme.of(context).textTheme.displayLarge,
               ).animate().fadeIn(delay: 400.ms).slideX(begin: -0.2),
 

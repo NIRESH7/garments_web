@@ -12,23 +12,20 @@ const cuttingEntrySchema = mongoose.Schema({
         '105': { type: Number, default: 0 },
         '110': { type: Number, default: 0 },
     },
-    total: { type: Number, default: 0 },
+    totalDozens: { type: Number, default: 0 },
 });
 
-const lotRequirementSchema = mongoose.Schema({
-    itemName: { type: String },
-    size: { type: String },
-    dozen: { type: Number },
-    dia: { type: String },
-    dozenWt: { type: Number },
-    totalWt: { type: Number },
-    roll: { type: Number },
-    set: { type: Number },
-    lotNumber: { type: String },
+const lotAllocationSchema = mongoose.Schema({
+    itemName: { type: String, required: true },
+    size: { type: String, required: true },
+    dozen: { type: Number, required: true },
+    // Fields from FIFO logic
     lotName: { type: String },
-    setNumber: { type: String },
+    lotNo: { type: String },
+    dia: { type: String },
     rackName: { type: String },
-    palletNo: { type: String },
+    palletNumber: { type: String },
+    allocationId: { type: String }, // For tracking
 });
 
 const cuttingOrderSchema = mongoose.Schema(
@@ -38,13 +35,27 @@ const cuttingOrderSchema = mongoose.Schema(
             required: true,
             ref: 'User',
         },
+        planId: {
+            type: String,
+            required: true,
+            unique: true,
+        },
+        planType: {
+            type: String,
+            enum: ['Monthly', 'Yearly'],
+            required: true,
+        },
+        planPeriod: {
+            type: String, // e.g., "2026-02" or "2026"
+            required: true,
+        },
         date: {
             type: Date,
             required: true,
             default: Date.now,
         },
         cuttingEntries: [cuttingEntrySchema],
-        lotRequirements: [lotRequirementSchema],
+        lotAllocations: [lotAllocationSchema],
     },
     {
         timestamps: true,
@@ -54,3 +65,4 @@ const cuttingOrderSchema = mongoose.Schema(
 const CuttingOrder = mongoose.model('CuttingOrder', cuttingOrderSchema);
 
 export default CuttingOrder;
+

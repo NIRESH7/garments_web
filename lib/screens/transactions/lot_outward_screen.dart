@@ -13,7 +13,8 @@ import '../../widgets/custom_dropdown_field.dart';
 import '../../core/constants/api_constants.dart';
 
 class LotOutwardScreen extends StatefulWidget {
-  const LotOutwardScreen({super.key});
+  final Map<String, dynamic>? editOutward;
+  const LotOutwardScreen({super.key, this.editOutward});
 
   @override
   State<LotOutwardScreen> createState() => _LotOutwardScreenState();
@@ -56,19 +57,25 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   XFile? _lotInchargeSignature;
   XFile? _authorizedSignature;
   String? _userRole;
-  bool _isScanned = false;
   int _activeSetIndex = 0;
-  bool _isValidating = false;
-  
+
   // Scan / Manual Toggle
   bool _isManual = true;
   MobileScannerController? _scannerController;
+  bool _isEditMode = false;
+  String? _editInchargeSigUrl;
+  String? _editAuthorizedSigUrl;
 
   @override
   void initState() {
     super.initState();
     _loadUserRole();
-    _loadInitialData();
+    if (widget.editOutward != null) {
+      _isEditMode = true;
+      _loadEditData();
+    } else {
+      _loadInitialData();
+    }
   }
 
   @override
@@ -96,6 +103,71 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       _dcNumber = dc ?? 'ERR-GEN';
       _isLoading = false;
     });
+  }
+
+  Future<void> _loadEditData() async {
+    final categories = await _api.getCategories();
+    final parties = await _api.getParties();
+    final item = widget.editOutward!;
+
+    setState(() {
+      _lotNames = _getValues(categories, 'Lot Name');
+      _dias = _getValues(categories, 'dia');
+      _allColours = _getValues(categories, 'Colours');
+      _parties = parties.map((m) => m['name'] as String).toList();
+
+      _dcNumber = item['dcNo'] ?? '';
+      _selectedLotName = item['lotName'];
+      _selectedDia = item['dia'];
+      _selectedLotNo = item['lotNo'];
+      _selectedParty = item['partyName'];
+      _process = item['process'];
+      _address = item['address'];
+      _vehicleController.text = item['vehicleNo'] ?? '';
+      _outwardDateTime = DateTime.parse(item['dateTime']);
+
+      _editInchargeSigUrl = item['lotInchargeSignature'];
+      _editAuthorizedSigUrl = item['authorizedSignature'];
+
+      // Populate selected sets
+      if (item['items'] != null) {
+        for (var it in item['items']) {
+          _selectedSets.add({
+            'set_no': it['set_no'],
+            'total_weight': (it['total_weight'] as num).toDouble(),
+            'rack_name': it['rack_name'] ?? 'Not Assigned',
+            'pallet_number': it['pallet_number'] ?? 'Not Assigned',
+            'colours': (it['colours'] as List)
+                .map(
+                  (c) => {
+                    'colour': c['colour'],
+                    'weight': (c['weight'] as num).toDouble(),
+                    'roll_weight': (c['roll_weight'] as num).toDouble(),
+                    'no_of_rolls': c['no_of_rolls'] ?? 0,
+                    'isChecked': true,
+                  },
+                )
+                .toList(),
+          });
+        }
+      }
+
+      _isLoading = false;
+    });
+
+    // Populate lot numbers and colours
+    if (_selectedDia != null) {
+      final lots = await _api.getLotsFifo(dia: _selectedDia!);
+      setState(() => _lotNos = lots);
+
+      if (_selectedLotNo != null) {
+        final colours = await _api.getColoursByLot(_selectedLotNo!);
+        setState(() => _currentLotColours = colours);
+
+        final sets = await _api.getBalancedSets(_selectedLotNo!, _selectedDia!);
+        setState(() => _availableSets = sets);
+      }
+    }
   }
 
   List<String> _getValues(List<dynamic> categories, String name) {
@@ -274,6 +346,22 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                         ? Image.network(file.path, fit: BoxFit.contain)
                         : Image.file(File(file.path), fit: BoxFit.contain),
                   )
+                : (label == "Lot Incharge" && _editInchargeSigUrl != null)
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: Image.network(
+                      '${ApiConstants.serverUrl}$_editInchargeSigUrl',
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : (label == "Authorized" && _editAuthorizedSigUrl != null)
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: Image.network(
+                      '${ApiConstants.serverUrl}$_editAuthorizedSigUrl',
+                      fit: BoxFit.contain,
+                    ),
+                  )
                 : const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -302,26 +390,28 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   Future<void> _toggleSetSelection(String setNo, bool selected) async {
     if (selected) {
       if (_selectedLotNo == null || _selectedDia == null) return;
-      
+
       // FIFO VALIDATION
-      setState(() => _isValidating = true);
       final violation = await _api.checkFifoViolation(
         _selectedLotNo!,
         _selectedDia!,
         setNo,
       );
-      setState(() => _isValidating = false);
 
       if (violation != null && violation['violation'] == true) {
         if (!mounted) return;
-        
-        final msg = violation['message'] ?? 
+
+        final msg =
+            violation['message'] ??
             'This Dia, Set Number, Rack, and Pallet Number are already available in a previous lot.';
-            
+
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('FIFO Violation', style: TextStyle(color: Colors.red)),
+            title: const Text(
+              'FIFO Violation',
+              style: TextStyle(color: Colors.red),
+            ),
             content: Text(msg),
             actions: [
               TextButton(
@@ -405,8 +495,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       setState(() {
         _selectedSets.removeWhere((s) => s['set_no'].toString() == setNo);
         if (_activeSetIndex >= _selectedSets.length) {
-          _activeSetIndex =
-              _selectedSets.isEmpty ? 0 : _selectedSets.length - 1;
+          _activeSetIndex = _selectedSets.isEmpty
+              ? 0
+              : _selectedSets.length - 1;
         }
       });
     }
@@ -510,7 +601,13 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       return;
     }
 
-    if (_lotInchargeSignature == null || _authorizedSignature == null) {
+    // signature validation
+    bool inchargeSigned =
+        _lotInchargeSignature != null || _editInchargeSigUrl != null;
+    bool authSigned =
+        _authorizedSignature != null || _editAuthorizedSigUrl != null;
+
+    if (!inchargeSigned || !authSigned) {
       _showError(
         'Mandatory: Both Lot Incharge and Authorized signatures required',
       );
@@ -561,16 +658,34 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     };
 
     try {
-      final success = await _api.saveOutward(outwardData);
+      bool success;
+      if (_isEditMode) {
+        success = await _api.updateOutward(
+          widget.editOutward!['_id'],
+          outwardData,
+        );
+      } else {
+        success = await _api.saveOutward(outwardData);
+      }
+
       if (success) {
         setState(() => _isSaved = true);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Outward Registered: $_dcNumber')),
+          SnackBar(
+            content: Text(
+              _isEditMode
+                  ? 'Outward Updated: $_dcNumber'
+                  : 'Outward Registered: $_dcNumber',
+            ),
+          ),
         );
 
-        // Prompt for sticker printing
-        _showPrintStickerDialog();
+        if (!_isEditMode) {
+          _showPrintStickerDialog();
+        } else {
+          Navigator.pop(context);
+        }
       } else {
         _showError('Failed to save to backend');
       }
@@ -999,13 +1114,15 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          'OUTWARD',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          _isEditMode ? 'EDIT OUTWARD' : 'OUTWARD',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: Icon(_isManual ? LucideIcons.scanLine : LucideIcons.mousePointer2),
+            icon: Icon(
+              _isManual ? LucideIcons.scanLine : LucideIcons.mousePointer2,
+            ),
             tooltip: _isManual ? 'Switch to Scan' : 'Switch to Manual',
             onPressed: () {
               setState(() {
@@ -1045,7 +1162,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               _buildDCSection(),
               const SizedBox(height: 16),
 
-              
               const SizedBox(height: 16),
 
               if (_isManual) _buildMainForm() else _buildScanSection(),
@@ -1076,7 +1192,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                   label: Text(
                     _isSaving
                         ? 'Saving...'
-                        : (_isSaved ? 'Dispatch Confirmed' : 'Save Outward'),
+                        : (_isSaved
+                              ? 'Dispatch Confirmed'
+                              : (_isEditMode
+                                    ? 'Update Outward'
+                                    : 'Save Outward')),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isSaved
@@ -1327,7 +1447,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 final List<Barcode> barcodes = capture.barcodes;
                 for (final barcode in barcodes) {
                   final String? code = barcode.rawValue;
-                   if (code != null && code.isNotEmpty) {
+                  if (code != null && code.isNotEmpty) {
                     _handleScannedCode(code);
                     break; // Handle first valid code
                   }
@@ -1348,40 +1468,45 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   void _handleScannedCode(String code) {
     // Vibrate or sound could be added here
     debugPrint('Scanned Code: $code');
-    
+
     // Logic: Treat code as Lot Number
     // 1. Check if this Lot Number exists in _lotNos (or ANY Lot No if we want to be smarter)
-    // For now, we only have _lotNos loaded if Dia is selected. 
+    // For now, we only have _lotNos loaded if Dia is selected.
     // This might be a limitation. Ideally, scanning should select Lot Name and Dia too.
-    
+
     // If we assume the code IS the Lot Number:
     bool found = false;
-    
+
     // Case 1: Dia is already selected, check if code is in the filtered list
     if (_selectedDia != null && _lotNos.contains(code)) {
       found = true;
-    } 
-    
-    // Case 2: Global search (if we had all lots). 
+    }
+
+    // Case 2: Global search (if we had all lots).
     // Since we don't have all lots loaded, we might need an API call to "find lot details".
     // For this iteration, let's assume the user selects Dia first OR we just try to set it.
-    
+
     if (found) {
-       setState(() {
+      setState(() {
         _selectedLotNo = code;
         _isManual = true; // Switch back to manual to show details
       });
       _onLotNoChanged(code); // Load details
-       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lot Found: $code'), backgroundColor: Colors.green),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lot Found: $code'),
+          backgroundColor: Colors.green,
+        ),
       );
     } else {
-       // Optional: Trigger an API search if not found in local filtered list?
-       // For now, just show error
-       ScaffoldMessenger.of(context).showSnackBar(
+      // Optional: Trigger an API search if not found in local filtered list?
+      // For now, just show error
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lot No "$code" not found in current list. Select Correct DIA first?'), 
-          backgroundColor: Colors.orange
+          content: Text(
+            'Lot No "$code" not found in current list. Select Correct DIA first?',
+          ),
+          backgroundColor: Colors.orange,
         ),
       );
     }

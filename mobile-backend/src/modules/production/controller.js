@@ -5,7 +5,7 @@ import Assignment from './assignmentModel.js';
 // @route   POST /api/production/assignments
 // @access  Private
 const createAssignment = asyncHandler(async (req, res) => {
-    const { fabricItem, size, dia, efficiency, dozenWeight, layLength, layPcs, wastePercentage } = req.body;
+    const { fabricItem, size, dia, efficiency, dozenWeight, layLength, layPcs, wastePercentage, foldingWt, lotName, gsm } = req.body;
 
     const assignment = await Assignment.create({
         user: req.user._id,
@@ -17,6 +17,9 @@ const createAssignment = asyncHandler(async (req, res) => {
         layLength,
         layPcs,
         wastePercentage,
+        foldingWt,
+        lotName,
+        gsm,
     });
 
     res.status(201).json(assignment);

@@ -19,9 +19,22 @@ const assignmentSchema = mongoose.Schema(
             type: String,
             required: true,
         },
+        lotName: {
+            type: String,
+            required: false,
+        },
+        gsm: {
+            type: String,
+            required: false,
+        },
         efficiency: {
             type: Number,
             required: true,
+        },
+        foldingWt: {
+            type: Number,
+            required: false,
+            default: 0.0,
         },
         dozenWeight: {
             type: Number,

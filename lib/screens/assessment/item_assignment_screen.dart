@@ -15,13 +15,17 @@ class ItemAssignmentScreen extends StatefulWidget {
 class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
   final _api = MobileApiService();
 
-  String? _selectedItem, _selectedSize, _selectedDia, _selectedEfficiency;
+  String? _selectedItem, _selectedSize, _selectedDia;
+  final _efficiencyController = TextEditingController();
   final _dozenWeightController = TextEditingController();
   final _layLengthController = TextEditingController();
   final _layPcsController = TextEditingController();
   final _wastePercentageController = TextEditingController();
+  final _foldingWtController = TextEditingController();
+  final _lotNameController = TextEditingController();
+  final _gsmController = TextEditingController();
 
-  List<String> _items = [], _sizes = [], _dias = [], _efficiencies = [];
+  List<String> _items = [], _sizes = [], _dias = [];
   bool _isLoading = true;
 
   @override
@@ -37,20 +41,17 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       _items = _getValues(categories, 'Item');
       _sizes = _getValues(categories, 'Size');
       _dias = _getValues(categories, 'Dia');
-      _efficiencies = _getValues(categories, 'Efficiency');
-      if (_efficiencies.isEmpty) {
-        _efficiencies = _getValues(categories, 'Efficency');
-      }
       _isLoading = false;
     });
   }
 
-  void _onEfficiencyChanged(String? val) {
-    setState(() => _selectedEfficiency = val);
-    if (val != null) {
-      final eff = double.tryParse(val.replaceAll('%', '').trim()) ?? 0;
+  void _onEfficiencyChanged(String val) {
+    if (val.isNotEmpty) {
+      final eff = double.tryParse(val) ?? 0;
       final waste = 100 - eff;
       _wastePercentageController.text = waste.toStringAsFixed(2);
+    } else {
+      _wastePercentageController.text = '';
     }
   }
 
@@ -73,16 +74,15 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
     if (_selectedItem == null ||
         _selectedSize == null ||
         _selectedDia == null ||
-        _selectedEfficiency == null ||
+        _efficiencyController.text.isEmpty ||
         _dozenWeightController.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields')),
+      );
       return;
     }
 
-    final efficiencyValue =
-        double.tryParse(_selectedEfficiency!.replaceAll('%', '').trim()) ?? 0.0;
+    final efficiencyValue = double.tryParse(_efficiencyController.text) ?? 0.0;
 
     final data = {
       'fabricItem': _selectedItem,
@@ -92,7 +92,11 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       'dozenWeight': double.tryParse(_dozenWeightController.text) ?? 0.0,
       'layLength': double.tryParse(_layLengthController.text) ?? 0.0,
       'layPcs': int.tryParse(_layPcsController.text) ?? 0,
-      'wastePercentage': double.tryParse(_wastePercentageController.text) ?? 0.0,
+      'wastePercentage':
+          double.tryParse(_wastePercentageController.text) ?? 0.0,
+      'foldingWt': double.tryParse(_foldingWtController.text) ?? 0.0,
+      'lotName': _lotNameController.text.trim(),
+      'gsm': _gsmController.text.trim(),
     };
 
     final success = await _api.createAssignment(data);
@@ -160,11 +164,76 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        _buildDropdown(
-                          _efficiencies,
-                          _selectedEfficiency,
-                          _onEfficiencyChanged,
-                          'Efficiency (%)',
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildFieldLabel('Efficiency (%)'),
+                                  TextField(
+                                    controller: _efficiencyController,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: _onEfficiencyChanged,
+                                    decoration: const InputDecoration(
+                                      hintText: 'e.g. 85',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildFieldLabel('Folding Wt (Kg)'),
+                                  TextField(
+                                    controller: _foldingWtController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      hintText: '0.00',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildFieldLabel('Lot Name (Optional)'),
+                                  TextField(
+                                    controller: _lotNameController,
+                                    decoration: const InputDecoration(
+                                      hintText: 'e.g. LOT-A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildFieldLabel('GSM (Optional)'),
+                                  TextField(
+                                    controller: _gsmController,
+                                    decoration: const InputDecoration(
+                                      hintText: 'e.g. 180',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 20),
                         _buildFieldLabel('Dozen Weight (Kg)'),
@@ -182,7 +251,7 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        
+
                         // Lay Length & Lay Pcs Row
                         Row(
                           children: [
@@ -194,7 +263,9 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                                   TextField(
                                     controller: _layLengthController,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(hintText: '0.00'),
+                                    decoration: const InputDecoration(
+                                      hintText: '0.00',
+                                    ),
                                   ),
                                 ],
                               ),
@@ -208,7 +279,9 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                                   TextField(
                                     controller: _layPcsController,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(hintText: '0'),
+                                    decoration: const InputDecoration(
+                                      hintText: '0',
+                                    ),
                                   ),
                                 ],
                               ),
@@ -222,6 +295,8 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                         TextField(
                           controller: _wastePercentageController,
                           readOnly: true, // Auto-calculated
+                          canRequestFocus: false,
+                          enableInteractiveSelection: false,
                           decoration: const InputDecoration(
                             hintText: '0.00',
                             filled: true,

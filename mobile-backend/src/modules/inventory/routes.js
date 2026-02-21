@@ -9,12 +9,13 @@ import {
     generateDcNumber,
     createOutward,
     getOutwards,
+    deleteOutward,
+    updateOutward,
     getLotAgingReport,
     getInwardColours,
     getFifoRecommendation,
     updateInwardComplaint,
     getQualityAuditReport,
-    getLotDetails,
     getLotDetails,
     getDistinctLots,
     checkFifoViolation,
@@ -71,6 +72,13 @@ router.route('/outward')
         { name: 'authorizedSignature', maxCount: 1 },
     ]), createOutward)
     .get(protect, getOutwards);
+
+router.route('/outward/:id')
+    .put(protect, upload.fields([
+        { name: 'lotInchargeSignature', maxCount: 1 },
+        { name: 'authorizedSignature', maxCount: 1 },
+    ]), updateOutward)
+    .delete(protect, deleteOutward);
 
 router.get('/outward/generate-dc', protect, generateDcNumber);
 router.get('/outward/check-fifo', protect, checkFifoViolation);
