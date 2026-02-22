@@ -480,6 +480,15 @@ class MobileApiService {
     }
   }
 
+  Future<bool> deleteAssignment(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.assignments}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // --- Master ---
   Future<List<dynamic>> getParties() async {
     try {
@@ -786,7 +795,10 @@ class MobileApiService {
   }
 
   // --- AI Chat ---
-  Future<Map<String, dynamic>> chatWithAI(String message, {String language = 'en'}) async {
+  Future<Map<String, dynamic>> chatWithAI(
+    String message, {
+    String language = 'en',
+  }) async {
     try {
       final response = await _client.post(
         ApiConstants.aiChat,
@@ -794,7 +806,9 @@ class MobileApiService {
       );
       return response.data;
     } catch (e) {
-      return {'text': 'Sorry, I am having trouble connecting to my brain right now.'};
+      return {
+        'text': 'Sorry, I am having trouble connecting to my brain right now.',
+      };
     }
   }
 
@@ -998,8 +1012,10 @@ class MobileApiService {
 
   Future<dynamic> addTaskReply(String taskId, Map<String, dynamic> data) async {
     try {
-      final response = await _client.post('${ApiConstants.tasks}/$taskId/reply',
-          data: data);
+      final response = await _client.post(
+        '${ApiConstants.tasks}/$taskId/reply',
+        data: data,
+      );
       return response.data;
     } catch (e) {
       return null;
@@ -1008,8 +1024,10 @@ class MobileApiService {
 
   Future<bool> updateTaskStatus(String taskId, String status) async {
     try {
-      final response = await _client.put('${ApiConstants.tasks}/$taskId/status',
-          data: {'status': status});
+      final response = await _client.put(
+        '${ApiConstants.tasks}/$taskId/status',
+        data: {'status': status},
+      );
       return response.statusCode == 200;
     } catch (e) {
       return false;

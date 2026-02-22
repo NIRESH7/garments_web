@@ -28,6 +28,11 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   List<dynamic> _inwardData = [];
   List<dynamic> _outwardData = [];
   List<dynamic> _closingData = [];
+  List<String> _masterLotNames = [];
+  List<String> _masterLotNos = [];
+  List<String> _masterParties = [];
+  List<String> _masterDias = [];
+  List<String> _masterColours = [];
 
   String _statusFilter = 'All'; // All, Complete, Incomplete
 
@@ -71,7 +76,48 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         _inwardData = results[1];
         _outwardData = results[2];
         _closingData = results[3];
+
+        // Extract master lists
+        _masterLotNames =
+            _agingData
+                .map((e) => e['lot_name']?.toString() ?? '')
+                .where((s) => s.isNotEmpty)
+                .toSet()
+                .toList()
+              ..sort();
+        _masterLotNos =
+            _agingData
+                .map((e) => e['lot_number']?.toString() ?? '')
+                .where((s) => s.isNotEmpty)
+                .toSet()
+                .toList()
+              ..sort();
         _isLoading = false;
+      });
+
+      // Fetch categories for Dia and Colour
+      final categories = await _apiService.getCategories();
+      final parties = await _apiService.getParties();
+
+      setState(() {
+        _masterParties =
+            parties.map((e) => e['name']?.toString() ?? '').toList()..sort();
+
+        for (var cat in categories) {
+          final name = cat['name']?.toString().toLowerCase() ?? '';
+          final values =
+              (cat['values'] as List?)
+                  ?.map((v) => v['name']?.toString() ?? '')
+                  .toList() ??
+              [];
+          if (name == 'dia' || name == 'dias') _masterDias = values..sort();
+          if (name == 'colour' ||
+              name == 'color' ||
+              name == 'colours' ||
+              name == 'colors') {
+            _masterColours = values..sort();
+          }
+        }
       });
     } catch (e) {
       setState(() => _isLoading = false);
@@ -108,6 +154,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: 'Aging Details'),
             Tab(text: 'Aging Summary'),
@@ -168,6 +215,11 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       builder: (ctx) => _FilterDialog(
         tabIndex: index,
         initialFilters: currentFilters,
+        lotNames: _masterLotNames,
+        lotNos: _masterLotNos,
+        parties: _masterParties,
+        dias: _masterDias,
+        colours: _masterColours,
         onApply: (newFilters) {
           setState(() {
             _filters[index] = newFilters;
@@ -293,13 +345,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
 
       final lotNo = item['lot_number'] ?? 'N/A';
       final lotName = item['lot_name'] ?? 'N/A';
-      
+
       if (!summary.containsKey(lotNo)) {
         summary[lotNo] = {
           'lotNo': lotNo,
           'lotName': lotName,
           'rolls': 0,
-          'weight': 0.0
+          'weight': 0.0,
         };
       }
       summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
@@ -307,7 +359,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     }
 
     return _buildReportTable(
-      headers: ['Lot Number', 'Lot Name', 'Total Rolls', 'Total Weight', 'Status'],
+      headers: [
+        'Lot Number',
+        'Lot Name',
+        'Total Rolls',
+        'Total Weight',
+        'Status',
+      ],
       rows: summary.values.map((v) {
         return <String>[
           v['lotNo'],
@@ -370,11 +428,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       for (var out in _outwardData) {
         final dia = out['dia']?.toString() ?? '-';
         if (!summary.containsKey(dia)) {
-          summary[dia] = {
-            'lots': <String>{},
-            'rolls': 0,
-            'weight': 0.0,
-          };
+          summary[dia] = {'lots': <String>{}, 'rolls': 0, 'weight': 0.0};
         }
         if (out['lotNo'] != null) {
           summary[dia]!['lots'].add(out['lotNo'].toString());
@@ -523,8 +577,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                         style: TextStyle(
                           fontSize: 12,
                           color: textColor,
-                          fontWeight:
-                              textColor != null ? FontWeight.bold : null,
+                          fontWeight: textColor != null
+                              ? FontWeight.bold
+                              : null,
                         ),
                       ),
                     );
@@ -574,9 +629,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     if (_isLoading) return;
     final data = _getReportDataForCurrentTab();
     if (data['rows'].isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No data to print')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No data to print')));
       return;
     }
 
@@ -592,13 +647,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
 
       await Printing.layoutPdf(
         onLayout: (format) async => pdfBytes,
-        name: '${data['title'].replaceAll(' ', '_')}_${DateFormat('ddMMyy').format(DateTime.now())}',
+        name:
+            '${data['title'].replaceAll(' ', '_')}_${DateFormat('ddMMyy').format(DateTime.now())}',
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating PDF: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating PDF: $e')));
       }
     }
   }
@@ -607,9 +663,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     if (_isLoading) return;
     final data = _getReportDataForCurrentTab();
     if (data['rows'].isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No data to share')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No data to share')));
       return;
     }
 
@@ -624,8 +680,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           rows: data['rows'],
         );
 
-        final fileName = '${data['title'].replaceAll(' ', '_')}_${DateFormat('ddMMyy').format(DateTime.now())}.pdf';
-        
+        final fileName =
+            '${data['title'].replaceAll(' ', '_')}_${DateFormat('ddMMyy').format(DateTime.now())}.pdf';
+
         // Use Share.shareXFiles for better native sharing support
         await Share.shareXFiles(
           [
@@ -635,21 +692,24 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               mimeType: 'application/pdf',
             ),
           ],
-          text: '${data['title']} - ${DateFormat('dd/MM/yy').format(DateTime.now())}',
+          text:
+              '${data['title']} - ${DateFormat('dd/MM/yy').format(DateTime.now())}',
         );
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error sharing PDF: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error sharing PDF: $e')));
         }
       }
     } else if (format == 'WhatsApp') {
       final buffer = StringBuffer();
       buffer.writeln("*${data['title'].toUpperCase()}*");
-      buffer.writeln("Generated: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}");
+      buffer.writeln(
+        "Generated: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}",
+      );
       buffer.writeln("---------------------------------");
-      
+
       // Add Headers (Joined by |)
       buffer.writeln(data['headers'].join(" | "));
       buffer.writeln("---------------------------------");
@@ -679,7 +739,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       case 0:
         title = "Aging Details Report";
         headers = [
-          'Date', 'Lot No', 'Name', 'Dia', 'Colour', 'Rolls', 'Wt', 'Days',
+          'Date',
+          'Lot No',
+          'Name',
+          'Dia',
+          'Colour',
+          'Rolls',
+          'Wt',
+          'Days',
         ];
         rows = _agingData.map((item) {
           final aging = _calculateAging(item['inward_date']);
@@ -697,8 +764,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         break;
       case 1:
         title = "Aging Summary Report";
-        headers = ['Lot Number', 'Lot Name', 'Total Rolls', 'Total Weight', 'Status'];
-        
+        headers = [
+          'Lot Number',
+          'Lot Name',
+          'Total Rolls',
+          'Total Weight',
+          'Status',
+        ];
+
         final filters = _filters[1] ?? {};
         final dateFilter = filters['date'];
 
@@ -706,18 +779,24 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         for (var item in _agingData) {
           // Local Date Filter
           if (dateFilter != null && dateFilter.isNotEmpty) {
-            if (!_formatDate(item['inward_date']).contains(dateFilter)) continue;
+            if (!_formatDate(item['inward_date']).contains(dateFilter))
+              continue;
           }
 
           final lotNo = item['lot_number'] ?? 'N/A';
           final lotName = item['lot_name'] ?? 'N/A';
           if (!summary.containsKey(lotNo)) {
-            summary[lotNo] = {'lotNo': lotNo, 'lotName': lotName, 'rolls': 0, 'weight': 0.0};
+            summary[lotNo] = {
+              'lotNo': lotNo,
+              'lotName': lotName,
+              'rolls': 0,
+              'weight': 0.0,
+            };
           }
           summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
           summary[lotNo]['weight'] += (item['weight'] ?? 0.0) as num;
         }
-        
+
         rows = summary.values.map((v) {
           return <String>[
             v['lotNo'],
@@ -731,7 +810,15 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       case 2:
         title = "Inward Report";
         headers = [
-          'Date', 'Inward No', 'Party', 'Party DC', 'Lot No', 'Lot Name', 'Roll', 'Wt', 'Val',
+          'Date',
+          'Inward No',
+          'Party',
+          'Party DC',
+          'Lot No',
+          'Lot Name',
+          'Roll',
+          'Wt',
+          'Val',
         ];
         for (var inward in _inwardData) {
           final entries = inward['diaEntries'] as List? ?? [];
@@ -771,7 +858,10 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             }
             final items = out['items'] as List? ?? [];
             summary[dia]!['rolls'] += items.length;
-            summary[dia]!['weight'] += items.fold(0.0, (sum, i) => sum + (i['total_weight'] ?? 0));
+            summary[dia]!['weight'] += items.fold(
+              0.0,
+              (sum, i) => sum + (i['total_weight'] ?? 0),
+            );
           }
           rows = summary.entries.map((e) {
             return <String>[
@@ -783,11 +873,22 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           }).toList();
         } else {
           headers = [
-            'Party', 'Lot Name', 'Date', 'DC No', 'Lot No', 'Dia', 'Process', 'Rolls', 'Wt',
+            'Party',
+            'Lot Name',
+            'Date',
+            'DC No',
+            'Lot No',
+            'Dia',
+            'Process',
+            'Rolls',
+            'Wt',
           ];
           rows = _outwardData.map((out) {
             final items = out['items'] as List? ?? [];
-            final weight = items.fold(0.0, (sum, i) => sum + (i['total_weight'] ?? 0));
+            final weight = items.fold(
+              0.0,
+              (sum, i) => sum + (i['total_weight'] ?? 0),
+            );
             return <String>[
               out['partyName'] ?? '-',
               out['lotName'] ?? '-',
@@ -805,7 +906,15 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       case 4:
         title = "Closing Stock Report";
         headers = [
-          'Lot No', 'Lot Name', 'In Roll', 'In Wt', 'Out Roll', 'Out Wt', 'Bal Roll', 'Bal Wt', 'Status',
+          'Lot No',
+          'Lot Name',
+          'In Roll',
+          'In Wt',
+          'Out Roll',
+          'Out Wt',
+          'Bal Roll',
+          'Bal Wt',
+          'Status',
         ];
         rows = _closingData.map((item) {
           return <String>[
@@ -850,11 +959,21 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
 class _FilterDialog extends StatefulWidget {
   final int tabIndex;
   final Map<String, dynamic> initialFilters;
+  final List<String> lotNames;
+  final List<String> lotNos;
+  final List<String> parties;
+  final List<String> dias;
+  final List<String> colours;
   final Function(Map<String, dynamic>) onApply;
 
   const _FilterDialog({
     required this.tabIndex,
     required this.initialFilters,
+    required this.lotNames,
+    required this.lotNos,
+    required this.parties,
+    required this.dias,
+    required this.colours,
     required this.onApply,
   });
 
@@ -920,20 +1039,17 @@ class _FilterDialogState extends State<_FilterDialog> {
                 3,
                 4,
               ].contains(widget.tabIndex)) // Lot Name (All Reports)
-                _buildTextField('lotName', 'Lot Name'),
-              if ([
-                0,
-                2,
-                3,
-                4,
-              ].contains(widget.tabIndex)) // Lot No (Aging, Inward, Outward, Closing)
-                _buildTextField('lotNo', 'Lot No'),
+                _buildDropdown('lotName', 'Lot Name', widget.lotNames),
+              if ([0, 2, 3, 4].contains(
+                widget.tabIndex,
+              )) // Lot No (Aging, Inward, Outward, Closing)
+                _buildDropdown('lotNo', 'Lot No', widget.lotNos),
               if (widget.tabIndex == 2) // Party (Inward)
-                _buildTextField('party', 'Party Name'),
+                _buildDropdown('party', 'Party Name', widget.parties),
               if ([0, 3].contains(widget.tabIndex)) // Dia (Aging, Outward)
-                _buildTextField('dia', 'Dia'),
+                _buildDropdown('dia', 'Dia', widget.dias),
               if (widget.tabIndex == 0) // Colour (Aging)
-                _buildTextField('colour', 'Colour'),
+                _buildDropdown('colour', 'Colour', widget.colours),
               if (widget.tabIndex == 4) // Status (Closing)
                 _buildDropdown('status', 'Status', [
                   'All',
@@ -957,24 +1073,6 @@ class _FilterDialogState extends State<_FilterDialog> {
           child: const Text('Apply'),
         ),
       ],
-    );
-  }
-
-  Widget _buildTextField(String key, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: TextFormField(
-        initialValue: _filters[key],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-        ),
-        onChanged: (val) => _filters[key] = val,
-      ),
     );
   }
 

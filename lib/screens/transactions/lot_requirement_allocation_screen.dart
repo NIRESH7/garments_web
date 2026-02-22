@@ -3,6 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/custom_dropdown_field.dart';
 
 class LotRequirementAllocationScreen extends StatefulWidget {
   const LotRequirementAllocationScreen({super.key});
@@ -21,28 +22,35 @@ class _LotRequirementAllocationScreenState
 
   // Data from API
   List<dynamic> _allPlans = [];
-  List<String> _itemNames = [];
+  List<String> _masterItemNames = [];
+  List<String> _masterSizes = [];
   List<String> _dias = [];
+  List<dynamic> _assignments = [];
 
   // Form State
   String? _selectedPlanId;
   String? _selectedItem;
   String? _selectedSize;
   String? _selectedDia;
-  
+
   final TextEditingController _dozenController = TextEditingController();
   final TextEditingController _dozenWeightController = TextEditingController();
   final TextEditingController _lotNameController = TextEditingController();
   final TextEditingController _gsmController = TextEditingController();
   final TextEditingController _efficiencyController = TextEditingController();
   final TextEditingController _wasteController = TextEditingController();
+  final TextEditingController _foldingWeightController =
+      TextEditingController();
 
   double _dozenBalance = 0;
   double _dozenWeight = 0;
   List<Map<String, dynamic>> _allocations = [];
 
-  double get _fabricRequiredKg => (double.tryParse(_dozenController.text) ?? 0) * _dozenWeight;
-  int get _rollsRequired => _fabricRequiredKg > 0 ? (_fabricRequiredKg / 20).ceil() : 0;
+  double get _fabricRequiredKg =>
+      (double.tryParse(_dozenController.text) ?? 0) *
+      (_dozenWeight + (double.tryParse(_foldingWeightController.text) ?? 0));
+  int get _rollsRequired =>
+      _fabricRequiredKg > 0 ? (_fabricRequiredKg / 20).ceil() : 0;
 
   @override
   void initState() {
@@ -57,7 +65,11 @@ class _LotRequirementAllocationScreenState
     _efficiencyController.addListener(() {
       final eff = double.tryParse(_efficiencyController.text) ?? 0;
       _wasteController.text = (100 - eff).toStringAsFixed(2);
+      setState(() {});
     });
+    _foldingWeightController.addListener(() => setState(() {}));
+    _gsmController.addListener(() => setState(() {}));
+    _lotNameController.addListener(() => setState(() {}));
   }
 
   @override
@@ -68,6 +80,7 @@ class _LotRequirementAllocationScreenState
     _gsmController.dispose();
     _efficiencyController.dispose();
     _wasteController.dispose();
+    _foldingWeightController.dispose();
     super.dispose();
   }
 
@@ -76,10 +89,21 @@ class _LotRequirementAllocationScreenState
     try {
       final plans = await _api.getCuttingOrders();
       final categories = await _api.getCategories();
-      
+
       setState(() {
         _allPlans = plans;
         _dias = _getValues(categories, ['Dia']);
+        _masterItemNames = _getValues(categories, [
+          'Item Name',
+          'itemName',
+          'item',
+        ]);
+        _masterSizes = _getValues(categories, ['Size', 'size']);
+      });
+
+      final assignments = await _api.getAssignments();
+      setState(() {
+        _assignments = assignments;
         _isLoading = false;
       });
     } catch (e) {
@@ -111,12 +135,6 @@ class _LotRequirementAllocationScreenState
       _selectedPlanId = planId;
       _selectedItem = null;
       _selectedSize = null;
-      _itemNames = [];
-      if (planId != null) {
-        final plan = _allPlans.firstWhere((p) => p['_id'] == planId);
-        final entries = plan['cuttingEntries'] as List;
-        _itemNames = entries.map((e) => e['itemName'].toString()).toSet().toList();
-      }
     });
   }
 
@@ -124,6 +142,7 @@ class _LotRequirementAllocationScreenState
     setState(() {
       _selectedItem = item;
       _selectedSize = null;
+      _updateFromAssignments();
     });
   }
 
@@ -132,18 +151,131 @@ class _LotRequirementAllocationScreenState
       _selectedSize = size;
       if (_selectedPlanId != null && _selectedItem != null && size != null) {
         final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId);
-        final entry = (plan['cuttingEntries'] as List).firstWhere((e) => e['itemName'] == _selectedItem);
-        final dozen = (entry['sizeQuantities'][size] ?? 0).toDouble();
-        _dozenController.text = dozen.toString();
-        _dozenBalance = dozen;
+        final entry = (plan['cuttingEntries'] as List).firstWhere(
+          (e) => e['itemName'] == _selectedItem,
+          orElse: () => null,
+        );
+        if (entry != null) {
+          final dozen = (entry['sizeQuantities'][size] ?? 0).toDouble();
+          _dozenController.text = dozen.toString();
+          _dozenBalance = dozen;
+        }
       }
+      _updateFromAssignments();
     });
+  }
+
+  void _onDiaSelected(String? dia) {
+    setState(() {
+      _selectedDia = dia;
+      _updateFromAssignments();
+    });
+  }
+
+  void _updateFromAssignments() {
+    if (_selectedItem == null) return;
+
+    // 1. Find all assignments for this item
+    // Find potential matches
+    final itemMatches = _assignments
+        .where(
+          (a) =>
+              a['fabricItem'].toString().trim().toLowerCase() ==
+              _selectedItem!.trim().toLowerCase(),
+        )
+        .toList();
+
+    if (itemMatches.isEmpty) return;
+
+    // 2. Try to find the best match (prioritize Size and Dia if selected)
+    dynamic bestMatch;
+
+    // Try exact Match (Item + Size + Dia)
+    if (_selectedSize != null && _selectedDia != null) {
+      bestMatch = itemMatches.firstWhere(
+        (a) =>
+            a['size'].toString().trim().toLowerCase() ==
+                _selectedSize!.trim().toLowerCase() &&
+            a['dia'].toString().trim().toLowerCase() ==
+                _selectedDia!.trim().toLowerCase(),
+        orElse: () => null,
+      );
+    }
+
+    // Try Match (Item + Size)
+    if (bestMatch == null && _selectedSize != null) {
+      bestMatch = itemMatches.firstWhere(
+        (a) =>
+            a['size'].toString().trim().toLowerCase() ==
+            _selectedSize!.trim().toLowerCase(),
+        orElse: () => null,
+      );
+    }
+
+    // Fallback to the first assignment for this item
+    bestMatch ??= itemMatches.first;
+
+    // 3. Auto-fill fields from the bestMatch
+    if (bestMatch != null) {
+      // Auto-fill Size if not selected
+      if (_selectedSize == null) {
+        final matchSize = bestMatch['size']?.toString();
+        if (matchSize != null) {
+          _selectedSize = matchSize;
+          // Trigger the plan-sync logic for this size
+          if (_selectedPlanId != null && _selectedItem != null) {
+            final plan = _allPlans.firstWhere(
+              (p) => p['_id'] == _selectedPlanId,
+              orElse: () => null,
+            );
+            if (plan != null) {
+              final entry = (plan['cuttingEntries'] as List).firstWhere(
+                (e) => e['itemName'] == _selectedItem,
+                orElse: () => null,
+              );
+              if (entry != null) {
+                final dozen = (entry['sizeQuantities'][matchSize] ?? 0)
+                    .toDouble();
+                _dozenController.text = dozen.toString();
+                _dozenBalance = dozen;
+              }
+            }
+          }
+        }
+      }
+
+      // Auto-fill Dia if not selected
+      if (_selectedDia == null) {
+        final matchDia = bestMatch['dia']?.toString();
+        if (matchDia != null && _dias.contains(matchDia)) {
+          _selectedDia = matchDia;
+        }
+      }
+
+      // Fill Text Fields
+      _lotNameController.text = bestMatch['lotName']?.toString() ?? '';
+      _gsmController.text = bestMatch['gsm']?.toString() ?? '';
+      _efficiencyController.text = bestMatch['efficiency']?.toString() ?? '';
+      _dozenWeightController.text = bestMatch['dozenWeight']?.toString() ?? '';
+      _foldingWeightController.text = bestMatch['foldingWt']?.toString() ?? '';
+
+      // Update calculations
+      final eff = double.tryParse(_efficiencyController.text) ?? 0;
+      _wasteController.text = (100 - eff).toStringAsFixed(2);
+      _dozenWeight = double.tryParse(_dozenWeightController.text) ?? 0;
+    }
   }
 
   Future<void> _runAllocation() async {
     final dozen = double.tryParse(_dozenController.text) ?? 0;
-    if (_selectedItem == null || _selectedSize == null || _selectedDia == null || dozen <= 0 || _dozenWeight <= 0) {
-      _showError('Please select Item, Size, Dia and enter positive Dozen & Weight');
+    if (_selectedItem == null ||
+        _selectedSize == null ||
+        _selectedDia == null ||
+        dozen <= 0 ||
+        _dozenWeight <= 0) {
+      _showError(
+        'Please select Item, Size, Dia and enter positive Dozen & Weight',
+      );
       return;
     }
 
@@ -158,9 +290,11 @@ class _LotRequirementAllocationScreenState
       );
       setState(() {
         if (result != null) {
-          _allocations = List<Map<String, dynamic>>.from(result['allocations'] ?? []);
+          _allocations = List<Map<String, dynamic>>.from(
+            result['allocations'] ?? [],
+          );
           if (result['success'] == false) {
-             _showError(result['message'] ?? 'Insufficient stock');
+            _showError(result['message'] ?? 'Insufficient stock');
           }
         }
         _isAllocating = false;
@@ -180,18 +314,26 @@ class _LotRequirementAllocationScreenState
     setState(() => _isSaving = true);
     try {
       // Prepare full allocation data for record
-      final fullAllocations = _allocations.map((a) => {
-        ...a,
-        'itemName': _selectedItem,
-        'size': _selectedSize,
-        'dia': _selectedDia,
-        'lotNameAssigned': _lotNameController.text,
-        'gsm': _gsmController.text,
-        'dozenWeight': _dozenWeight,
-        'efficiency': _efficiencyController.text,
-      }).toList();
+      final fullAllocations = _allocations
+          .map(
+            (a) => {
+              ...a,
+              'itemName': _selectedItem,
+              'size': _selectedSize,
+              'dia': _selectedDia,
+              'lotNameAssigned': _lotNameController.text,
+              'gsm': _gsmController.text,
+              'dozenWeight': _dozenWeight,
+              'efficiency': _efficiencyController.text,
+              'foldingWeight': _foldingWeightController.text,
+            },
+          )
+          .toList();
 
-      final success = await _api.saveLotAllocation(_selectedPlanId!, fullAllocations);
+      final success = await _api.saveLotAllocation(
+        _selectedPlanId!,
+        fullAllocations,
+      );
       if (success) {
         _showSuccess('Allocations Saved Successfully');
         Navigator.pop(context);
@@ -206,21 +348,21 @@ class _LotRequirementAllocationScreenState
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   void _showSuccess(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.green),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
   }
 
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
-    
+
     return Scaffold(
       appBar: AppBar(title: const Text('LOT REQUIREMENT ALLOCATION')),
       drawer: const AppDrawer(),
@@ -231,22 +373,22 @@ class _LotRequirementAllocationScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   _buildSectionHeader('PLAN SELECTION', primaryColor),
-                   _buildPlanCard(),
-                   const SizedBox(height: 20),
-                   if (_selectedPlanId != null) ...[
-                     _buildSectionHeader('REQUIREMENT DETAILS', primaryColor),
-                     _buildRequirementCard(),
-                     const SizedBox(height: 20),
-                     _buildSectionHeader('WEIGHT & CALCULATION', primaryColor),
-                     _buildCalculationCard(primaryColor),
-                     const SizedBox(height: 20),
-                     _buildSectionHeader('FIFO ALLOCATIONS', primaryColor),
-                     _buildAllocationTable(primaryColor),
-                     const SizedBox(height: 30),
-                     _buildSaveButton(primaryColor),
-                   ],
-                   const SizedBox(height: 50),
+                  _buildSectionHeader('PLAN SELECTION', primaryColor),
+                  _buildPlanCard(),
+                  const SizedBox(height: 20),
+                  if (_selectedPlanId != null) ...[
+                    _buildSectionHeader('REQUIREMENT DETAILS', primaryColor),
+                    _buildRequirementCard(),
+                    const SizedBox(height: 20),
+                    _buildSectionHeader('WEIGHT & CALCULATION', primaryColor),
+                    _buildCalculationCard(primaryColor),
+                    const SizedBox(height: 20),
+                    _buildSectionHeader('FIFO ALLOCATIONS', primaryColor),
+                    _buildAllocationTable(primaryColor),
+                    const SizedBox(height: 30),
+                    _buildSaveButton(primaryColor),
+                  ],
+                  const SizedBox(height: 50),
                 ],
               ),
             ),
@@ -258,7 +400,11 @@ class _LotRequirementAllocationScreenState
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
         title,
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+          color: color,
+        ),
       ),
     );
   }
@@ -271,10 +417,14 @@ class _LotRequirementAllocationScreenState
         child: DropdownButtonFormField<String>(
           value: _selectedPlanId,
           decoration: const InputDecoration(labelText: 'Select Saved Plan'),
-          items: _allPlans.map((p) => DropdownMenuItem(
-            value: p['_id'].toString(),
-            child: Text('${p['planType']} - ${p['planPeriod']}'),
-          )).toList(),
+          items: _allPlans
+              .map(
+                (p) => DropdownMenuItem(
+                  value: p['_id'].toString(),
+                  child: Text('${p['planType']} - ${p['planPeriod']}'),
+                ),
+              )
+              .toList(),
           onChanged: _onPlanSelected,
         ),
       ),
@@ -282,11 +432,27 @@ class _LotRequirementAllocationScreenState
   }
 
   Widget _buildRequirementCard() {
-    List<String> sizes = [];
+    List<String> sizes = _masterSizes;
     if (_selectedPlanId != null && _selectedItem != null) {
-      final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId);
-      final entry = (plan['cuttingEntries'] as List).firstWhere((e) => e['itemName'] == _selectedItem);
-      sizes = (entry['sizeQuantities'] as Map).keys.where((k) => (entry['sizeQuantities'][k] ?? 0) > 0).map((k) => k.toString()).toList();
+      final plan = _allPlans.firstWhere(
+        (p) => p['_id'] == _selectedPlanId,
+        orElse: () => null,
+      );
+      if (plan != null) {
+        final entry = (plan['cuttingEntries'] as List).firstWhere(
+          (e) => e['itemName'] == _selectedItem,
+          orElse: () => null,
+        );
+        if (entry != null) {
+          final planSizes = (entry['sizeQuantities'] as Map).keys
+              .where((k) => (entry['sizeQuantities'][k] ?? 0) > 0)
+              .map((k) => k.toString())
+              .toList();
+          if (planSizes.isNotEmpty) {
+            sizes = planSizes;
+          }
+        }
+      }
     }
 
     return Card(
@@ -295,31 +461,33 @@ class _LotRequirementAllocationScreenState
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            DropdownButtonFormField<String>(
+            CustomDropdownField(
+              label: 'Item Name',
+              items: _masterItemNames,
               value: _selectedItem,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Item Name'),
-              items: _itemNames.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
               onChanged: _onItemSelected,
+              hint: 'Select Item',
             ),
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: CustomDropdownField(
+                    label: 'Size',
+                    items: sizes,
                     value: sizes.contains(_selectedSize) ? _selectedSize : null,
-                    decoration: const InputDecoration(labelText: 'Size'),
-                    items: sizes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                     onChanged: _onSizeSelected,
+                    hint: 'Select Size',
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: CustomDropdownField(
+                    label: 'Dia',
+                    items: _dias,
                     value: _selectedDia,
-                    decoration: const InputDecoration(labelText: 'Dia'),
-                    items: _dias.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                    onChanged: (val) => setState(() => _selectedDia = val),
+                    onChanged: _onDiaSelected,
+                    hint: 'Select Dia',
                   ),
                 ),
               ],
@@ -327,10 +495,13 @@ class _LotRequirementAllocationScreenState
             const SizedBox(height: 16),
             TextFormField(
               controller: _lotNameController,
-              decoration: const InputDecoration(labelText: 'Assigned Lot Name', hintText: 'Enter Lot Name'),
+              decoration: const InputDecoration(
+                labelText: 'Assigned Lot Name',
+                hintText: 'Enter Lot Name',
+              ),
             ),
             const SizedBox(height: 16),
-             Row(
+            Row(
               children: [
                 Expanded(
                   child: TextFormField(
@@ -344,7 +515,35 @@ class _LotRequirementAllocationScreenState
                   child: TextFormField(
                     controller: _efficiencyController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Efficiency %'),
+                    decoration: const InputDecoration(
+                      labelText: 'Efficiency %',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _foldingWeightController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Folding Weight (Kg)',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    controller: _wasteController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Waste %',
+                      filled: true,
+                      fillColor: Color(0xFFF1F5F9),
+                    ),
                   ),
                 ),
               ],
@@ -368,15 +567,22 @@ class _LotRequirementAllocationScreenState
                   child: TextFormField(
                     controller: _dozenController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Dozen (Modify)', helperText: 'Modify planned dozen if needed'),
+                    decoration: const InputDecoration(
+                      labelText: 'Dozen (Modify)',
+                      helperText: 'Modify planned dozen if needed',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: TextFormField(
                     controller: _dozenWeightController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Dozen Weight (Kg)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Dozen Weight (Kg)',
+                    ),
                   ),
                 ),
               ],
@@ -392,8 +598,16 @@ class _LotRequirementAllocationScreenState
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildCalcItem('Required Weight', '${_fabricRequiredKg.toStringAsFixed(2)} KG', primaryColor),
-                  _buildCalcItem('Rolls Need', '~$_rollsRequired Rolls', primaryColor),
+                  _buildCalcItem(
+                    'Required Weight',
+                    '${_fabricRequiredKg.toStringAsFixed(2)} KG',
+                    primaryColor,
+                  ),
+                  _buildCalcItem(
+                    'Rolls Need',
+                    '~$_rollsRequired Rolls',
+                    primaryColor,
+                  ),
                 ],
               ),
             ),
@@ -404,11 +618,15 @@ class _LotRequirementAllocationScreenState
               child: ElevatedButton.icon(
                 onPressed: _isAllocating ? null : _runAllocation,
                 icon: const Icon(LucideIcons.zap, size: 18),
-                label: Text(_isAllocating ? 'ALLOCATING...' : 'AUTO FIFO ALLOCATE'),
+                label: Text(
+                  _isAllocating ? 'ALLOCATING...' : 'AUTO FIFO ALLOCATE',
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),
@@ -421,9 +639,19 @@ class _LotRequirementAllocationScreenState
   Widget _buildCalcItem(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Colors.black54),
+        ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     );
   }
@@ -438,7 +666,12 @@ class _LotRequirementAllocationScreenState
       child: _allocations.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: Text('No allocations yet. Run FIFO to see lots.', style: TextStyle(color: Colors.grey))),
+              child: Center(
+                child: Text(
+                  'No allocations yet. Run FIFO to see lots.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
             )
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -452,16 +685,20 @@ class _LotRequirementAllocationScreenState
                   DataColumn(label: Text('PALLET NO')),
                   DataColumn(label: Text('DOZEN')),
                 ],
-                rows: _allocations.map((a) => DataRow(
-                  cells: [
-                     DataCell(Text(a['lotName'] ?? '')),
-                     DataCell(Text(a['sets']?.toString() ?? '-')),
-                     DataCell(Text(a['dia'] ?? '')),
-                     DataCell(Text(a['rackName'] ?? '')),
-                     DataCell(Text(a['palletNumber'] ?? '')),
-                     DataCell(Text(a['dozen']?.toString() ?? '0')),
-                  ],
-                )).toList(),
+                rows: _allocations
+                    .map(
+                      (a) => DataRow(
+                        cells: [
+                          DataCell(Text(a['lotName'] ?? '')),
+                          DataCell(Text(a['sets']?.toString() ?? '-')),
+                          DataCell(Text(a['dia'] ?? '')),
+                          DataCell(Text(a['rackName'] ?? '')),
+                          DataCell(Text(a['palletNumber'] ?? '')),
+                          DataCell(Text(a['dozen']?.toString() ?? '0')),
+                        ],
+                      ),
+                    )
+                    .toList(),
               ),
             ),
     );
@@ -471,14 +708,28 @@ class _LotRequirementAllocationScreenState
     return Center(
       child: ElevatedButton(
         onPressed: _isSaving ? null : _saveAllocation,
-         style: ElevatedButton.styleFrom(
+        style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
           backgroundColor: ColorPalette.success,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: _isSaving
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text('SAVE LOT ALLOCATION', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Text(
+                'SAVE LOT ALLOCATION',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
       ),
     );
   }

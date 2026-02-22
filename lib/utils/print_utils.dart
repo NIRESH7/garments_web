@@ -20,7 +20,7 @@ class PrintUtils {
           style: pw.TextStyle(font: font, fontSize: 10),
         ),
         pw.Text(
-          'Pooluvapatti (P.O), Tirupur - 641602. Tamil Nadu.',
+          'Pooluvapatti (P.O), Tirupur - 2.',
           style: pw.TextStyle(font: font, fontSize: 10),
         ),
         pw.SizedBox(height: 2),
@@ -40,7 +40,11 @@ class PrintUtils {
         pw.SizedBox(height: 2),
         pw.Text(
           'GSTIN: 33BHNPS9629C1ZZ',
-          style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.blue900),
+          style: pw.TextStyle(
+            font: boldFont,
+            fontSize: 10,
+            color: PdfColors.blue900,
+          ),
         ),
         pw.SizedBox(height: 8),
         pw.Divider(thickness: 1, color: PdfColors.grey300),

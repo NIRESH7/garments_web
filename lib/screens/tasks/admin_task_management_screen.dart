@@ -11,7 +11,8 @@ class AdminTaskManagementScreen extends StatefulWidget {
   const AdminTaskManagementScreen({super.key});
 
   @override
-  State<AdminTaskManagementScreen> createState() => _AdminTaskManagementScreenState();
+  State<AdminTaskManagementScreen> createState() =>
+      _AdminTaskManagementScreenState();
 }
 
 class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
@@ -19,7 +20,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   final _stt = stt.SpeechToText();
   bool _isListening = false;
   bool _isLoading = false;
-  
+
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   String _priority = 'Medium';
@@ -48,11 +49,13 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       bool available = await _stt.initialize();
       if (available) {
         setState(() => _isListening = true);
-        _stt.listen(onResult: (val) {
-          setState(() {
-            _descController.text = val.recognizedWords;
-          });
-        });
+        _stt.listen(
+          onResult: (val) {
+            setState(() {
+              _descController.text = val.recognizedWords;
+            });
+          },
+        );
       }
     } else {
       setState(() => _isListening = false);
@@ -62,7 +65,9 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
 
   Future<void> _createTask() async {
     if (_titleController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a task title')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a task title')),
+      );
       return;
     }
 
@@ -72,11 +77,14 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       'priority': _priority,
       'assignedTo': _assignedTo,
       'deadline': _deadline?.toIso8601String(),
+      'createdAt': DateTime.now().toIso8601String(),
     };
 
     final result = await _api.createTask(data);
     if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task Created Successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task Created Successfully')),
+      );
       _titleController.clear();
       _descController.clear();
       _loadTasks();
@@ -90,7 +98,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('TASK MANAGEMENT (ADMIN)')),
       drawer: const AppDrawer(),
-      body: _isLoading 
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -99,7 +107,10 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 children: [
                   _buildTaskForm(primaryColor),
                   const SizedBox(height: 30),
-                  const Text('RECENT TASKS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const Text(
+                    'RECENT TASKS',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                   const SizedBox(height: 10),
                   _buildTaskList(),
                 ],
@@ -118,7 +129,10 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
           children: [
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Task Title', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Task Title',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -128,7 +142,10 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 labelText: 'Task Description',
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
-                  icon: Icon(_isListening ? LucideIcons.mic : LucideIcons.micOff, color: _isListening ? Colors.red : primaryColor),
+                  icon: Icon(
+                    _isListening ? LucideIcons.mic : LucideIcons.micOff,
+                    color: _isListening ? Colors.red : primaryColor,
+                  ),
                   onPressed: _listen,
                 ),
               ),
@@ -139,8 +156,13 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _priority,
-                    decoration: const InputDecoration(labelText: 'Priority', border: OutlineInputBorder()),
-                    items: ['Low', 'Medium', 'High'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    decoration: const InputDecoration(
+                      labelText: 'Priority',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Low', 'Medium', 'High']
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
                     onChanged: (val) => setState(() => _priority = val!),
                   ),
                 ),
@@ -148,8 +170,13 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _assignedTo,
-                    decoration: const InputDecoration(labelText: 'Assign To', border: OutlineInputBorder()),
-                    items: ['All', 'Tailoring', 'Packing', 'Cutting'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    decoration: const InputDecoration(
+                      labelText: 'Assign To',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['All', 'Tailoring', 'Packing', 'Cutting']
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
                     onChanged: (val) => setState(() => _assignedTo = val!),
                   ),
                 ),
@@ -162,9 +189,14 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: primaryColor,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              child: const Text('CREATE & ASSIGN TASK', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text(
+                'CREATE & ASSIGN TASK',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -179,8 +211,10 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       itemCount: _tasks.length,
       itemBuilder: (context, index) {
         final task = _tasks[index];
-        final priorityColor = task['priority'] == 'High' ? Colors.red : (task['priority'] == 'Medium' ? Colors.orange : Colors.green);
-        
+        final priorityColor = task['priority'] == 'High'
+            ? Colors.red
+            : (task['priority'] == 'Medium' ? Colors.orange : Colors.green);
+
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: InkWell(
@@ -196,7 +230,11 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: priorityColor,
-                child: const Icon(LucideIcons.listTodo, color: Colors.white, size: 20),
+                child: const Icon(
+                  LucideIcons.listTodo,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
               title: Text(
                 task['title'] ?? 'No Title',
