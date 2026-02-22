@@ -26,6 +26,10 @@ const lotAllocationSchema = mongoose.Schema({
     rackName: { type: String },
     palletNumber: { type: String },
     allocationId: { type: String }, // For tracking
+    day: { type: String },
+    date: { type: String },
+    time: { type: String },
+    setNum: { type: String },
 });
 
 const cuttingOrderSchema = mongoose.Schema(
@@ -53,6 +57,12 @@ const cuttingOrderSchema = mongoose.Schema(
             type: Date,
             required: true,
             default: Date.now,
+        },
+        startDate: {
+            type: Date,
+        },
+        endDate: {
+            type: Date,
         },
         cuttingEntries: [cuttingEntrySchema],
         lotAllocations: [lotAllocationSchema],

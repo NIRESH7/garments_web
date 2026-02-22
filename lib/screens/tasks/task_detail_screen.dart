@@ -240,13 +240,20 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               ...(task['replies'] as List).map(
-                (r) => Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '• ${r['workerName']}: ${r['replyText']}',
-                    style: const TextStyle(fontSize: 13, color: Colors.black54),
-                  ),
-                ),
+                (r) {
+                  final String type = r['type'] ?? 'Progress';
+                  final String label = type == 'Completion' ? '✅ COMPLETION' : (type == 'Client' ? '💬 CLIENT' : '⚙️ PROGRESS');
+                  final String dateStr = r['submittedAt'] != null 
+                    ? DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.parse(r['submittedAt'].toString())) 
+                    : 'N/A';
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '• $label: ${r['workerName']} - ${r['replyText']} ($dateStr)',
+                      style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
+                  );
+                },
               ),
             ],
           ],

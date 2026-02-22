@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 import '../../widgets/app_drawer.dart';
+import '../reports/lot_allocation_summary_report.dart';
 
 class LotRequirementScreen extends StatefulWidget {
   const LotRequirementScreen({super.key});
@@ -29,18 +30,25 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
 
   String? _selectedItem;
   String? _selectedSize;
+  String _selectedDay = DateFormat('EEEE').format(DateTime.now());
+  DateTime _selectedDate = DateTime.now();
+  TimeOfDay _selectedTime = TimeOfDay.now();
+
   double _dozen = 0;
+  final _dozenController = TextEditingController();
 
   List<dynamic> _allocations = [];
   bool _isAllocating = false;
 
   List<dynamic> _assignments = [];
   double _dozenWeight = 0;
+  double _foldingWt = 0;
+  String _dia = '';
+  String _gsm = '';
 
-  double get _fabricRequiredKg => _dozen * _dozenWeight;
+  double get _fabricRequiredKg => _dozen * (_dozenWeight + _foldingWt);
   int get _rollsRequired => (_fabricRequiredKg / 20).ceil();
-
-  final _dozenController = TextEditingController();
+  double get _setsRequired => _rollsRequired / 11;
 
   @override
   void initState() {
@@ -100,14 +108,39 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
         orElse: () => null,
       );
 
-      setState(() {
-        if (entry != null) {
-          _dozen = (entry['sizeQuantities'][_selectedSize] ?? 0).toDouble();
-          _dozenController.text = _dozen.toString();
+      double plannedDozen = 0;
+      if (entry != null) {
+        plannedDozen = (entry['sizeQuantities'][_selectedSize] ?? 0).toDouble();
+      }
+
+      // Calculate already allocated dozen for this item and size
+      double allocatedDozen = 0;
+      if (_selectedPlan!['lotAllocations'] != null) {
+        final alcs = _selectedPlan!['lotAllocations'] as List;
+        for (var a in alcs) {
+          if (a['itemName'] == _selectedItem && a['size'] == _selectedSize) {
+            allocatedDozen += (a['dozen'] ?? 0).toDouble();
+          }
         }
-        _dozenWeight = assignment != null
-            ? (assignment['dozenWeight'] ?? 0).toDouble()
-            : 0;
+      }
+
+      final double remaining = plannedDozen - allocatedDozen;
+
+      setState(() {
+        _dozen = remaining > 0 ? remaining : 0;
+        _dozenController.text = _dozen.toString();
+        
+        if (assignment != null) {
+          _dozenWeight = (assignment['dozenWeight'] ?? 0).toDouble();
+          _foldingWt = (assignment['foldingWt'] ?? 0).toDouble();
+          _dia = (assignment['dia'] ?? '').toString();
+          _gsm = (assignment['gsm'] ?? '').toString();
+        } else {
+          _dozenWeight = 0;
+          _foldingWt = 0;
+          _dia = '';
+          _gsm = '';
+        }
       });
     }
   }
@@ -162,31 +195,40 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
           )
           .toList();
 
-      final success = await _api.saveLotAllocation(
-        _selectedPlan!['_id'],
-        lotAllocations.cast<Map<String, dynamic>>(),
-      );
+      final List<Map<String, dynamic>> finalAllocations = _allocations
+          .map(
+            (a) => {
+              ...a,
+              'itemName': _selectedItem,
+              'size': _selectedSize,
+              'day': _selectedDay,
+              'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+              'time': _selectedTime.format(context),
+              'allocationId': 'ALC-${DateTime.now().millisecondsSinceEpoch}',
+            },
+          )
+          .toList();
+
+      final success = await _api.saveLotAllocation(_selectedPlan!['_id'], finalAllocations);
       if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Lot Allocation Saved Successfully')),
-          );
-          // Refresh plan data
-          _loadPlans();
-          setState(() {
-            _allocations = [];
-            _selectedItem = null;
-            _selectedSize = null;
-            _dozen = 0;
-          });
-        }
-      } else {
-        _showError('Failed to save allocation');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Allocations Saved Successfully')),
+        );
+        // Refresh plan to update balance
+        await _loadPlans();
+        // Clear form for next entry but keep same Day/Date
+        setState(() {
+          _selectedItem = null;
+          _selectedSize = null;
+          _dozen = 0;
+          _dozenController.text = '0';
+          _allocations = [];
+        });
       }
     } catch (e) {
-      _showError('Error: $e');
+      _showError('Save failed: $e');
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      setState(() => _isSaving = false);
     }
   }
 
@@ -201,7 +243,24 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('LOT REQUIREMENT & ALLOCATION')),
+      appBar: AppBar(
+        title: const Text('LOT REQUIREMENT & ALLOCATION'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LotAllocationSummaryReportScreen(),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: _shareViaWhatsApp,
+          ),
+        ],
+      ),
       drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -211,8 +270,10 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildPlanSelector(),
+                  const SizedBox(height: 16),
+                  _buildDateTimeSelectors(),
                   const SizedBox(height: 20),
-                  if (_selectedPlan != null) _buildAllocationForm(),
+                  if (_selectedPlanId != null) _buildAllocationForm(),
                   const SizedBox(height: 24),
                   if (_allocations.isNotEmpty) _buildAllocationTable(),
                   const SizedBox(height: 40),
@@ -237,6 +298,69 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildDateTimeSelectors() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedDay,
+                    decoration: const InputDecoration(labelText: 'DAY'),
+                    items: [
+                      'Monday',
+                      'Tuesday',
+                      'Wednesday',
+                      'Thursday',
+                      'Friday',
+                      'Saturday'
+                    ].map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    onChanged: (val) => setState(() => _selectedDay = val!),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (date != null) setState(() => _selectedDate = date);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'DATE'),
+                      child: Text(DateFormat('dd-MM-yyyy').format(_selectedDate)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () async {
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: _selectedTime,
+                );
+                if (time != null) setState(() => _selectedTime = time);
+              },
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'TIME'),
+                child: Text(_selectedTime.format(context)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -349,7 +473,19 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                   setState(() => _dozen = double.tryParse(val) ?? 0),
             ),
             if (_selectedItem != null && _selectedSize != null) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildInfoItem('DIA', _dia),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildInfoItem('GSM', _gsm),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -359,49 +495,14 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                     color: Theme.of(context).primaryColor.withOpacity(0.1),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                child: Column(
                   children: [
-                    Column(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        const Text(
-                          'FABRIC REQUIRED',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_fabricRequiredKg.toStringAsFixed(2)} KG',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Theme.of(context).primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        const Text(
-                          'ROLLS REQUIRED',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '~$_rollsRequired Rolls',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Theme.of(context).primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        _buildCalcItem('FABRIC REQ', '${_fabricRequiredKg.toStringAsFixed(2)} KG'),
+                        _buildCalcItem('ROLLS REQ', '$_rollsRequired'),
+                        _buildCalcItem('SETS REQ', _setsRequired.toStringAsFixed(2)),
                       ],
                     ),
                   ],
@@ -409,26 +510,70 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
               ),
             ],
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _isAllocating ? null : _runFifoAllocation,
-                icon: const Icon(Icons.auto_awesome),
-                label: Text(_isAllocating ? 'ALLOCATING...' : 'AUTO FIFO'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isAllocating ? null : _runFifoAllocation,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text(_isAllocating ? 'ALLOCATING...' : 'AUTO FIFO'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _resetForm,
+                    icon: const Icon(Icons.skip_next),
+                    label: const Text('NEXT PAGE'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildInfoItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildCalcItem(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 16, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  void _resetForm() {
+    setState(() {
+      _selectedItem = null;
+      _selectedSize = null;
+      _dozen = 0;
+      _dozenController.text = '0';
+      _allocations = [];
+      _dozenWeight = 0;
+      _foldingWt = 0;
+      _dia = '';
+      _gsm = '';
+    });
   }
 
   Widget _buildAllocationTable() {
@@ -457,6 +602,7 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                 DataColumn(label: Text('LOT NAME')),
                 DataColumn(label: Text('LOT NO')),
                 DataColumn(label: Text('DIA')),
+                DataColumn(label: Text('SET NO')),
                 DataColumn(label: Text('DOZEN')),
                 DataColumn(label: Text('WEIGHT (KG)')),
                 DataColumn(label: Text('RACK')),
@@ -469,6 +615,7 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                         DataCell(Text(a['lotName'] ?? '')),
                         DataCell(Text(a['lotNo'] ?? '')),
                         DataCell(Text(a['dia'] ?? '')),
+                        DataCell(Text(a['setNum'] ?? 'N/A')),
                         DataCell(Text(a['dozen'].toString())),
                         DataCell(Text(a['weight'].toString())),
                         DataCell(Text(a['rackName'] ?? '')),

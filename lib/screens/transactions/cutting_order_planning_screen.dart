@@ -21,7 +21,9 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
   String _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
 
   List<String> _itemNames = [];
-  final List<int> _sizes = [75, 80, 85, 90, 95, 100, 105, 110];
+  List<int> get _sizes => _sizeType == 'Senior'
+      ? [75, 80, 85, 90, 95, 100, 105, 110]
+      : [50, 55, 60, 65, 70, 75];
   final List<Map<String, dynamic>> _cuttingEntries = [];
 
   @override
@@ -105,6 +107,9 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
       final data = {
         'planType': _planType,
         'planPeriod': _planPeriod,
+        'startDate': _startDate?.toIso8601String(),
+        'endDate': _endDate?.toIso8601String(),
+        'sizeType': _sizeType,
         'cuttingEntries': _cuttingEntries,
         'status': 'Planned', // Explicitly mark as planned
       };
@@ -216,90 +221,117 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
     );
   }
 
+  DateTime? _startDate;
+  DateTime? _endDate;
+  String _sizeType = 'Senior'; // 'Junior' (50-75) or 'Senior' (75-110)
+
   Widget _buildPlanParams() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Row(
+        child: Column(
           children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _planType,
-                decoration: const InputDecoration(
-                  labelText: 'PLAN TYPE',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _planType,
+                    decoration: const InputDecoration(
+                      labelText: 'PLAN TYPE',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Monthly', 'Yearly']
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        _planType = val!;
+                        if (_planType == 'Monthly') {
+                          _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
+                        } else {
+                          _planPeriod = DateFormat('yyyy').format(DateTime.now());
+                        }
+                      });
+                    },
+                  ),
                 ),
-                items: ['Monthly', 'Yearly']
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                    .toList(),
-                onChanged: (val) {
-                  setState(() {
-                    _planType = val!;
-                    if (_planType == 'Monthly') {
-                      _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
-                    } else {
-                      _planPeriod = DateFormat('yyyy').format(DateTime.now());
-                    }
-                  });
-                },
-              ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _sizeType,
+                    decoration: const InputDecoration(
+                      labelText: 'SIZE TYPE',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Senior', 'Junior']
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        _sizeType = val!;
+                      });
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                readOnly: true,
-                controller: TextEditingController(text: _planPeriod),
-                decoration: const InputDecoration(
-                  labelText: 'PLAN PERIOD',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  suffixIcon: Icon(Icons.calendar_month),
-                ),
-                onTap: () async {
-                  if (_planType == 'Monthly') {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-                    if (date != null) {
-                      setState(
-                        () => _planPeriod = DateFormat('yyyy-MM').format(date),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(
+                        text: _startDate != null
+                            ? DateFormat('dd-MM-yyyy').format(_startDate!)
+                            : ''),
+                    decoration: const InputDecoration(
+                      labelText: 'FROM DATE',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
                       );
-                    }
-                  } else {
-                    // Simple year selector
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return AlertDialog(
-                          title: const Text("Select Year"),
-                          content: SizedBox(
-                            width: 300,
-                            height: 300,
-                            child: YearPicker(
-                              firstDate: DateTime(DateTime.now().year - 100, 1),
-                              lastDate: DateTime(DateTime.now().year + 100, 1),
-                              initialDate: DateTime.now(),
-                              selectedDate: DateTime(int.parse(_planPeriod)),
-                              onChanged: (DateTime dateTime) {
-                                setState(() {
-                                  _planPeriod = dateTime.year.toString();
-                                });
-                                Navigator.pop(context);
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  }
-                },
-              ),
+                      if (date != null) {
+                        setState(() => _startDate = date);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: TextEditingController(
+                        text: _endDate != null
+                            ? DateFormat('dd-MM-yyyy').format(_endDate!)
+                            : ''),
+                    decoration: const InputDecoration(
+                      labelText: 'TO DATE',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _endDate ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (date != null) {
+                        setState(() => _endDate = date);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
           ],
         ),

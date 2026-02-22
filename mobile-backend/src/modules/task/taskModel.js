@@ -5,6 +5,7 @@ const replySchema = mongoose.Schema({
     replyText: { type: String },
     voiceReplyUrl: { type: String },
     submittedAt: { type: Date, default: Date.now },
+    type: { type: String, enum: ['Progress', 'Client', 'Completion'], default: 'Progress' },
 });
 
 const taskSchema = mongoose.Schema(

@@ -55,14 +55,16 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
         throw new Error(`No assignment found for ${itemName} size ${size}`);
     }
 
-    const { dia, dozenWeight } = assignment;
-    const requiredWeight = targetDozen * dozenWeight;
+    const { dia, dozenWeight, foldingWt } = assignment;
+    const effDozenWeight = dozenWeight + (foldingWt || 0);
+    const requiredWeight = targetDozen * effDozenWeight;
 
     // 2. Find Inward Lots for this Dia, sorted by FIFO
     const inwards = await Inward.find({ 'diaEntries.dia': dia }).sort({ inwardDate: 1, createdAt: 1 });
 
     let allocations = [];
     let remainingWeight = requiredWeight;
+    let totalRollsUsed = 0;
 
     for (const inw of inwards) {
         if (remainingWeight <= 0) break;
@@ -72,7 +74,6 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
         if (!entry) continue;
 
         const totalInwardWt = entry.recWt || 0;
-
         const lotOutwards = await Outward.find({ lotNo: inw.lotNo, dia });
         let totalOutwardWt = 0;
         lotOutwards.forEach(out => {
@@ -81,15 +82,24 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
             });
         });
 
-        const balance = totalInwardWt - totalOutwardWt;
+        const lotBalance = totalInwardWt - totalOutwardWt;
 
-        if (balance > 0.01) {
-            const allocatedWt = Math.min(balance, remainingWeight);
-            const allocatedDozen = allocatedWt / dozenWeight;
+        if (lotBalance > 0.001) {
+            const allocatedWt = Math.min(lotBalance, remainingWeight);
+            const allocatedDozen = allocatedWt / effDozenWeight;
+            const rollsInThisLot = allocatedWt / 20;
 
+            // Get storage details for this lot
             const sd = inw.storageDetails && Array.isArray(inw.storageDetails)
                 ? inw.storageDetails.find(s => s.dia === dia)
                 : null;
+
+            // Calculate Set Number: 11 rolls = 1 set
+            const startRoll = totalRollsUsed;
+            const endRoll = totalRollsUsed + rollsInThisLot;
+            const startSet = Math.floor(startRoll / 11) + 1;
+            const endSet = Math.floor(endRoll / 11) + 1;
+            const setNumDisplay = startSet === endSet ? `${startSet}` : `${startSet}-${endSet}`;
 
             allocations.push({
                 lotName: inw.lotName,
@@ -97,26 +107,31 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
                 dia: dia,
                 dozen: parseFloat(allocatedDozen.toFixed(2)),
                 weight: parseFloat(allocatedWt.toFixed(2)),
-                rackName: sd && sd.racks && sd.racks[0] ? sd.racks[0] : 'N/A',
-                palletNumber: sd && sd.pallets && sd.pallets[0] ? sd.pallets[0] : 'N/A',
+                rolls: parseFloat(rollsInThisLot.toFixed(2)),
+                setNum: setNumDisplay,
+                rackName: sd && sd.racks && sd.racks.length > 0 ? sd.racks.join(', ') : 'N/A',
+                palletNumber: sd && sd.pallets && sd.pallets.length > 0 ? sd.pallets.join(', ') : 'N/A',
             });
 
-
             remainingWeight -= allocatedWt;
+            totalRollsUsed += rollsInThisLot;
         }
     }
 
     if (remainingWeight > 0.1) {
         return res.json({
             success: false,
-            message: `Insufficient stock. Short by ${(remainingWeight / dozenWeight).toFixed(2)} dozens.`,
+            message: `Insufficient stock. Short by ${(remainingWeight / effDozenWeight).toFixed(2)} dozens.`,
             allocations
         });
     }
 
     res.json({
         success: true,
-        allocations
+        allocations,
+        totalFabric: parseFloat(requiredWeight.toFixed(2)),
+        totalRolls: parseFloat(totalRollsUsed.toFixed(2)),
+        totalSets: parseFloat((totalRollsUsed / 11).toFixed(2))
     });
 });
 

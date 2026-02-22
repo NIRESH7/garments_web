@@ -12,6 +12,8 @@ import 'quality_audit_report_screen.dart';
 import 'shade_card_report_screen.dart';
 
 import 'rack_pallet_report_screen.dart';
+import 'lot_allocation_summary_report.dart';
+import 'task_progress_report.dart';
 
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
@@ -23,6 +25,32 @@ class ReportsDashboard extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          _ReportCard(
+            title: 'Departmental Task Report',
+            subtitle: 'Cutting/Packing/Tailoring progress',
+            icon: LucideIcons.listChecks,
+            color: Colors.purple,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const TaskProgressReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
+            title: 'Daily Allocation Summary',
+            subtitle: 'Day-by-day lot requirement report',
+            icon: LucideIcons.calendarCheck,
+            color: Colors.blue,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LotAllocationSummaryReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           _ReportCard(
             title: 'Rack & Pallet Wise Report',
             subtitle: 'Stock grouping by storage location',

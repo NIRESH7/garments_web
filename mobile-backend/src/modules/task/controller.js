@@ -54,7 +54,12 @@ const addTaskReply = asyncHandler(async (req, res) => {
             workerName,
             replyText,
             voiceReplyUrl,
+            type: req.body.type || 'Progress',
         };
+
+        if (status === 'Completed') {
+            reply.type = 'Completion';
+        }
 
         task.replies.push(reply);
         if (status) {
