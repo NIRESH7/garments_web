@@ -161,6 +161,51 @@ class MobileApiService {
     }
   }
 
+  Future<bool> deleteInward(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.inward}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> updateInward(String id, Map<String, dynamic> data) async {
+    try {
+      final formData = FormData();
+
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          formData.files.add(
+            MapEntry(
+              entry.key,
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ),
+          );
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+        }
+      }
+
+      final response = await _client.put(
+        '${ApiConstants.inward}/$id',
+        data: formData,
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data != null && e.response?.data is Map
+          ? (e.response?.data['message'] ?? e.message)
+          : e.message;
+      throw Exception(errorMsg);
+    } catch (e) {
+      throw Exception('Failed to update inward: $e');
+    }
+  }
+
   Future<List<dynamic>> getOutwards({
     String? startDate,
     String? endDate,
@@ -740,6 +785,19 @@ class MobileApiService {
     }
   }
 
+  // --- AI Chat ---
+  Future<Map<String, dynamic>> chatWithAI(String message, {String language = 'en'}) async {
+    try {
+      final response = await _client.post(
+        ApiConstants.aiChat,
+        data: {'message': message, 'language': language},
+      );
+      return response.data;
+    } catch (e) {
+      return {'text': 'Sorry, I am having trouble connecting to my brain right now.'};
+    }
+  }
+
   // --- AI Color Prediction ---
   Future<Map<String, dynamic>?> predictColor({
     required String fabricType,
@@ -914,6 +972,44 @@ class MobileApiService {
         '${ApiConstants.allocateLots}/$planId/allocate',
         data: {'lotAllocations': lotAllocations},
       );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getTasks() async {
+    try {
+      final response = await _client.get(ApiConstants.tasks);
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<dynamic> createTask(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(ApiConstants.tasks, data: data);
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<dynamic> addTaskReply(String taskId, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post('${ApiConstants.tasks}/$taskId/reply',
+          data: data);
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> updateTaskStatus(String taskId, String status) async {
+    try {
+      final response = await _client.put('${ApiConstants.tasks}/$taskId/status',
+          data: {'status': status});
       return response.statusCode == 200;
     } catch (e) {
       return false;

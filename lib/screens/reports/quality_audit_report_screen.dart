@@ -3,6 +3,7 @@ import '../../services/mobile_api_service.dart';
 import '../../core/constants/api_constants.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import '../../services/quality_audit_print_service.dart';
 
 class QualityAuditReportScreen extends StatefulWidget {
   const QualityAuditReportScreen({super.key});
@@ -47,6 +48,14 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
         title: const Text('Quality & Complaint Audit'),
         backgroundColor: Colors.red.shade700,
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.printer),
+            onPressed: () {
+              if (_reports.isNotEmpty) {
+                QualityAuditPrintService().printQualityAudit(_reports);
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(LucideIcons.filter),
             onPressed: _showFilterDialog,

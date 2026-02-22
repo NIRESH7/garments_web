@@ -1,8 +1,11 @@
 class ApiConstants {
-static const String baseUrl =
-      'https://garments-backend-9gsw.onrender.com/api'; // Update to your production IP
-  static const String serverUrl =
-      'https://garments-backend-9gsw.onrender.com';  // Auth
+// static const String baseUrl =
+//       'https://garments-backend-9gsw.onrender.com/api'; 
+//   static const String serverUrl =
+//       'https://garments-backend-9gsw.onrender.com';  
+
+  static const String baseUrl = 'http://localhost:5001/api';
+  static const String serverUrl = 'http://localhost:5001';
   static const String login = '/auth/login';
   static const String register = '/auth/register';
   static const String verifyOtp = '/auth/verify-otp';
@@ -50,6 +53,12 @@ static const String baseUrl =
 
   // Notifications
   static const String notifications = '/notifications';
+
+  // AI Chat
+  static const String aiChat = '/ai/chat';
+
+  // Tasks
+  static const String tasks = '/tasks';
 
   // Upload
   static const String upload = '/upload';

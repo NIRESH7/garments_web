@@ -38,7 +38,10 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
     final categories = await _api.getCategories();
 
     setState(() {
-      _items = _getValues(categories, 'Item');
+      _items = _getValues(categories, 'Item Name');
+      if (_items.isEmpty) {
+        _items = _getValues(categories, 'Item');
+      }
       _sizes = _getValues(categories, 'Size');
       _dias = _getValues(categories, 'Dia');
       _isLoading = false;

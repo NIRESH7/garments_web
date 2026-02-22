@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import '../../utils/print_utils.dart';
 
 class GodownStockReportScreen extends StatefulWidget {
   const GodownStockReportScreen({super.key});
@@ -83,21 +84,28 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.all(24),
         header: (pw.Context context) => pw.Column(
           children: [
-            pw.Text(
-              'GODOWN STOCK REPORT',
-              style: pw.TextStyle(
-                fontSize: 20,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blue900,
-              ),
-            ),
-            pw.Text(
-              'Generated on: $dateStr',
-              style: const pw.TextStyle(fontSize: 10),
+            PrintUtils.buildCompanyHeader(pw.Font.helveticaBold(), pw.Font.helvetica()),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'STOCK STATUS REPORT',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue900,
+                  ),
+                ),
+                pw.Text(
+                  'Generated on: $dateStr',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
+              ],
             ),
             pw.SizedBox(height: 10),
             pw.Divider(),

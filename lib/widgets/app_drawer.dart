@@ -3,6 +3,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../core/theme/color_palette.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/auth/login_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/theme/theme_provider.dart';
+import '../screens/settings/theme_settings_screen.dart';
+import '../screens/chat/chat_screen.dart';
 
 // Masters
 import '../screens/masters/categories_master_screen.dart';
@@ -18,7 +22,8 @@ import '../screens/transactions/lot_outward_screen.dart';
 import '../screens/transactions/inward_list_screen.dart';
 import '../screens/transactions/outward_list_screen.dart';
 import '../screens/assessment/item_assignment_list_screen.dart';
-import '../screens/transactions/cutting_order_entry_screen.dart';
+import '../screens/transactions/cutting_order_planning_screen.dart';
+import '../screens/transactions/lot_requirement_allocation_screen.dart';
 
 // Reports
 import '../screens/reports/overview_report.dart';
@@ -28,8 +33,10 @@ import '../screens/reports/monthly_summary_report.dart';
 import '../screens/reports/client_format_report.dart';
 import '../screens/reports/godown_stock_report_screen.dart';
 import '../screens/reports/rack_pallet_report_screen.dart';
+import '../screens/tasks/admin_task_management_screen.dart';
+import '../screens/tasks/worker_task_dashboard_screen.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
 
   void _navigateTo(BuildContext context, Widget screen) {
@@ -38,14 +45,15 @@ class AppDrawer extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final primaryColor = Theme.of(context).primaryColor;
     return Drawer(
       child: Column(
         children: [
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 50, bottom: 20),
-            decoration: const BoxDecoration(color: ColorPalette.primary),
+            decoration: BoxDecoration(color: primaryColor),
             child: Column(
               children: [
                 Container(
@@ -54,13 +62,13 @@ class AppDrawer extends StatelessWidget {
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: const CircleAvatar(
+                  child: CircleAvatar(
                     radius: 35,
                     backgroundColor: Colors.white,
                     child: Icon(
                       LucideIcons.user,
                       size: 40,
-                      color: ColorPalette.primary,
+                      color: primaryColor,
                     ),
                   ),
                 ),
@@ -180,8 +188,31 @@ class AppDrawer extends StatelessWidget {
                   children: [
                     _buildSubItem(
                       context,
-                      "Cutting Plan & Lot Setup",
-                      const CuttingOrderEntryScreen(),
+                      "Cutting Order Planning",
+                      const CuttingOrderPlanningScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Lot Requirement",
+                      const LotRequirementAllocationScreen(),
+                    ),
+                  ],
+                ),
+
+                // Communication & Tasks Group
+                ExpansionTile(
+                  leading: const Icon(LucideIcons.messageSquare),
+                  title: const Text("Tasks & Communication"),
+                  children: [
+                    _buildSubItem(
+                      context,
+                      "Assign Tasks (Admin)",
+                      const AdminTaskManagementScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "My Tasks (Worker)",
+                      const WorkerTaskDashboardScreen(),
                     ),
                   ],
                 ),
@@ -236,16 +267,14 @@ class AppDrawer extends StatelessWidget {
                 ),
 
                 ListTile(
-                  leading: const Icon(LucideIcons.mic),
-                  title: const Text('Voice Queries'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Voice Queries not implemented yet"),
-                      ),
-                    );
-                  },
+                  leading: const Icon(LucideIcons.palette),
+                  title: const Text('App Theme'),
+                  onTap: () => _navigateTo(context, const ThemeSettingsScreen()),
+                ),
+                ListTile(
+                  leading: const Icon(LucideIcons.bot),
+                  title: const Text('AI Chatbot'),
+                  onTap: () => _navigateTo(context, const ChatScreen()),
                 ),
 
                 const Divider(),
@@ -256,6 +285,7 @@ class AppDrawer extends StatelessWidget {
                     style: TextStyle(color: Colors.red),
                   ),
                   onTap: () {
+                    ref.read(themeProvider.notifier).resetTheme();
                     Navigator.pop(context);
                     Navigator.pushAndRemoveUntil(
                       context,

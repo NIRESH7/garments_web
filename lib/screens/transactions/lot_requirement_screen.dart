@@ -353,9 +353,9 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Theme.of(context).primaryColor.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade100),
+                  border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.1)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -371,14 +371,14 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '${_fabricRequiredKg.toStringAsFixed(2)} KG',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            color: ColorPalette.primary,
-                            fontWeight: FontWeight.bold,
+                          Text(
+                            '${_fabricRequiredKg.toStringAsFixed(2)} KG',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Theme.of(context).primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                     Column(
@@ -394,9 +394,9 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '~$_rollsRequired Rolls',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
-                            color: ColorPalette.primary,
+                            color: Theme.of(context).primaryColor,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -415,7 +415,7 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                 icon: const Icon(Icons.auto_awesome),
                 label: Text(_isAllocating ? 'ALLOCATING...' : 'AUTO FIFO'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorPalette.primary,
+                  backgroundColor: Theme.of(context).primaryColor,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -438,7 +438,7 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
-            color: ColorPalette.primary,
+            color: Theme.of(context).primaryColor,
           ),
         ),
         const SizedBox(height: 10),

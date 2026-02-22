@@ -53,7 +53,7 @@ class ReportsDashboard extends StatelessWidget {
             title: 'Client Format Report',
             subtitle: 'Professional stock status summary',
             icon: LucideIcons.fileText,
-            color: ColorPalette.primary,
+            color: Theme.of(context).primaryColor,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(

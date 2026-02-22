@@ -4,6 +4,7 @@ import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import '../core/constants/api_constants.dart';
+import '../utils/print_utils.dart';
 
 class OutwardPrintService {
   Future<void> printOutwardReport(Map<String, dynamic> outward) async {
@@ -78,6 +79,7 @@ class OutwardPrintService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              PrintUtils.buildCompanyHeader(boldFont, font),
               _buildHeader(outward, boldFont),
               pw.SizedBox(height: 20),
               _buildTable(

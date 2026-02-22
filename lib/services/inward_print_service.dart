@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'inward_data_processor.dart';
 import '../core/constants/api_constants.dart';
+import '../utils/print_utils.dart';
 
 class InwardPrintService {
   Future<Uint8List> generatePdfBytes(Map<String, dynamic> inward) async {
@@ -68,6 +69,7 @@ class InwardPrintService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              PrintUtils.buildCompanyHeader(boldFont, font),
               _buildHeader(inward, boldFont),
               pw.SizedBox(height: 20),
               _buildTable(dias, rows, totals, font, boldFont),

@@ -3,13 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'color_palette.dart';
 
 class AppTheme {
-  static ThemeData get lightTheme {
+  static ThemeData lightTheme(Color primaryColor) {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: ColorPalette.background,
-      colorScheme: const ColorScheme.light(
-        primary: ColorPalette.primary,
+      colorScheme: ColorScheme.light(
+        primary: primaryColor,
         secondary: ColorPalette.secondary,
         surface: ColorPalette.surface,
         error: ColorPalette.error,
@@ -61,7 +61,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: ColorPalette.primary, width: 1.5),
+          borderSide: BorderSide(color: primaryColor, width: 1.5),
         ),
         labelStyle: GoogleFonts.outfit(color: ColorPalette.textSecondary),
         contentPadding: const EdgeInsets.symmetric(
@@ -71,7 +71,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: ColorPalette.primary,
+          backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 56),
           shape: RoundedRectangleBorder(

@@ -144,12 +144,12 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.blue.shade50,
+      color: Theme.of(context).primaryColor.withOpacity(0.1),
       child: Text(
         'Filtered by Status: $_statusFilter',
         style: TextStyle(
           fontSize: 12,
-          color: Colors.blue.shade800,
+          color: Theme.of(context).primaryColor,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -495,10 +495,10 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                     (h) => DataColumn(
                       label: Text(
                         h,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
-                          color: ColorPalette.primary,
+                          color: Theme.of(context).primaryColor,
                         ),
                       ),
                     ),

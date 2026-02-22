@@ -1,0 +1,215 @@
+import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../../services/mobile_api_service.dart';
+import '../../core/theme/color_palette.dart';
+import '../../widgets/app_drawer.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:intl/intl.dart';
+import './task_detail_screen.dart';
+
+class AdminTaskManagementScreen extends StatefulWidget {
+  const AdminTaskManagementScreen({super.key});
+
+  @override
+  State<AdminTaskManagementScreen> createState() => _AdminTaskManagementScreenState();
+}
+
+class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
+  final _api = MobileApiService();
+  final _stt = stt.SpeechToText();
+  bool _isListening = false;
+  bool _isLoading = false;
+  
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+  String _priority = 'Medium';
+  String _assignedTo = 'All';
+  DateTime? _deadline;
+
+  List<dynamic> _tasks = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTasks();
+  }
+
+  Future<void> _loadTasks() async {
+    setState(() => _isLoading = true);
+    final tasks = await _api.getTasks();
+    setState(() {
+      _tasks = tasks;
+      _isLoading = false;
+    });
+  }
+
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _stt.initialize();
+      if (available) {
+        setState(() => _isListening = true);
+        _stt.listen(onResult: (val) {
+          setState(() {
+            _descController.text = val.recognizedWords;
+          });
+        });
+      }
+    } else {
+      setState(() => _isListening = false);
+      _stt.stop();
+    }
+  }
+
+  Future<void> _createTask() async {
+    if (_titleController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a task title')));
+      return;
+    }
+
+    final data = {
+      'title': _titleController.text,
+      'description': _descController.text,
+      'priority': _priority,
+      'assignedTo': _assignedTo,
+      'deadline': _deadline?.toIso8601String(),
+    };
+
+    final result = await _api.createTask(data);
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task Created Successfully')));
+      _titleController.clear();
+      _descController.clear();
+      _loadTasks();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('TASK MANAGEMENT (ADMIN)')),
+      drawer: const AppDrawer(),
+      body: _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTaskForm(primaryColor),
+                  const SizedBox(height: 30),
+                  const Text('RECENT TASKS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 10),
+                  _buildTaskList(),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildTaskForm(Color primaryColor) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Task Title', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Task Description',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_isListening ? LucideIcons.mic : LucideIcons.micOff, color: _isListening ? Colors.red : primaryColor),
+                  onPressed: _listen,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _priority,
+                    decoration: const InputDecoration(labelText: 'Priority', border: OutlineInputBorder()),
+                    items: ['Low', 'Medium', 'High'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setState(() => _priority = val!),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _assignedTo,
+                    decoration: const InputDecoration(labelText: 'Assign To', border: OutlineInputBorder()),
+                    items: ['All', 'Tailoring', 'Packing', 'Cutting'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setState(() => _assignedTo = val!),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _createTask,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('CREATE & ASSIGN TASK', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskList() {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _tasks.length,
+      itemBuilder: (context, index) {
+        final task = _tasks[index];
+        final priorityColor = task['priority'] == 'High' ? Colors.red : (task['priority'] == 'Medium' ? Colors.orange : Colors.green);
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            onTap: () {
+              debugPrint('DEBUG: Tapped on task ${task['_id']}');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TaskDetailScreen(task: task),
+                ),
+              ).then((_) => _loadTasks());
+            },
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: priorityColor,
+                child: const Icon(LucideIcons.listTodo, color: Colors.white, size: 20),
+              ),
+              title: Text(
+                task['title'] ?? 'No Title',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Assigned: ${task['assignedTo']} | Status: ${task['status']}',
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

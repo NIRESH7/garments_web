@@ -3,6 +3,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 import '../../core/constants/api_constants.dart';
+import '../utils/print_utils.dart';
 
 class ShadeCardPrintService {
   Future<void> printShadeCard(List<dynamic> groups) async {
@@ -123,6 +124,8 @@ class ShadeCardPrintService {
           header: (context) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              PrintUtils.buildCompanyHeader(boldFont, font),
+              pw.SizedBox(height: 10),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [

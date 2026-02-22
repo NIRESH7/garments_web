@@ -777,7 +777,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: isMain ? 16 : 14,
-            color: isMain ? ColorPalette.primary : Colors.black87,
+            color: isMain ? Theme.of(context).primaryColor : Colors.black87,
           ),
         ),
       ],

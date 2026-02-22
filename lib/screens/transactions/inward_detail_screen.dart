@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_constants.dart';
+import '../../services/mobile_api_service.dart';
+import 'lot_inward_screen.dart';
 
 import '../../services/inward_print_service.dart';
 
@@ -17,6 +19,16 @@ class InwardDetailScreen extends StatelessWidget {
         title: const Text('Inward Details'),
         backgroundColor: Colors.green,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () => _editInward(context),
+            tooltip: 'Edit Inward',
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () => _deleteInward(context),
+            tooltip: 'Delete Inward',
+          ),
           IconButton(
             icon: const Icon(Icons.print),
             onPressed: () => _printReport(context),
@@ -703,6 +715,61 @@ class InwardDetailScreen extends StatelessWidget {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error generating report: $e')));
+      }
+    }
+  }
+
+  void _editInward(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LotInwardScreen(editInward: inward),
+      ),
+    );
+  }
+
+  Future<void> _deleteInward(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Inward'),
+        content: const Text('Are you sure you want to delete this inward?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final api = MobileApiService();
+        final success = await api.deleteInward(inward['_id']);
+        if (context.mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Inward deleted successfully')),
+            );
+            Navigator.pop(context, true); // Return true to indicate deletion
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to delete inward')),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error deleting inward: $e')));
+        }
       }
     }
   }

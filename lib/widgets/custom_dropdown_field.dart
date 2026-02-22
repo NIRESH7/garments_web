@@ -79,7 +79,7 @@ class CustomDropdownField extends StatelessWidget {
                           Icon(
                             prefixIcon,
                             size: 18,
-                            color: ColorPalette.primary,
+                            color: Theme.of(context).primaryColor,
                           ),
                           const SizedBox(width: 10),
                         ],
@@ -257,7 +257,7 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: ColorPalette.primary),
+                  borderSide: BorderSide(color: Theme.of(context).primaryColor),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -329,14 +329,14 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
                                   ? FontWeight.bold
                                   : FontWeight.normal,
                               color: isSelected
-                                  ? ColorPalette.primary
+                                  ? Theme.of(context).primaryColor
                                   : ColorPalette.textPrimary,
                             ),
                           ),
                           trailing: isSelected
-                              ? const Icon(
+                              ? Icon(
                                   LucideIcons.check,
-                                  color: ColorPalette.primary,
+                                  color: Theme.of(context).primaryColor,
                                   size: 18,
                                 )
                               : null,

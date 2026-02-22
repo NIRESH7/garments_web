@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
+import '../utils/print_utils.dart';
 
 class ReportPrintService {
   // Singleton pattern
@@ -25,6 +26,8 @@ class ReportPrintService {
         margin: const pw.EdgeInsets.all(24),
         header: (pw.Context context) => pw.Column(
           children: [
+            PrintUtils.buildCompanyHeader(pw.Font.helveticaBold(), pw.Font.helvetica()),
+            pw.SizedBox(height: 10),
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [

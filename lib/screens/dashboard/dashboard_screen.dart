@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/theme/theme_provider.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/constants/api_constants.dart';
 import '../../services/mobile_api_service.dart';
@@ -12,7 +14,10 @@ import '../auth/login_screen.dart';
 import '../dashboard/notifications_screen.dart';
 import '../assessment/item_assignment_list_screen.dart';
 import '../transactions/lot_complaint_solution_screen.dart';
-import '../transactions/cutting_order_entry_screen.dart';
+import '../transactions/cutting_order_planning_screen.dart';
+import '../transactions/lot_requirement_allocation_screen.dart';
+import '../tasks/admin_task_management_screen.dart';
+import '../tasks/worker_task_dashboard_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
 
@@ -62,35 +67,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
               LucideIcons.home,
               size: 26,
               color: _pageIndex == 0
-                  ? ColorPalette.primary
+                  ? Theme.of(context).primaryColor
                   : ColorPalette.textSecondary,
             ),
             Icon(
               LucideIcons.database,
               size: 26,
               color: _pageIndex == 1
-                  ? ColorPalette.primary
+                  ? Theme.of(context).primaryColor
                   : ColorPalette.textSecondary,
             ),
             Icon(
               LucideIcons.arrowUpDown,
               size: 26,
               color: _pageIndex == 2
-                  ? ColorPalette.primary
+                  ? Theme.of(context).primaryColor
                   : ColorPalette.textSecondary,
             ),
             Icon(
               LucideIcons.clipboardCheck,
               size: 26,
               color: _pageIndex == 3
-                  ? ColorPalette.primary
+                  ? Theme.of(context).primaryColor
                   : ColorPalette.textSecondary,
             ),
             Icon(
               LucideIcons.barChart3,
               size: 26,
               color: _pageIndex == 4
-                  ? ColorPalette.primary
+                  ? Theme.of(context).primaryColor
                   : ColorPalette.textSecondary,
             ),
           ],
@@ -176,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'Complaint Solution',
               subtitle: 'Resolve and clear quality issues',
               icon: LucideIcons.shieldCheck,
-              color: Colors.blueAccent,
+              color: Theme.of(context).primaryColor,
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -189,16 +194,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
             _TransactionTile(
-              title: 'Cutting Order Entry',
-              subtitle: 'Plan and record cutting orders',
-              icon: LucideIcons.scissors,
-              color: Colors.orangeAccent,
+              title: 'Cutting Planning',
+              subtitle: 'Create monthly/yearly plans',
+              icon: LucideIcons.calendar,
+              color: Colors.indigo,
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const CuttingOrderEntryScreen(),
+                    builder: (context) => const CuttingOrderPlanningScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _TransactionTile(
+              title: 'Lot Requirement',
+              subtitle: 'FIFO Lot Assignment',
+              icon: LucideIcons.layoutGrid,
+              color: Colors.orange,
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LotRequirementAllocationScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _TransactionTile(
+              title: 'Task Management',
+              subtitle: 'Assign & track lab/factory tasks',
+              icon: LucideIcons.checkSquare,
+              color: Colors.purple,
+              onTap: () {
+                Navigator.pop(context);
+                // For simplicity, we navigate to the task list view which can branch
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const WorkerTaskDashboardScreen(),
                   ),
                 );
               },
@@ -210,14 +248,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _DynamicDataHomeTab extends StatefulWidget {
+class _DynamicDataHomeTab extends ConsumerStatefulWidget {
   const _DynamicDataHomeTab();
 
   @override
-  State<_DynamicDataHomeTab> createState() => _DynamicDataHomeTabState();
+  ConsumerState<_DynamicDataHomeTab> createState() => _DynamicDataHomeTabState();
 }
 
-class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
+class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
   final _api = MobileApiService();
   Map<String, dynamic> _summary = {
     'opening': {'weight': '0.00', 'rolls': 0},
@@ -335,7 +373,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
                   IconButton(
                     icon: const Icon(LucideIcons.filter),
                     onPressed: _showFilterDialog,
-                    color: ColorPalette.primary,
+                    color: Theme.of(context).primaryColor,
                   ),
                 ],
               ),
@@ -397,7 +435,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
               ),
               child: CircleAvatar(
                 radius: 24,
-                backgroundColor: ColorPalette.primary.withOpacity(0.1),
+                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
                 backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
                     ? NetworkImage(
                         '${ApiConstants.serverUrl}${_avatarUrl!.startsWith('/') ? '' : '/'}$_avatarUrl',
@@ -406,9 +444,9 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
                 child: _avatarUrl == null || _avatarUrl!.isEmpty
                     ? Text(
                         _userName.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: ColorPalette.primary,
+                          color: Theme.of(context).primaryColor,
                         ),
                       )
                     : null,
@@ -479,6 +517,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
                       ),
                       TextButton(
                         onPressed: () {
+                          ref.read(themeProvider.notifier).resetTheme();
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
@@ -587,7 +626,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
           title: 'Opening Stock',
           weight: _summary['opening']['weight'],
           rolls: _summary['opening']['rolls'],
-          color: Colors.blue,
+          color: Theme.of(context).primaryColor,
           icon: LucideIcons.box,
         ),
         _StockCard(
@@ -608,7 +647,7 @@ class _DynamicDataHomeTabState extends State<_DynamicDataHomeTab> {
           title: 'Closing Stock',
           weight: _summary['closing']['weight'],
           rolls: _summary['closing']['rolls'],
-          color: Colors.indigo,
+          color: Theme.of(context).primaryColor.withOpacity(0.8),
           icon: LucideIcons.layers,
         ),
       ],

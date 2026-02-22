@@ -21,7 +21,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 class LotInwardScreen extends StatefulWidget {
-  const LotInwardScreen({super.key});
+  final Map<String, dynamic>? editInward;
+  const LotInwardScreen({super.key, this.editInward});
 
   @override
   State<LotInwardScreen> createState() => _LotInwardScreenState();
@@ -93,6 +94,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _inTime = DateFormat('hh:mm a').format(DateTime.now());
     _loadUserRole();
     _loadMasterData();
+    
+    if (widget.editInward != null) {
+      _populateEditData();
+    }
     
     // Add listener for Lot Number to check for existing lot
     _lotNumberController.addListener(() {
@@ -168,6 +173,62 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error loading data: $e')));
+      }
+    }
+  }
+
+  void _populateEditData() {
+    final data = widget.editInward!;
+    _inwardNoController.text = data['inwardNo'] ?? '';
+    _selectedLotName = data['lotName'];
+    _lotNumberController.text = data['lotNo'] ?? '';
+    _selectedParty = data['fromParty'];
+    _process = data['process'] ?? '';
+    _rateController.text = (data['rate'] ?? '').toString();
+    _gsmController.text = (data['gsm'] ?? '').toString();
+    _vehicleController.text = data['vehicleNo'] ?? '';
+    _dcController.text = data['partyDcNo'] ?? '';
+    _qualityStatus = data['qualityStatus'] ?? 'OK';
+    _gsmStatus = data['gsmStatus'] ?? 'OK';
+    _shadeStatus = data['shadeStatus'] ?? 'OK';
+    _washingStatus = data['washingStatus'] ?? 'OK';
+    _complaintController.text = data['complaintText'] ?? '';
+
+    // diaEntries
+    if (data['diaEntries'] != null) {
+      _rows = (data['diaEntries'] as List).map((e) {
+        final row = InwardRow();
+        row.dia = e['dia'];
+        row.rolls = (e['roll'] ?? 0) is int ? e['roll'] : (e['roll'] as num).toInt();
+        row.sets = (e['sets'] ?? 0) is int ? e['sets'] : (e['sets'] as num).toInt();
+        row.deliveredWeight = (e['delivWt'] ?? 0).toDouble();
+        row.recRoll = (e['recRoll'] ?? 0) is int ? e['recRoll'] : (e['recRoll'] as num).toInt();
+        row.recWeight = (e['recWt'] ?? 0).toDouble();
+        row.rate = (e['rate'] ?? 0).toDouble();
+        _updateRowMath(row);
+        return row;
+      }).toList();
+    }
+
+    // storageDetails
+    if (data['storageDetails'] != null) {
+      for (var storage in data['storageDetails']) {
+        final dia = storage['dia'];
+        if (dia != null) {
+          final diaData = StickerDiaData();
+          diaData.racks = List<String?>.from(storage['racks'] ?? []);
+          diaData.pallets = List<String?>.from(storage['pallets'] ?? []);
+          if (storage['rows'] != null) {
+            diaData.rows = (storage['rows'] as List).map((r) {
+              final sRow = StickerRow();
+              sRow.colour = r['colour'];
+              sRow.setWeights = List<String>.from(r['setWeights'] ?? []);
+              return sRow;
+            }).toList();
+          }
+          _stickerData[dia] = diaData;
+          _completedStickerDias.add(dia);
+        }
       }
     }
   }
@@ -638,14 +699,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     inwardData["authorizedSignature"] = _authorizedSignature;
     inwardData["mdSignature"] = _mdSignature;
 
-    final success = await _api.saveInward(inwardData);
+    final success = widget.editInward != null
+        ? await _api.updateInward(widget.editInward!['_id'], inwardData)
+        : await _api.saveInward(inwardData);
 
     setState(() {
       _isLoading = false;
       _isSaving = false;
-      if (success) {
-        // No-op for now unless we need to track local save state
-      }
     });
 
     if (!mounted) return;
@@ -968,7 +1028,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                               ),
                             ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0EA5E9),
+                              backgroundColor: Theme.of(context).primaryColor,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -1341,7 +1401,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 ),
           title: Text(
             _currentPage == 0
-                ? 'Lot Inward Entry'
+                ? (widget.editInward != null ? 'Edit Lot Inward' : 'Lot Inward Entry')
                 : 'Sticker & Storage Details',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
@@ -1939,7 +1999,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
+                    backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -2131,7 +2191,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 icon: const Icon(Icons.add, size: 20),
                 label: const Text("Add Row"),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF0EA5E9),
+                  foregroundColor: Theme.of(context).primaryColor,
                 ),
               ),
             ),
@@ -2419,7 +2479,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           "Add Row",
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        style: TextButton.styleFrom(foregroundColor: const Color(0xFF0EA5E9)),
+        style: TextButton.styleFrom(foregroundColor: Theme.of(context).primaryColor),
       ),
     ],
   );
@@ -2438,7 +2498,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           child: ElevatedButton(
             onPressed: _navigateToStickerPage,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0EA5E9),
+              backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -2468,7 +2528,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   )
                 : const Icon(Icons.save, size: 24),
             label: Text(
-              _isSaving ? "Saving..." : "Save Entry",
+              _isSaving
+                  ? "Saving..."
+                  : (widget.editInward != null ? "Update Entry" : "Save Entry"),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(

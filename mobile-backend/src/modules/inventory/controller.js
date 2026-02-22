@@ -1033,9 +1033,111 @@ const checkFifoViolation = asyncHandler(async (req, res) => {
     res.json({ violation: false });
 });
 
+// @desc    Delete an inward entry
+// @route   DELETE /api/inventory/inward/:id
+// @access  Private
+const deleteInward = asyncHandler(async (req, res) => {
+    const inward = await Inward.findById(req.params.id);
+
+    if (inward) {
+        await inward.deleteOne();
+        res.json({ message: 'Inward entry removed' });
+    } else {
+        res.status(404);
+        throw new Error('Inward entry not found');
+    }
+});
+
+// @desc    Update an inward entry
+// @route   PUT /api/inventory/inward/:id
+// @access  Private
+const updateInward = asyncHandler(async (req, res) => {
+    const inward = await Inward.findById(req.params.id);
+
+    if (inward) {
+        const {
+            inwardDate,
+            inTime,
+            outTime,
+            lotName,
+            lotNo,
+            fromParty,
+            process,
+            rate,
+            gsm,
+            vehicleNo,
+            partyDcNo,
+            diaEntries,
+            storageDetails,
+            qualityStatus,
+            qualityImage,
+            gsmStatus,
+            gsmImage,
+            shadeStatus,
+            shadeImage,
+            washingStatus,
+            washingImage,
+            complaintText,
+            complaintImage,
+            balanceImage,
+        } = req.body;
+
+        inward.inwardDate = inwardDate || inward.inwardDate;
+        inward.inTime = inTime || inward.inTime;
+        inward.outTime = outTime || inward.outTime;
+        inward.lotName = lotName || inward.lotName;
+        inward.lotNo = lotNo || inward.lotNo;
+        inward.fromParty = fromParty || inward.fromParty;
+        inward.process = process || inward.process;
+        inward.rate = rate !== undefined ? Number(rate) : inward.rate;
+        inward.gsm = gsm || inward.gsm;
+        inward.vehicleNo = vehicleNo || inward.vehicleNo;
+        inward.partyDcNo = partyDcNo || inward.partyDcNo;
+
+        inward.qualityStatus = qualityStatus || inward.qualityStatus;
+        inward.qualityImage = qualityImage || inward.qualityImage;
+        inward.gsmStatus = gsmStatus || inward.gsmStatus;
+        inward.gsmImage = gsmImage || inward.gsmImage;
+        inward.shadeStatus = shadeStatus || inward.shadeStatus;
+        inward.shadeImage = shadeImage || inward.shadeImage;
+        inward.washingStatus = washingStatus || inward.washingStatus;
+        inward.washingImage = washingImage || inward.washingImage;
+        inward.complaintText = complaintText || inward.complaintText;
+        inward.complaintImage = complaintImage || inward.complaintImage;
+        inward.balanceImage = balanceImage || inward.balanceImage;
+
+        if (diaEntries) {
+            inward.diaEntries = typeof diaEntries === 'string' ? JSON.parse(diaEntries) : diaEntries;
+        }
+        if (storageDetails) {
+            inward.storageDetails = typeof storageDetails === 'string' ? JSON.parse(storageDetails) : storageDetails;
+        }
+
+        if (req.files) {
+            if (req.files.lotInchargeSignature) {
+                inward.lotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
+            }
+            if (req.files.authorizedSignature) {
+                inward.authorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
+            }
+            if (req.files.mdSignature) {
+                inward.mdSignature = `/${req.files.mdSignature[0].path.replace(/\\/g, '/')}`;
+            }
+        }
+
+        const updatedInward = await inward.save();
+        res.json(updatedInward);
+    } else {
+        res.status(404);
+        throw new Error('Inward entry not found');
+    }
+});
+
 export {
     createInward,
     getInwards,
+    deleteInward,
+    updateInward,
     getLotsFifo,
     getBalancedSets,
     generateInwardNumber,
