@@ -108,4 +108,42 @@ const forgotPassword = asyncHandler(async (req, res) => {
     }
 });
 
-export { authUser, registerUser, verifyOTP, forgotPassword };
+// @desc    Create an admin user
+// @route   POST /api/auth/create-admin
+// @access  Public (Should be protected or removed in production)
+const createAdmin = asyncHandler(async (req, res) => {
+    const { name, email, password, role } = req.body;
+
+    const userExists = await User.findOne({ email });
+
+    if (userExists) {
+        res.status(400);
+        throw new Error('User already exists');
+    }
+
+    const user = await User.create({
+        name,
+        email,
+        password,
+        isAdmin: true,
+        role: role || 'admin',
+        isVerified: true,
+    });
+
+    if (user) {
+        res.status(201).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            isAdmin: user.isAdmin,
+            role: user.role,
+            isVerified: user.isVerified,
+            token: generateToken(user._id),
+        });
+    } else {
+        res.status(400);
+        throw new Error('Invalid user data');
+    }
+});
+
+export { authUser, registerUser, verifyOTP, forgotPassword, createAdmin };

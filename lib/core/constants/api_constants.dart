@@ -1,8 +1,8 @@
 class ApiConstants {
   static const String baseUrl =
-      'https://garments-backend-9gsw.onrender.com/api'; 
+      'http://13.220.94.83:5001/api'; 
   static const String serverUrl =
-      'https://garments-backend-9gsw.onrender.com';  
+      'http://13.220.94.83:5001';  
 
   // static const String baseUrl = 'http://localhost:5001/api';
   // static const String serverUrl = 'http://localhost:5001';
