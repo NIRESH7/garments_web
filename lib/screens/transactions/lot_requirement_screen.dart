@@ -355,7 +355,9 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).primaryColor.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.1)),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -371,14 +373,14 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                          Text(
-                            '${_fabricRequiredKg.toStringAsFixed(2)} KG',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Theme.of(context).primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Text(
+                          '${_fabricRequiredKg.toStringAsFixed(2)} KG',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Theme.of(context).primaryColor,
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
                       ],
                     ),
                     Column(
@@ -433,7 +435,7 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'FIFO LOT ALLOCATIONS',
           style: TextStyle(
             fontWeight: FontWeight.bold,
