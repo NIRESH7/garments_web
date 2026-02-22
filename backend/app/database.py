@@ -2,8 +2,8 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
 # Default to local mongo if not env var
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = "garments_erp"
+MONGO_URL = os.getenv("MONGO_URL", "mongodb+srv://deepaks24062000_db_user:deepak%4024@cluster0.ffresp2.mongodb.net/garments_mobile")
+DB_NAME = "garments_mobile"
 
 class Database:
     client: AsyncIOMotorClient = None

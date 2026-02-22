@@ -4,7 +4,7 @@ import fetch from 'node-fetch'; // if available, or dynamic import
 
 // Constants
 const API_URL = 'http://localhost:5001/api';
-const MONGODB_URI = 'mongodb://localhost:27017/garments_erp';
+const MONGODB_URI = 'mongodb+srv://deepaks24062000_db_user:deepak%4024@cluster0.ffresp2.mongodb.net/garments_mobile';
 
 async function run() {
     try {

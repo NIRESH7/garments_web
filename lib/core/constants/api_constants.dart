@@ -1,11 +1,11 @@
 class ApiConstants {
-  // static const String baseUrl =
-  //     'https://garments-backend-9gsw.onrender.com/api'; 
-  // static const String serverUrl =
-  //     'https://garments-backend-9gsw.onrender.com';  
+  static const String baseUrl =
+      'https://garments-backend-9gsw.onrender.com/api'; 
+  static const String serverUrl =
+      'https://garments-backend-9gsw.onrender.com';  
 
-  static const String baseUrl = 'http://localhost:5001/api';
-  static const String serverUrl = 'http://localhost:5001';
+  // static const String baseUrl = 'http://localhost:5001/api';
+  // static const String serverUrl = 'http://localhost:5001';
   static const String login = '/auth/login';
   static const String register = '/auth/register';
   static const String verifyOtp = '/auth/verify-otp';

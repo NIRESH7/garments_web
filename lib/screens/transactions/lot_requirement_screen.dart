@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/lot_allocation_summary_report.dart';
+import 'package:share_plus/share_plus.dart';
 
 class LotRequirementScreen extends StatefulWidget {
   const LotRequirementScreen({super.key});
@@ -129,7 +131,7 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
       setState(() {
         _dozen = remaining > 0 ? remaining : 0;
         _dozenController.text = _dozen.toString();
-        
+
         if (assignment != null) {
           _dozenWeight = (assignment['dozenWeight'] ?? 0).toDouble();
           _foldingWt = (assignment['foldingWt'] ?? 0).toDouble();
@@ -183,33 +185,23 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
 
     setState(() => _isSaving = true);
     try {
-      // Add itemName, size, dozen to each allocation for record keeping
-      final lotAllocations = _allocations
-          .map(
-            (a) => {
-              ...a,
-              'itemName': _selectedItem,
-              'size': _selectedSize,
-              'allocationId': 'ALC-${DateTime.now().millisecondsSinceEpoch}',
-            },
-          )
-          .toList();
+      final List<Map<String, dynamic>> finalAllocations = _allocations.map((a) {
+        final Map<String, dynamic> map = Map<String, dynamic>.from(a as Map);
+        return <String, dynamic>{
+          ...map,
+          'itemName': _selectedItem,
+          'size': _selectedSize,
+          'day': _selectedDay,
+          'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+          'time': _selectedTime.format(context),
+          'allocationId': 'ALC-${DateTime.now().millisecondsSinceEpoch}',
+        };
+      }).toList();
 
-      final List<Map<String, dynamic>> finalAllocations = _allocations
-          .map(
-            (a) => {
-              ...a,
-              'itemName': _selectedItem,
-              'size': _selectedSize,
-              'day': _selectedDay,
-              'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-              'time': _selectedTime.format(context),
-              'allocationId': 'ALC-${DateTime.now().millisecondsSinceEpoch}',
-            },
-          )
-          .toList();
-
-      final success = await _api.saveLotAllocation(_selectedPlan!['_id'], finalAllocations);
+      final success = await _api.saveLotAllocation(
+        _selectedPlan!['_id'],
+        finalAllocations,
+      );
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Allocations Saved Successfully')),
@@ -313,14 +305,19 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                   child: DropdownButtonFormField<String>(
                     value: _selectedDay,
                     decoration: const InputDecoration(labelText: 'DAY'),
-                    items: [
-                      'Monday',
-                      'Tuesday',
-                      'Wednesday',
-                      'Thursday',
-                      'Friday',
-                      'Saturday'
-                    ].map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    items:
+                        [
+                              'Monday',
+                              'Tuesday',
+                              'Wednesday',
+                              'Thursday',
+                              'Friday',
+                              'Saturday',
+                            ]
+                            .map(
+                              (d) => DropdownMenuItem(value: d, child: Text(d)),
+                            )
+                            .toList(),
                     onChanged: (val) => setState(() => _selectedDay = val!),
                   ),
                 ),
@@ -338,7 +335,9 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                     },
                     child: InputDecorator(
                       decoration: const InputDecoration(labelText: 'DATE'),
-                      child: Text(DateFormat('dd-MM-yyyy').format(_selectedDate)),
+                      child: Text(
+                        DateFormat('dd-MM-yyyy').format(_selectedDate),
+                      ),
                     ),
                   ),
                 ),
@@ -476,13 +475,9 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(
-                    child: _buildInfoItem('DIA', _dia),
-                  ),
+                  Expanded(child: _buildInfoItem('DIA', _dia)),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildInfoItem('GSM', _gsm),
-                  ),
+                  Expanded(child: _buildInfoItem('GSM', _gsm)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -500,9 +495,15 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildCalcItem('FABRIC REQ', '${_fabricRequiredKg.toStringAsFixed(2)} KG'),
+                        _buildCalcItem(
+                          'FABRIC REQ',
+                          '${_fabricRequiredKg.toStringAsFixed(2)} KG',
+                        ),
                         _buildCalcItem('ROLLS REQ', '$_rollsRequired'),
-                        _buildCalcItem('SETS REQ', _setsRequired.toStringAsFixed(2)),
+                        _buildCalcItem(
+                          'SETS REQ',
+                          _setsRequired.toStringAsFixed(2),
+                        ),
                       ],
                     ),
                   ],
@@ -546,8 +547,18 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
       ],
     );
   }
@@ -555,9 +566,23 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
   Widget _buildCalcItem(String label, String value) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.black54,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 16, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            color: Theme.of(context).primaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     );
   }
@@ -629,5 +654,30 @@ class _LotRequirementScreenState extends State<LotRequirementScreen> {
         ),
       ],
     );
+  }
+
+  void _shareViaWhatsApp() {
+    if (_allocations.isEmpty) {
+      _showError('No allocations to share');
+      return;
+    }
+
+    final planStr = _selectedPlan != null ? _selectedPlan!['planId'] : 'N/A';
+    String text = "*LOT ALLOCATION SUMMARY*\n\n";
+    text += "Plan: $planStr\n";
+    text += "Item: ${_selectedItem ?? 'N/A'}\n";
+    text += "Size: ${_selectedSize ?? 'N/A'}\n";
+    text += "Date: ${DateFormat('dd-MM-yyyy').format(_selectedDate)}\n";
+    text += "Day: $_selectedDay\n\n";
+
+    text += "ALLOCATIONS:\n";
+    for (var a in _allocations) {
+      text += "- Lot: ${a['lotName']} (${a['lotNo']})\n";
+      text +=
+          "  Set: ${a['setNum'] ?? 'N/A'}, Dozen: ${a['dozen']}, Wt: ${a['weight']}kg\n";
+      text += "  Loc: ${a['rackName'] ?? ''} / ${a['palletNumber'] ?? ''}\n\n";
+    }
+
+    Share.share(text);
   }
 }
