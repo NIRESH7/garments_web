@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
 import '../../widgets/app_drawer.dart';
 
 class CuttingOrderPlanningScreen extends StatefulWidget {

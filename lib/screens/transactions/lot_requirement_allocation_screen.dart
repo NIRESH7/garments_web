@@ -42,7 +42,6 @@ class _LotRequirementAllocationScreenState
   final TextEditingController _foldingWeightController =
       TextEditingController();
 
-  double _dozenBalance = 0;
   double _dozenWeight = 0;
   List<Map<String, dynamic>> _allocations = [];
 
@@ -158,7 +157,6 @@ class _LotRequirementAllocationScreenState
         if (entry != null) {
           final dozen = (entry['sizeQuantities'][size] ?? 0).toDouble();
           _dozenController.text = dozen.toString();
-          _dozenBalance = dozen;
         }
       }
       _updateFromAssignments();
@@ -237,7 +235,6 @@ class _LotRequirementAllocationScreenState
                 final dozen = (entry['sizeQuantities'][matchSize] ?? 0)
                     .toDouble();
                 _dozenController.text = dozen.toString();
-                _dozenBalance = dozen;
               }
             }
           }

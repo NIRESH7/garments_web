@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../core/theme/color_palette.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/auth/login_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
