@@ -3,7 +3,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});

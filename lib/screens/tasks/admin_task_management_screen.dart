@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
 import '../../widgets/app_drawer.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:intl/intl.dart';
 import './task_detail_screen.dart';
 
 class AdminTaskManagementScreen extends StatefulWidget {

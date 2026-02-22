@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
 import '../../widgets/app_drawer.dart';
 import './task_detail_screen.dart';
 
@@ -34,7 +33,6 @@ class _WorkerTaskDashboardScreenState extends State<WorkerTaskDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
       appBar: AppBar(title: const Text('MY TASKS')),

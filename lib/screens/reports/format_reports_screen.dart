@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
