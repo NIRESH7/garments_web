@@ -91,12 +91,13 @@ class TaskPrintService {
                 ),
                 pw.SizedBox(height: 10),
                 pw.Table.fromTextArray(
-                  headers: ['Worker', 'Status', 'Message'],
+                  headers: ['Date', 'Worker', 'Status', 'Message'],
                   headerStyle: pw.TextStyle(font: boldFont, fontSize: 10),
                   cellStyle: pw.TextStyle(font: font, fontSize: 9),
                   data: (task['replies'] as List)
                       .map(
                         (r) => [
+                          _formatDate(r['submittedAt']),
                           r['workerName'] ?? 'N/A',
                           r['status'] ?? 'N/A',
                           r['replyText'] ?? '',
