@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
-import '../../widgets/app_drawer.dart';
-import '../../services/lot_allocation_print_service.dart';
+import 'package:garments/services/mobile_api_service.dart';
+import 'package:garments/core/theme/color_palette.dart';
+import 'package:garments/widgets/app_drawer.dart';
+import 'package:garments/services/lot_allocation_print_service.dart';
 
 class LotAllocationSummaryReportScreen extends StatefulWidget {
   const LotAllocationSummaryReportScreen({super.key});

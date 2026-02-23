@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
-import '../../widgets/app_drawer.dart';
-import '../../widgets/custom_dropdown_field.dart';
+import 'package:garments/services/mobile_api_service.dart';
+import 'package:garments/core/theme/color_palette.dart';
+import 'package:garments/services/lot_allocation_print_service.dart';
+import 'package:garments/core/storage/storage_service.dart';
+import 'package:garments/widgets/app_drawer.dart';
+import 'package:garments/widgets/custom_dropdown_field.dart';
+
+const List<String> _kWeekDays = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday'
+];
+
 
 class LotRequirementAllocationScreen extends StatefulWidget {
   const LotRequirementAllocationScreen({super.key});
@@ -44,6 +56,10 @@ class _LotRequirementAllocationScreenState
 
   double _dozenWeight = 0;
   List<Map<String, dynamic>> _allocations = [];
+  List<Map<String, dynamic>> _allWeekAllocations = [];
+  String _selectedDay = 'Monday';
+  final _printServiceWeekly = LotAllocationPrintService();
+
 
   double get _fabricRequiredKg =>
       (double.tryParse(_dozenController.text) ?? 0) *
@@ -302,37 +318,81 @@ class _LotRequirementAllocationScreenState
     }
   }
 
-  Future<void> _saveAllocation() async {
-    if (_selectedPlanId == null || _allocations.isEmpty) {
+  void _nextDay() {
+    if (_allocations.isEmpty) {
+      _showError('No allocations for $_selectedDay. Run FIFO first.');
+      return;
+    }
+
+    // 1. Store current day's allocations
+    for (var a in _allocations) {
+      _allWeekAllocations.add({
+        ...a,
+        'day': _selectedDay,
+        'itemName': _selectedItem,
+        'size': _selectedSize,
+        'dia': _selectedDia,
+        'lotNameAssigned': _lotNameController.text,
+        'gsm': _gsmController.text,
+        'dozenWeight': _dozenWeight,
+        'efficiency': _efficiencyController.text,
+        'foldingWeight': _foldingWeightController.text,
+      });
+    }
+
+    // 2. Move to next day
+    final currentIndex = _kWeekDays.indexOf(_selectedDay);
+    if (currentIndex < _kWeekDays.length - 1) {
+      setState(() {
+        _selectedDay = _kWeekDays[currentIndex + 1];
+        _allocations = []; // Clear for next day
+        // Keep plan selected but clear item-specifics if desired, 
+        // or keep them if client wants to reuse same setup
+        _selectedItem = null;
+        _selectedSize = null;
+        _selectedDia = null;
+        _lotNameController.clear();
+        _dozenController.clear();
+        _dozenWeightController.clear();
+      });
+      _showSuccess('Monday Data Recorded. Now select for $_selectedDay');
+    }
+  }
+
+  Future<void> _saveWeeklyAllocation() async {
+    // Collect Saturday's data if not already added
+    if (_selectedDay == 'Saturday' && _allocations.isNotEmpty) {
+      for (var a in _allocations) {
+        if (!_allWeekAllocations.any((aw) => aw['day'] == 'Saturday' && aw['lotNo'] == a['lotNo'])) {
+           _allWeekAllocations.add({
+            ...a,
+            'day': 'Saturday',
+            'itemName': _selectedItem,
+            'size': _selectedSize,
+            'dia': _selectedDia,
+            'lotNameAssigned': _lotNameController.text,
+            'gsm': _gsmController.text,
+            'dozenWeight': _dozenWeight,
+            'efficiency': _efficiencyController.text,
+            'foldingWeight': _foldingWeightController.text,
+          });
+        }
+      }
+    }
+
+    if (_selectedPlanId == null || _allWeekAllocations.isEmpty) {
       _showError('No allocations to save.');
       return;
     }
 
     setState(() => _isSaving = true);
     try {
-      // Prepare full allocation data for record
-      final fullAllocations = _allocations
-          .map(
-            (a) => {
-              ...a,
-              'itemName': _selectedItem,
-              'size': _selectedSize,
-              'dia': _selectedDia,
-              'lotNameAssigned': _lotNameController.text,
-              'gsm': _gsmController.text,
-              'dozenWeight': _dozenWeight,
-              'efficiency': _efficiencyController.text,
-              'foldingWeight': _foldingWeightController.text,
-            },
-          )
-          .toList();
-
       final success = await _api.saveLotAllocation(
         _selectedPlanId!,
-        fullAllocations,
+        _allWeekAllocations,
       );
       if (success) {
-        _showSuccess('Allocations Saved Successfully');
+        _showSuccess('Weekly Allocations Saved Successfully');
         Navigator.pop(context);
       } else {
         _showError('Failed to save allocations');
@@ -342,6 +402,29 @@ class _LotRequirementAllocationScreenState
     } finally {
       setState(() => _isSaving = false);
     }
+  }
+
+  void _printWeekly() {
+    if (_allWeekAllocations.isEmpty && _allocations.isEmpty) {
+      _showError('No details to print.');
+      return;
+    }
+
+    final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId);
+    final planId = plan['planId'] ?? 'N/A';
+    final planPeriod = plan['planPeriod'] ?? 'N/A';
+
+    // Temporary list for print if not saved yet
+    List<Map<String, dynamic>> printList = List.from(_allWeekAllocations);
+    if (_allocations.isNotEmpty) {
+      for (var a in _allocations) {
+        if (!printList.any((pl) => pl['day'] == _selectedDay && pl['lotNo'] == a['lotNo'])) {
+          printList.add({...a, 'day': _selectedDay});
+        }
+      }
+    }
+
+    _printServiceWeekly.printWeeklyAllocations(planId, planPeriod, printList);
   }
 
   void _showError(String msg) {
@@ -361,7 +444,17 @@ class _LotRequirementAllocationScreenState
     final primaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('LOT REQUIREMENT ALLOCATION')),
+      appBar: AppBar(
+        title: const Text('LOT REQUIREMENT ALLOCATION'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: _printWeekly,
+            tooltip: 'Print Weekly Plan',
+          ),
+        ],
+      ),
+
       drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -469,6 +562,21 @@ class _LotRequirementAllocationScreenState
             Row(
               children: [
                 Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedDay,
+                    decoration: const InputDecoration(labelText: 'Selection Day'),
+                    items: _kWeekDays
+                        .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                        .toList(),
+                    onChanged: (val) => setState(() => _selectedDay = val!),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
                   child: CustomDropdownField(
                     label: 'Size',
                     items: sizes,
@@ -489,6 +597,7 @@ class _LotRequirementAllocationScreenState
                 ),
               ],
             ),
+
             const SizedBox(height: 16),
             TextFormField(
               controller: _lotNameController,
@@ -676,6 +785,7 @@ class _LotRequirementAllocationScreenState
                 headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
                 columns: const [
                   DataColumn(label: Text('LOT NAME')),
+                  DataColumn(label: Text('LOT NO')),
                   DataColumn(label: Text('SET')),
                   DataColumn(label: Text('DIA')),
                   DataColumn(label: Text('RACK')),
@@ -687,8 +797,9 @@ class _LotRequirementAllocationScreenState
                       (a) => DataRow(
                         cells: [
                           DataCell(Text(a['lotName'] ?? '')),
-                          DataCell(Text(a['sets']?.toString() ?? '-')),
-                          DataCell(Text(a['dia'] ?? '')),
+                          DataCell(Text(a['lotNo'] ?? '-')),
+                          DataCell(Text(a['setNum']?.toString() ?? '-')),
+                          DataCell(Text(a['dia']?.toString() ?? '')),
                           DataCell(Text(a['rackName'] ?? '')),
                           DataCell(Text(a['palletNumber'] ?? '')),
                           DataCell(Text(a['dozen']?.toString() ?? '0')),
@@ -702,32 +813,60 @@ class _LotRequirementAllocationScreenState
   }
 
   Widget _buildSaveButton(Color primaryColor) {
-    return Center(
-      child: ElevatedButton(
-        onPressed: _isSaving ? null : _saveAllocation,
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-          backgroundColor: ColorPalette.success,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: _isSaving
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : const Text(
-                'SAVE LOT ALLOCATION',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+    final bool isSaturday = _selectedDay == 'Saturday';
+
+    return Column(
+      children: [
+        if (!isSaturday)
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _nextDay,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-      ),
+              child: const Text(
+                'NEXT DAY',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ),
+        if (!isSaturday) const SizedBox(height: 16),
+        Center(
+          child: ElevatedButton(
+            onPressed: _isSaving ? null : _saveWeeklyAllocation,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+              backgroundColor: ColorPalette.success,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Text(
+                    isSaturday ? 'SAVE WEEKLY ALLOCATION' : 'SAVE CURRENT ONLY',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
