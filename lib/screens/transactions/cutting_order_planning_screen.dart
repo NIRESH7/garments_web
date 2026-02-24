@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../services/lot_allocation_print_service.dart';
 
 class CuttingOrderPlanningScreen extends StatefulWidget {
   const CuttingOrderPlanningScreen({super.key});
@@ -13,6 +14,7 @@ class CuttingOrderPlanningScreen extends StatefulWidget {
 
 class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen> {
   final _api = MobileApiService();
+  final _printService = LotAllocationPrintService();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isSaving = false;
@@ -139,6 +141,23 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
     }
   }
 
+  void _printPlanningSheet() {
+    if (_cuttingEntries.isEmpty || _cuttingEntries.every((e) => e['itemName'].isEmpty)) {
+      _showError('No details to print.');
+      return;
+    }
+    
+    _printService.printCuttingOrderPlanning(
+      _planType,
+      _planPeriod,
+      _startDate,
+      _endDate,
+      _sizeType,
+      _cuttingEntries,
+      _sizes,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
@@ -148,6 +167,13 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: _printPlanningSheet,
+            tooltip: 'Print Planning Sheet',
+          ),
+        ],
       ),
       drawer: const AppDrawer(),
       body: _isLoading
@@ -420,7 +446,7 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                         final sStr = s.toString();
                         return DataCell(
                           SizedBox(
-                            width: 50,
+                            width: 100, // Widened to fit large values better
                             child: TextFormField(
                               initialValue:
                                   entry['sizeQuantities'][sStr].toString() == '0'
@@ -428,6 +454,7 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                                       : entry['sizeQuantities'][sStr].toString(),
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.center,
+                              maxLines: null, // Allow wrapping to the next line
                               onChanged: (val) {
                                 setState(() {
                                   entry['sizeQuantities'][sStr] =
@@ -436,6 +463,9 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                                 });
                               },
                               decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 8, horizontal: 4),
                                   border: InputBorder.none,
                                   hintText: '0',
                                   hintStyle:
