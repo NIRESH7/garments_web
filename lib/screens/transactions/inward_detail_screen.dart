@@ -1014,8 +1014,13 @@ class InwardDetailScreen extends StatelessWidget {
     try {
       final pdf = _generateStickersPdf(stickerList);
       
+      final pageFormat = stickerList.length == 1
+          ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
+          : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
+
       await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
+        format: pageFormat,
+        onLayout: (PdfPageFormat defaultFormat) async => pdf.save(),
         name: 'Stickers_${inward['lotNo'] ?? 'Details'}',
       );
     } catch (e) {

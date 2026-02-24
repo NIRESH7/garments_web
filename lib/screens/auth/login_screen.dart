@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController(text: "password123");
   final _api = MobileApiService();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -118,11 +119,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   TextField(
                     controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: Icon(LucideIcons.lock, size: 20),
-                      suffixIcon: Icon(LucideIcons.eyeOff, size: 20),
+                      prefixIcon: const Icon(LucideIcons.lock, size: 20),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
                     ),
                   ).animate().fadeIn(delay: 1000.ms).slideY(begin: 0.1),
                 ],
