@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 import '../../core/constants/api_constants.dart';
 import '../../services/mobile_api_service.dart';
 import 'lot_inward_screen.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/inward_print_service.dart';
 
@@ -77,6 +82,8 @@ class InwardDetailScreen extends StatelessWidget {
             _buildDiaEntriesCard(),
             const SizedBox(height: 16),
             _buildSignaturesCard(),
+            const SizedBox(height: 16),
+            _buildStickerPreviewsCard(context),
             const SizedBox(height: 32),
           ],
         ),
@@ -97,132 +104,22 @@ class InwardDetailScreen extends StatelessWidget {
 
   Future<void> _shareDetails(BuildContext context) async {
     try {
-      final sb = StringBuffer();
-      sb.writeln("*LOT INWARD DETAILS*");
-      sb.writeln("");
+      final service = InwardPrintService();
+      final pdfBytes = await service.generatePdfBytes(inward);
+      
+      final filename = 'Lot_Inward_${inward['lotNo'] ?? 'Details'}.pdf';
 
-      // Header Info
-      sb.writeln("Inward No: ${inward['inwardNo'] ?? 'N/A'}");
-      String formattedDate = 'N/A';
-      if (inward['inwardDate'] != null) {
-        try {
-          formattedDate = DateFormat(
-            'dd-MM-yyyy',
-          ).format(DateTime.parse(inward['inwardDate']));
-        } catch (e) {
-          formattedDate = inward['inwardDate'].toString();
-        }
-      }
-      sb.writeln("Date: $formattedDate");
-      sb.writeln("Party: ${inward['fromParty'] ?? 'N/A'}");
-      sb.writeln(
-        "Lot: ${inward['lotName'] ?? 'N/A'} / ${inward['lotNo'] ?? 'N/A'}",
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            pdfBytes,
+            mimeType: 'application/pdf',
+            name: filename,
+          )
+        ],
+        text: 'Inward Details - Lot ${inward['lotNo'] ?? ''}',
+        subject: 'Lot Inward PDF',
       );
-      sb.writeln("");
-
-      // Status info
-      sb.writeln("GSM Check: ${inward['gsmStatus'] ?? 'OK'}");
-      sb.writeln("Shade Matching: ${inward['shadeStatus'] ?? 'OK'}");
-      sb.writeln("Washing Check: ${inward['washingStatus'] ?? 'OK'}");
-      sb.writeln("");
-
-      final entries = inward['diaEntries'] as List<dynamic>? ?? [];
-      final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
-
-      for (var entry in entries) {
-        if (entry == null) continue;
-        final e = entry as Map<String, dynamic>;
-        final dia = e['dia']?.toString();
-        final recWt = double.tryParse(e['recWt']?.toString() ?? '0') ?? 0;
-        final recRoll = e['recRoll'] ?? 0;
-
-        if (dia != null) sb.writeln("DIA: $dia");
-        sb.writeln("Rolls: $recRoll");
-        sb.writeln("Received Weight: ${recWt.toStringAsFixed(2)} Kg");
-
-        // Add Storage for this DIA
-        if (dia != null && dia.isNotEmpty) {
-          final storage = storageDetails.firstWhere(
-            (s) => s != null && s['dia']?.toString() == dia,
-            orElse: () => null,
-          );
-          if (storage != null) {
-            final racks = (storage['racks'] as List<dynamic>? ?? [])
-                .where((r) => r != null && r.toString().isNotEmpty)
-                .join(', ');
-            final pallets = (storage['pallets'] as List<dynamic>? ?? [])
-                .where((p) => p != null && p.toString().isNotEmpty)
-                .join(', ');
-            if (racks.isNotEmpty) sb.writeln("Racks: $racks");
-            if (pallets.isNotEmpty) sb.writeln("Pallets: $pallets");
-
-            final rows = storage['rows'] as List<dynamic>? ?? [];
-            for (var row in rows) {
-              if (row == null) continue;
-              final col = row['colour'] ?? '-';
-              final tot = row['totalWeight'] ?? '-';
-              sb.writeln(" - $col: $tot Kg");
-            }
-          }
-        }
-        sb.writeln("");
-      }
-
-      // Calculate Totals
-      int totalRolls = 0;
-      double totalWeight = 0.0;
-      for (var entry in entries) {
-        if (entry != null) {
-          totalRolls += (entry['recRoll'] as num?)?.toInt() ?? 0;
-          totalWeight +=
-              double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
-        }
-      }
-
-      sb.writeln("-----------------------");
-      sb.writeln("TOTAL SUMMARY");
-      sb.writeln("Total Rolls: $totalRolls");
-      sb.writeln("Total Weight: ${totalWeight.toStringAsFixed(2)} Kg");
-      sb.writeln("-----------------------");
-      sb.writeln("");
-
-      // Signatures
-      sb.writeln("Signatures:");
-      sb.writeln(
-        "Lot Incharge: ${inward['lotInchargeSignature'] != null && inward['lotInchargeSignature'].toString().isNotEmpty ? 'OK' : 'Missing'}",
-      );
-      sb.writeln(
-        "Authorized: ${inward['authorizedSignature'] != null && inward['authorizedSignature'].toString().isNotEmpty ? 'OK' : 'Missing'}",
-      );
-      sb.writeln(
-        "MD: ${inward['mdSignature'] != null && inward['mdSignature'].toString().isNotEmpty ? 'OK' : 'Missing'}",
-      );
-
-      final whatsappUrl =
-          "whatsapp://send?text=${Uri.encodeComponent(sb.toString())}";
-      final url = Uri.parse(whatsappUrl);
-
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        // Fallback for some devices or if the deep link fails
-        final webUrl = Uri.parse(
-          "https://wa.me/?text=${Uri.encodeComponent(sb.toString())}",
-        );
-        if (await canLaunchUrl(webUrl)) {
-          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Could not launch WhatsApp. Please ensure it is installed.",
-                ),
-              ),
-            );
-          }
-        }
-      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -770,6 +667,362 @@ class InwardDetailScreen extends StatelessWidget {
             context,
           ).showSnackBar(SnackBar(content: Text('Error deleting inward: $e')));
         }
+      }
+    }
+  }
+
+  Widget _buildStickerPreviewsCard(BuildContext context) {
+    final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
+
+    // Flatten sticker data
+    final List<Map<String, dynamic>> stickers = [];
+
+    for (var s in storageDetails) {
+      if (s == null) continue;
+      final dia = (s['dia'] ?? '').toString();
+      final rows = s['rows'] as List<dynamic>? ?? [];
+
+      for (var r in rows) {
+        if (r == null) continue;
+        final colour = (r['colour'] ?? '').toString();
+        if (colour.isNotEmpty) {
+          final setWeights = r['setWeights'] as List<dynamic>? ?? [];
+          for (int i = 0; i < setWeights.length; i++) {
+            final weight = setWeights[i]?.toString() ?? '';
+            if (weight.trim().isNotEmpty) {
+              stickers.add({
+                'lotNo': inward['lotNo']?.toString() ?? '',
+                'lotName': inward['lotName']?.toString() ?? '',
+                'dia': dia,
+                'colour': colour,
+                'weight': weight,
+                'date': () {
+                  try {
+                    return DateFormat('dd-MM-yyyy').format(
+                      DateTime.parse(
+                        inward['inwardDate'] ?? DateTime.now().toString(),
+                      ),
+                    );
+                  } catch (e) {
+                    return inward['inwardDate'] ?? '';
+                  }
+                }(),
+                'setNo': i + 1,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (stickers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Sticker Previews',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.print, color: Colors.blue),
+                  tooltip: 'Print All Stickers as PDF',
+                  onPressed: () {
+                    _printStickersAsPdf(context, stickers);
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.share, color: Colors.blue),
+                  tooltip: 'Share All Stickers as PDF',
+                  onPressed: () {
+                    _shareStickersAsPdf(context, stickers);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...stickers.map((item) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black, width: 2),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStickerRow('LOT NO', item['lotNo']),
+                    _buildStickerRow('Lot Name', item['lotName']),
+                    _buildStickerRow('Dia', item['dia']),
+                    _buildStickerRow('Colour', item['colour']),
+                    _buildStickerRow('Set No', '#${item['setNo']}'),
+                    _buildStickerRow('Roll Wt', '${item['weight']} kg'),
+                    _buildStickerRow('Date', item['date']),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.black),
+                            ),
+                            child: QrImageView(
+                              data:
+                                  'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                              version: QrVersions.auto,
+                              size: 100.0,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'SCAN FOR AUTH',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.print, color: Colors.blue),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Print Sticker',
+                        onPressed: () {
+                          _printStickersAsPdf(context, [item]);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.share, color: Colors.blue),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Share Sticker PDF',
+                        onPressed: () {
+                          _shareStickersAsPdf(context, [item]);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildStickerRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label :',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfRow(String label, String value, {double fontSize = 10, bool isBoldValue = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(
+            width: 30,
+            child: pw.Text(
+              '$label:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fontSize),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: fontSize,
+                fontWeight: isBoldValue ? pw.FontWeight.bold : pw.FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildSingleSticker(Map<String, dynamic> item) {
+    return pw.Container(
+      width: double.infinity,
+      height: double.infinity,
+      padding: const pw.EdgeInsets.all(2),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(width: 1),
+        color: PdfColors.white,
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
+              _buildPdfRow('Wt', '${item['weight']} kg', fontSize: 6, isBoldValue: true),
+              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 5),
+            ],
+          ),
+          pw.Spacer(),
+          pw.Center(
+            child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Container(
+                  width: 50,
+                  height: 50,
+                  child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data:
+                        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                  ),
+                ),
+                pw.SizedBox(height: 1),
+                pw.Text(
+                  'SCAN',
+                  style: pw.TextStyle(
+                    fontSize: 5,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 2),
+        ],
+      ),
+    );
+  }
+
+  pw.Document _generateStickersPdf(List<Map<String, dynamic>> stickerList) {
+    final pdf = pw.Document();
+
+    for (int i = 0; i < stickerList.length; i += 2) {
+      final item1 = stickerList[i];
+      final item2 = (i + 1 < stickerList.length) ? stickerList[i + 1] : null;
+
+      final isSingle = item2 == null;
+      final pageFormat = isSingle
+          ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
+          : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          margin: const pw.EdgeInsets.all(2),
+          build: (pw.Context context) {
+            if (isSingle) {
+              return _buildSingleSticker(item1);
+            } else {
+              return pw.Row(
+                children: [
+                  pw.Expanded(child: _buildSingleSticker(item1)),
+                  pw.SizedBox(width: 2),
+                  pw.Expanded(child: _buildSingleSticker(item2)),
+                ],
+              );
+            }
+          },
+        ),
+      );
+    }
+    return pdf;
+  }
+
+  Future<void> _shareStickersAsPdf(
+    BuildContext context,
+    List<Map<String, dynamic>> stickerList,
+  ) async {
+    try {
+      final pdf = _generateStickersPdf(stickerList);
+
+      final pdfBytes = await pdf.save();
+
+      final filename = 'Stickers_${inward['lotNo'] ?? 'Details'}.pdf';
+
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            pdfBytes,
+            mimeType: 'application/pdf',
+            name: filename,
+          )
+        ],
+        text: 'Stickers - Lot ${inward['lotNo'] ?? ''}',
+        subject: 'Sticker Labels PDF',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error preparing sticker PDF: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _printStickersAsPdf(
+    BuildContext context,
+    List<Map<String, dynamic>> stickerList,
+  ) async {
+    try {
+      final pdf = _generateStickersPdf(stickerList);
+      
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name: 'Stickers_${inward['lotNo'] ?? 'Details'}',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error printing stickers: $e")),
+        );
       }
     }
   }

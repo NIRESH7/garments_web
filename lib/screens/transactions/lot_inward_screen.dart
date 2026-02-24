@@ -1171,6 +1171,61 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
+  pw.Widget _buildSingleSticker(Map<String, dynamic> item) {
+    return pw.Container(
+      width: double.infinity,
+      height: double.infinity,
+      padding: const pw.EdgeInsets.all(2),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(width: 1),
+        color: PdfColors.white,
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
+              _buildPdfRow('Wt', '${item['weight']} kg', fontSize: 6, isBoldValue: true),
+              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 5),
+            ],
+          ),
+          pw.Spacer(),
+          pw.Center(
+            child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Container(
+                  width: 50,
+                  height: 50,
+                  child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data:
+                        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                  ),
+                ),
+                pw.SizedBox(height: 1),
+                pw.Text(
+                  'SCAN',
+                  style: pw.TextStyle(
+                    fontSize: 5,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 2),
+        ],
+      ),
+    );
+  }
+
   Future<void> _shareStickers(
     List<Map<String, dynamic>> stickerList, {
     required String format,
@@ -1181,78 +1236,32 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     try {
       final pdf = pw.Document();
-      final pageFormat = PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
 
-      for (var item in stickerList) {
+      for (int i = 0; i < stickerList.length; i += 2) {
+        final item1 = stickerList[i];
+        final item2 = (i + 1 < stickerList.length) ? stickerList[i + 1] : null;
+
+        final isSingle = item2 == null;
+        final pageFormat = isSingle
+            ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
+            : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
+
         pdf.addPage(
           pw.Page(
             pageFormat: pageFormat,
             margin: const pw.EdgeInsets.all(2), // Minimal margin for small sticker
             build: (pw.Context context) {
-              return pw.Container(
-                width: double.infinity,
-                height: double.infinity,
-                padding: const pw.EdgeInsets.all(2),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(width: 1),
-                  color: PdfColors.white,
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+              if (isSingle) {
+                return _buildSingleSticker(item1);
+              } else {
+                return pw.Row(
                   children: [
-                    // Layout: Left side Details, Right side QR (or top/bottom)
-                    // Trying side-by-side to save vertical space
-                    pw.Row(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        // Details Column
-                        pw.Expanded(
-                          flex: 3,
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              _buildPdfRow('LOT', item['lotNo'], fontSize: 6),
-                              _buildPdfRow('Name', item['lotName'], fontSize: 6),
-                              _buildPdfRow('Dia', item['dia'], fontSize: 6),
-                              _buildPdfRow('Col', item['colour'], fontSize: 6),
-                              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
-                              _buildPdfRow('Wt', '${item['weight']} kg', fontSize: 6, isBoldValue: true),
-                              _buildPdfRow('Dt', item['date'], fontSize: 5),
-                            ],
-                          ),
-                        ),
-                        // QR Column
-                        pw.Expanded(
-                          flex: 2,
-                          child: pw.Column(
-                            mainAxisAlignment: pw.MainAxisAlignment.center,
-                            children: [
-                              pw.SizedBox(height: 4),
-                              pw.Container(
-                                width: 40,
-                                height: 40,
-                                child: pw.BarcodeWidget(
-                                  barcode: pw.Barcode.qrCode(),
-                                  data:
-                                      'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
-                                ),
-                              ),
-                              pw.SizedBox(height: 2),
-                              pw.Text(
-                                'SCAN',
-                                style: pw.TextStyle(
-                                  fontSize: 5,
-                                  fontWeight: pw.FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    pw.Expanded(child: _buildSingleSticker(item1)),
+                    pw.SizedBox(width: 2),
+                    pw.Expanded(child: _buildSingleSticker(item2)),
                   ],
-                ),
-              );
+                );
+              }
             },
           ),
         );
