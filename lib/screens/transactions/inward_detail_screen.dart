@@ -13,10 +13,20 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/inward_print_service.dart';
 
-class InwardDetailScreen extends StatelessWidget {
+class InwardDetailScreen extends StatefulWidget {
   final Map<String, dynamic> inward;
 
   const InwardDetailScreen({super.key, required this.inward});
+
+  @override
+  State<InwardDetailScreen> createState() => _InwardDetailScreenState();
+}
+
+class _InwardDetailScreenState extends State<InwardDetailScreen> {
+  bool _showStickers = false;
+  bool _showAllQRs = false;
+
+  Map<String, dynamic> get inward => widget.inward;
 
   @override
   Widget build(BuildContext context) {
@@ -717,40 +727,103 @@ class InwardDetailScreen extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    if (!_showStickers) {
+      return Card(
+        child: InkWell(
+          onTap: () => setState(() => _showStickers = true),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Sticker Previews',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '${stickers.length} stickers available',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const Icon(Icons.arrow_forward_ios, size: 16),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Sticker Previews',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.print, color: Colors.blue),
-                  tooltip: 'Print All Stickers as PDF',
-                  onPressed: () {
-                    _printStickersAsPdf(context, stickers);
-                  },
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Sticker Previews',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.visibility_off, size: 16),
+                      label: const Text('Hide'),
+                      onPressed: () => setState(() => _showStickers = false),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.share, color: Colors.blue),
-                  tooltip: 'Share All Stickers as PDF',
-                  onPressed: () {
-                    _shareStickersAsPdf(context, stickers);
-                  },
+                const Divider(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SwitchListTile(
+                        title: const Text(
+                          'Show QR Codes',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        subtitle: const Text(
+                          'Turn on to see scannable tags',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: _showAllQRs,
+                        dense: true,
+                        onChanged: (val) => setState(() => _showAllQRs = val),
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.print, color: Colors.blue),
+                          tooltip: 'Print All Stickers',
+                          onPressed: () =>
+                              _printStickersAsPdf(context, stickers),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.share, color: Colors.blue),
+                          tooltip: 'Share All Stickers',
+                          onPressed: () =>
+                              _shareStickersAsPdf(context, stickers),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 12),
         ...stickers.map((item) {
@@ -775,33 +848,60 @@ class InwardDetailScreen extends StatelessWidget {
                     _buildStickerRow('Roll Wt', '${item['weight']} kg'),
                     _buildStickerRow('Date', item['date']),
                     const SizedBox(height: 12),
-                    Center(
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.black),
+                    if (_showAllQRs)
+                      Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.black),
+                              ),
+                              child: QrImageView(
+                                data:
+                                    'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                                version: QrVersions.auto,
+                                size: 100.0,
+                              ),
                             ),
-                            child: QrImageView(
-                              data:
-                                  'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
-                              version: QrVersions.auto,
-                              size: 100.0,
+                            const SizedBox(height: 4),
+                            const Text(
+                              'SCAN FOR AUTH',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
+                          ],
+                        ),
+                      )
+                    else
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'SCAN FOR AUTH',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade200),
                           ),
-                        ],
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.qr_code, color: Colors.grey, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'QR Code Hidden',
+                                style:
+                                    TextStyle(color: Colors.grey, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 Positioned(
@@ -865,11 +965,11 @@ class InwardDetailScreen extends StatelessWidget {
     bool isBoldValue = false,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      padding: const pw.EdgeInsets.symmetric(vertical: 0.2),
       child: pw.Row(
         children: [
           pw.SizedBox(
-            width: 30,
+            width: 40,
             child: pw.Text(
               '$label:',
               style: pw.TextStyle(
@@ -909,54 +1009,54 @@ class InwardDetailScreen extends StatelessWidget {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 9),
               _buildPdfRow(
                 'Name',
                 item['lotName']?.toString() ?? '',
-                fontSize: 6,
+                fontSize: 9,
               ),
-              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 9),
               _buildPdfRow(
                 'Col',
                 item['colour']?.toString() ?? '',
-                fontSize: 6,
+                fontSize: 9,
               ),
-              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
+              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 9),
               _buildPdfRow(
                 'Wt',
                 '${item['weight']} kg',
-                fontSize: 6,
+                fontSize: 9,
                 isBoldValue: true,
               ),
-              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 5),
+              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 9),
             ],
           ),
-          pw.Spacer(),
+          pw.SizedBox(height: 4),
           pw.Center(
             child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Container(
-                  width: 50,
-                  height: 50,
+                  width: 40,
+                  height: 40,
                   child: pw.BarcodeWidget(
                     barcode: pw.Barcode.qrCode(),
                     data:
                         'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
                   ),
                 ),
-                pw.SizedBox(height: 1),
+                pw.SizedBox(height: 0.5),
                 pw.Text(
                   'SCAN',
                   style: pw.TextStyle(
-                    fontSize: 5,
+                    fontSize: 7,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 2),
+          pw.SizedBox(height: 1),
         ],
       ),
     );

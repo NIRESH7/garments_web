@@ -1,10 +1,8 @@
 class ApiConstants {
-  static const String baseUrl = 'http://localhost:5001/api';
-  static const String serverUrl = 'http://localhost:5001';
-  // static const String baseUrl =
-  //     'http://13.220.94.83:5001/api';
-  // static const String serverUrl =
-  //     'http://13.220.94.83:5001';
+  static const String baseUrl = 'http://192.168.29.179:5001/api';
+  static const String serverUrl = 'http://192.168.29.179:5001';
+  // static const String baseUrl = 'http://localhost:5001/api';
+  // static const String serverUrl = 'http://localhost:5001';
 
   static const String login = '/auth/login';
   static const String register = '/auth/register';
