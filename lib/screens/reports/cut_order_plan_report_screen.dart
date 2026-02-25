@@ -138,6 +138,23 @@ class _CutOrderPlanReportScreenState extends State<CutOrderPlanReportScreen> {
                       initialDateRange: _startDate != null && _endDate != null
                           ? DateTimeRange(start: _startDate!, end: _endDate!)
                           : null,
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: ColorScheme.light(
+                              primary: Theme.of(context).primaryColor,
+                              onPrimary: Colors.white,
+                              onSurface: Colors.black87,
+                            ),
+                            textButtonTheme: TextButtonThemeData(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
                     );
                     if (picked != null) {
                       setState(() {
@@ -284,17 +301,20 @@ class _CutOrderPlanReportScreenState extends State<CutOrderPlanReportScreen> {
             DataColumn(label: Text('PENDING DZ')),
           ],
           rows: _reportData.map((row) {
-            final pending = (row['pending'] as num).toDouble();
+            final pending = (row['pending'] as num? ?? 0).toDouble();
+            final planned = (row['planned'] as num? ?? 0);
+            final issued = (row['issued'] as num? ?? 0);
+            
             return DataRow(
               cells: [
-                DataCell(Text(row['planName'] ?? row['planId'])),
-                DataCell(Text(row['itemName'])),
-                DataCell(Text(row['size'])),
-                DataCell(Text('${row['planned']} dz')),
-                DataCell(Text('${row['issued']} dz')),
+                DataCell(Text(row['planName']?.toString() ?? row['planId']?.toString() ?? '-')),
+                DataCell(Text(row['itemName']?.toString() ?? '-')),
+                DataCell(Text(row['size']?.toString() ?? '-')),
+                DataCell(Text('$planned dz')),
+                DataCell(Text('$issued dz')),
                 DataCell(
                   Text(
-                    '${row['pending']} dz',
+                    '${row['pending'] ?? 0} dz',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: pending > 0 ? Colors.red : Colors.green,

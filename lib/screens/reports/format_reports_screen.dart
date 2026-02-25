@@ -1101,6 +1101,23 @@ class _FilterDialogState extends State<_FilterDialog> {
           initialDate: DateTime.now(),
           firstDate: DateTime(2020),
           lastDate: DateTime(2030),
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: ColorScheme.light(
+                  primary: Theme.of(context).primaryColor,
+                  onPrimary: Colors.white,
+                  onSurface: Colors.black87,
+                ),
+                textButtonTheme: TextButtonThemeData(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).primaryColor,
+                  ),
+                ),
+              ),
+              child: child!,
+            );
+          },
         );
         if (date != null) {
           final formatted = DateFormat('yyyy-MM-dd').format(date);
@@ -1133,6 +1150,23 @@ class _FilterDialogState extends State<_FilterDialog> {
           initialDate: DateTime.now(),
           firstDate: DateTime(2020),
           lastDate: DateTime(2030),
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: ColorScheme.light(
+                  primary: Theme.of(context).primaryColor,
+                  onPrimary: Colors.white,
+                  onSurface: Colors.black87,
+                ),
+                textButtonTheme: TextButtonThemeData(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).primaryColor,
+                  ),
+                ),
+              ),
+              child: child!,
+            );
+          },
         );
         if (date != null) {
           final formatted = DateFormat('dd/MM/yy').format(date);
