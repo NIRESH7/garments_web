@@ -11,6 +11,7 @@ import {
     deleteCuttingOrder,
     getFifoAllocation,
     saveLotAllocation,
+    getAllocationReport,
 } from './cuttingOrderController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -31,6 +32,7 @@ router
     .get(protect, getCuttingOrders);
 
 router.post('/cutting-orders/:id/allocate', protect, saveLotAllocation);
+router.get('/cutting-orders/:id/allocation-report', protect, getAllocationReport);
 
 router
     .route('/cutting-orders/:id')

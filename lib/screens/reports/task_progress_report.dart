@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
-import '../../core/theme/color_palette.dart';
+
 import '../../widgets/app_drawer.dart';
 
 class TaskProgressReportScreen extends StatefulWidget {
   const TaskProgressReportScreen({super.key});
 
   @override
-  State<TaskProgressReportScreen> createState() => _TaskProgressReportScreenState();
+  State<TaskProgressReportScreen> createState() =>
+      _TaskProgressReportScreenState();
 }
 
 class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
@@ -32,8 +33,9 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
       setState(() {
         _tasks = tasks.where((t) {
           final date = DateTime.parse(t['createdAt'].toString());
-          final inRange = date.isAfter(_startDate.subtract(const Duration(days: 1))) &&
-                          date.isBefore(_endDate.add(const Duration(days: 1)));
+          final inRange =
+              date.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+              date.isBefore(_endDate.add(const Duration(days: 1)));
           final inDept = _targetDept == 'All' || t['assignedTo'] == _targetDept;
           return inRange && inDept;
         }).toList();
@@ -43,7 +45,9 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -59,15 +63,15 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _tasks.isEmpty
-                    ? const Center(child: Text('No tasks found for this criteria'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _tasks.length,
-                        itemBuilder: (context, index) {
-                          final task = _tasks[index];
-                          return _buildTaskCard(task);
-                        },
-                      ),
+                ? const Center(child: Text('No tasks found for this criteria'))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _tasks.length,
+                    itemBuilder: (context, index) {
+                      final task = _tasks[index];
+                      return _buildTaskCard(task);
+                    },
+                  ),
           ),
         ],
       ),
@@ -118,8 +122,14 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('FROM', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        Text(DateFormat('dd-MM-yyyy').format(_startDate), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          'FROM',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          DateFormat('dd-MM-yyyy').format(_startDate),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ],
                     ),
                   ),
@@ -143,8 +153,14 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('TO', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        Text(DateFormat('dd-MM-yyyy').format(_endDate), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          'TO',
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                        Text(
+                          DateFormat('dd-MM-yyyy').format(_endDate),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ],
                     ),
                   ),
@@ -170,25 +186,48 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
               children: [
                 Text(
                   task['title'] ?? 'No Title',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
                 _statusChip(task['status'] ?? 'Pending'),
               ],
             ),
             const SizedBox(height: 8),
-            Text(task['description'] ?? '', style: const TextStyle(color: Colors.black87)),
+            Text(
+              task['description'] ?? '',
+              style: const TextStyle(color: Colors.black87),
+            ),
             const Divider(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Created: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(task['createdAt']))}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                Text('Assigned: ${task['assignedTo']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                Text(
+                  'Created: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(task['createdAt']))}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                Text(
+                  'Assigned: ${task['assignedTo']}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
-            if (task['replies'] != null && (task['replies'] as List).isNotEmpty) ...[
+            if (task['replies'] != null &&
+                (task['replies'] as List).isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Text('Progress History:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
-              for (var reply in task['replies']) 
+              const Text(
+                'Progress History:',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+              for (var reply in task['replies'])
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
@@ -215,7 +254,14 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color),
       ),
-      child: Text(status, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 }

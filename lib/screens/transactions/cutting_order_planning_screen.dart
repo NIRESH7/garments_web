@@ -12,7 +12,8 @@ class CuttingOrderPlanningScreen extends StatefulWidget {
       _CuttingOrderPlanningScreenState();
 }
 
-class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen> {
+class _CuttingOrderPlanningScreenState
+    extends State<CuttingOrderPlanningScreen> {
   final _api = MobileApiService();
   final _printService = LotAllocationPrintService();
   final _formKey = GlobalKey<FormState>();
@@ -21,6 +22,7 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
 
   String _planType = 'Monthly';
   String _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
+  final _planNameCtrl = TextEditingController();
 
   List<String> _itemNames = [];
   List<int> get _sizes => _sizeType == 'Senior'
@@ -107,6 +109,7 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
 
     try {
       final data = {
+        'planName': _planNameCtrl.text.trim(),
         'planType': _planType,
         'planPeriod': _planPeriod,
         'startDate': _startDate?.toIso8601String(),
@@ -136,17 +139,19 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
     }
   }
 
   void _printPlanningSheet() {
-    if (_cuttingEntries.isEmpty || _cuttingEntries.every((e) => e['itemName'].isEmpty)) {
+    if (_cuttingEntries.isEmpty ||
+        _cuttingEntries.every((e) => e['itemName'].isEmpty)) {
       _showError('No details to print.');
       return;
     }
-    
+
     _printService.printCuttingOrderPlanning(
       _planType,
       _planPeriod,
@@ -228,7 +233,9 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2),
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text(
                                 'SAVE PLANNING SHEET',
@@ -259,6 +266,16 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            TextFormField(
+              controller: _planNameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'PLAN NAME / REMARKS',
+                hintText: 'e.g. Summer Collection 2026',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.edit_note),
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -275,9 +292,13 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                       setState(() {
                         _planType = val!;
                         if (_planType == 'Monthly') {
-                          _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
+                          _planPeriod = DateFormat(
+                            'yyyy-MM',
+                          ).format(DateTime.now());
                         } else {
-                          _planPeriod = DateFormat('yyyy').format(DateTime.now());
+                          _planPeriod = DateFormat(
+                            'yyyy',
+                          ).format(DateTime.now());
                         }
                       });
                     },
@@ -310,9 +331,10 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                   child: TextFormField(
                     readOnly: true,
                     controller: TextEditingController(
-                        text: _startDate != null
-                            ? DateFormat('dd-MM-yyyy').format(_startDate!)
-                            : ''),
+                      text: _startDate != null
+                          ? DateFormat('dd-MM-yyyy').format(_startDate!)
+                          : '',
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'FROM DATE',
                       border: OutlineInputBorder(),
@@ -336,9 +358,10 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                   child: TextFormField(
                     readOnly: true,
                     controller: TextEditingController(
-                        text: _endDate != null
-                            ? DateFormat('dd-MM-yyyy').format(_endDate!)
-                            : ''),
+                      text: _endDate != null
+                          ? DateFormat('dd-MM-yyyy').format(_endDate!)
+                          : '',
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'TO DATE',
                       border: OutlineInputBorder(),
@@ -403,20 +426,35 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                 horizontalMargin: 15,
                 headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
                 border: TableBorder.symmetric(
-                    inside: BorderSide(color: Colors.grey.shade300)),
+                  inside: BorderSide(color: Colors.grey.shade300),
+                ),
                 columns: [
                   const DataColumn(
-                      label: Text('ITEM NAME',
-                          style: TextStyle(fontWeight: FontWeight.bold))),
-                  ..._sizes.map((s) => DataColumn(
-                      label: Text(s.toString(),
-                          style: const TextStyle(fontWeight: FontWeight.bold)))),
+                    label: Text(
+                      'ITEM NAME',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ..._sizes.map(
+                    (s) => DataColumn(
+                      label: Text(
+                        s.toString(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
                   const DataColumn(
-                      label: Text('DOZENS',
-                          style: TextStyle(fontWeight: FontWeight.bold))),
+                    label: Text(
+                      'DOZENS',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   const DataColumn(
-                      label: Text('ACTION',
-                          style: TextStyle(fontWeight: FontWeight.bold))),
+                    label: Text(
+                      'ACTION',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ],
                 rows: List.generate(_cuttingEntries.length, (index) {
                   final entry = _cuttingEntries[index];
@@ -431,14 +469,20 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                                 ? null
                                 : entry['itemName'],
                             items: _itemNames
-                                .map((name) =>
-                                    DropdownMenuItem(value: name, child: Text(name)))
+                                .map(
+                                  (name) => DropdownMenuItem(
+                                    value: name,
+                                    child: Text(name),
+                                  ),
+                                )
                                 .toList(),
                             onChanged: (val) {
                               setState(() => entry['itemName'] = val ?? '');
                             },
                             decoration: const InputDecoration(
-                                border: InputBorder.none, hintText: 'Select Item'),
+                              border: InputBorder.none,
+                              hintText: 'Select Item',
+                            ),
                           ),
                         ),
                       ),
@@ -449,9 +493,10 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                             width: 100, // Widened to fit large values better
                             child: TextFormField(
                               initialValue:
-                                  entry['sizeQuantities'][sStr].toString() == '0'
-                                      ? ''
-                                      : entry['sizeQuantities'][sStr].toString(),
+                                  entry['sizeQuantities'][sStr].toString() ==
+                                      '0'
+                                  ? ''
+                                  : entry['sizeQuantities'][sStr].toString(),
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.center,
                               maxLines: null, // Allow wrapping to the next line
@@ -463,24 +508,37 @@ class _CuttingOrderPlanningScreenState extends State<CuttingOrderPlanningScreen>
                                 });
                               },
                               decoration: InputDecoration(
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 8, horizontal: 4),
-                                  border: InputBorder.none,
-                                  hintText: '0',
-                                  hintStyle:
-                                      TextStyle(color: Colors.grey.shade400)),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 4,
+                                ),
+                                border: InputBorder.none,
+                                hintText: '0',
+                                hintStyle: TextStyle(
+                                  color: Colors.grey.shade400,
+                                ),
+                              ),
                             ),
                           ),
                         );
                       }),
-                      DataCell(Text(entry['totalDozens'].toString(),
+                      DataCell(
+                        Text(
+                          entry['totalDozens'].toString(),
                           style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold))),
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                       DataCell(
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                            size: 20,
+                          ),
                           onPressed: () {
                             setState(() => _cuttingEntries.removeAt(index));
                           },

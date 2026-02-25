@@ -18,7 +18,9 @@ class LotAllocationPrintService {
     final font = pw.Font.helvetica();
     final boldFont = pw.Font.helveticaBold();
 
-    final validEntries = cuttingEntries.where((e) => e['itemName'].toString().isNotEmpty).toList();
+    final validEntries = cuttingEntries
+        .where((e) => e['itemName'].toString().isNotEmpty)
+        .toList();
 
     pdf.addPage(
       pw.MultiPage(
@@ -45,22 +47,37 @@ class LotAllocationPrintService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Plan Type: $planType', style: pw.TextStyle(font: font, fontSize: 10)),
+                    pw.Text(
+                      'Plan Type: $planType',
+                      style: pw.TextStyle(font: font, fontSize: 10),
+                    ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Period: $planPeriod', style: pw.TextStyle(font: font, fontSize: 10)),
+                    pw.Text(
+                      'Period: $planPeriod',
+                      style: pw.TextStyle(font: font, fontSize: 10),
+                    ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Size Type: $sizeType', style: pw.TextStyle(font: font, fontSize: 10)),
+                    pw.Text(
+                      'Size Type: $sizeType',
+                      style: pw.TextStyle(font: font, fontSize: 10),
+                    ),
                   ],
                 ),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                     if (startDate != null)
-                      pw.Text('From: ${DateFormat('dd-MM-yyyy').format(startDate)}', style: pw.TextStyle(font: font, fontSize: 10)),
-                     if (endDate != null) ...[
+                    if (startDate != null)
+                      pw.Text(
+                        'From: ${DateFormat('dd-MM-yyyy').format(startDate)}',
+                        style: pw.TextStyle(font: font, fontSize: 10),
+                      ),
+                    if (endDate != null) ...[
                       pw.SizedBox(height: 4),
-                      pw.Text('To: ${DateFormat('dd-MM-yyyy').format(endDate)}', style: pw.TextStyle(font: font, fontSize: 10)),
-                     ]
+                      pw.Text(
+                        'To: ${DateFormat('dd-MM-yyyy').format(endDate)}',
+                        style: pw.TextStyle(font: font, fontSize: 10),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -70,15 +87,19 @@ class LotAllocationPrintService {
               headers: [
                 'Item Name',
                 ...sizes.map((s) => s.toString()),
-                'Total Dozens'
+                'Total Dozens',
               ],
               headerStyle: pw.TextStyle(font: boldFont, fontSize: 9),
               cellStyle: pw.TextStyle(font: font, fontSize: 8),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey200,
+              ),
               data: validEntries.map((e) {
                 return [
                   e['itemName'] ?? '',
-                  ...sizes.map((s) => (e['sizeQuantities']?[s.toString()] ?? 0).toString()),
+                  ...sizes.map(
+                    (s) => (e['sizeQuantities']?[s.toString()] ?? 0).toString(),
+                  ),
                   e['totalDozens']?.toString() ?? '0',
                 ];
               }).toList(),
@@ -100,11 +121,19 @@ class LotAllocationPrintService {
               children: [
                 pw.Text(
                   'Generated via IDEAL innerwear ERP',
-                  style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey700),
+                  style: pw.TextStyle(
+                    font: font,
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                  ),
                 ),
                 pw.Text(
                   'Date: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
-                  style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey700),
+                  style: pw.TextStyle(
+                    font: font,
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ],
             ),
@@ -115,7 +144,8 @@ class LotAllocationPrintService {
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Cutting_Order_Planning_${DateFormat('ddMMyyyy_HHmm').format(DateTime.now())}',
+      name:
+          'Cutting_Order_Planning_${DateFormat('ddMMyyyy_HHmm').format(DateTime.now())}',
     );
   }
 
@@ -150,16 +180,32 @@ class LotAllocationPrintService {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Plan ID: $planId', style: pw.TextStyle(font: font, fontSize: 10)),
-                pw.Text('Period: $planPeriod', style: pw.TextStyle(font: font, fontSize: 10)),
+                pw.Text(
+                  'Plan ID: $planId',
+                  style: pw.TextStyle(font: font, fontSize: 10),
+                ),
+                pw.Text(
+                  'Period: $planPeriod',
+                  style: pw.TextStyle(font: font, fontSize: 10),
+                ),
               ],
             ),
             pw.SizedBox(height: 15),
             pw.Table.fromTextArray(
-              headers: ['Day', 'Lot Name', 'Lot No', 'Set', 'Dia', 'Rack', 'Dozen'],
+              headers: [
+                'Day',
+                'Lot Name',
+                'Lot No',
+                'Set',
+                'Dia',
+                'Rack',
+                'Dozen',
+              ],
               headerStyle: pw.TextStyle(font: boldFont, fontSize: 9),
               cellStyle: pw.TextStyle(font: font, fontSize: 8),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey200,
+              ),
               data: allAllocations.map((a) {
                 return [
                   a['day'] ?? 'N/A',
@@ -189,11 +235,19 @@ class LotAllocationPrintService {
               children: [
                 pw.Text(
                   'Generated via IDEAL innerwear ERP',
-                  style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey700),
+                  style: pw.TextStyle(
+                    font: font,
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                  ),
                 ),
                 pw.Text(
                   'Date: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
-                  style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey700),
+                  style: pw.TextStyle(
+                    font: font,
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ],
             ),
@@ -260,11 +314,17 @@ class LotAllocationPrintService {
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     if (itemName != null)
-                      pw.Text('Item: $itemName', style: pw.TextStyle(font: font, fontSize: 10)),
+                      pw.Text(
+                        'Item: $itemName',
+                        style: pw.TextStyle(font: font, fontSize: 10),
+                      ),
                     if (size != null) ...[
                       pw.SizedBox(height: 2),
-                      pw.Text('Size: $size', style: pw.TextStyle(font: font, fontSize: 10)),
-                    ]
+                      pw.Text(
+                        'Size: $size',
+                        style: pw.TextStyle(font: font, fontSize: 10),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -278,11 +338,13 @@ class LotAllocationPrintService {
                 'Size',
                 'Lot No',
                 'Dia',
-                'Dozen'
+                'Dozen',
               ],
               headerStyle: pw.TextStyle(font: boldFont, fontSize: 8),
               cellStyle: pw.TextStyle(font: font, fontSize: 7),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey200,
+              ),
               data: allocations.map((a) {
                 final date = a['orderDate'] is DateTime
                     ? a['orderDate'] as DateTime
@@ -339,6 +401,142 @@ class LotAllocationPrintService {
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: 'Daily_Allocation_Report',
+    );
+  }
+
+  /// Prints the SET-LEVEL FIFO allocation report (one row per set).
+  /// Columns: Day | Item | Size | Dozen | Need Wt | Lot Name | Lot No | Dia | Set No | Rack | Pallet | Set Wt
+  Future<void> printSetLevelReport(
+    String planId,
+    String planPeriod,
+    String? dayFilter,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final pdf = pw.Document();
+    final font = pw.Font.helvetica();
+    final boldFont = pw.Font.helveticaBold();
+
+    final totalWt = rows.fold<double>(
+      0.0,
+      (s, r) => s + ((r['setWeight'] as num?)?.toDouble() ?? 0),
+    );
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(24),
+        build: (pw.Context ctx) => [
+          PrintUtils.buildCompanyHeader(boldFont, font),
+          pw.SizedBox(height: 14),
+          pw.Center(
+            child: pw.Text(
+              'LOT ALLOCATION — SET-LEVEL PLAN REPORT',
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 14,
+                decoration: pw.TextDecoration.underline,
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Plan: $planId  |  Period: $planPeriod',
+                style: pw.TextStyle(font: font, fontSize: 9),
+              ),
+              pw.Text(
+                dayFilter != null ? 'Day: $dayFilter' : 'All Days',
+                style: pw.TextStyle(font: font, fontSize: 9),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+          pw.Table.fromTextArray(
+            headers: [
+              'Day',
+              'Item Name',
+              'Size',
+              'Dozen',
+              'Need Wt (kg)',
+              'Lot Name',
+              'Lot No',
+              'Dia',
+              'Set No',
+              'Rack',
+              'Pallet',
+              'Set Wt (kg)',
+            ],
+            headerStyle: pw.TextStyle(font: boldFont, fontSize: 7),
+            cellStyle: pw.TextStyle(font: font, fontSize: 7),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            cellDecoration: (idx, data, rowNum) => pw.BoxDecoration(
+              color: rowNum % 2 == 0 ? PdfColors.white : PdfColors.grey50,
+            ),
+            data: rows
+                .map(
+                  (r) => [
+                    r['day'] ?? '-',
+                    r['itemName'] ?? '-',
+                    r['size'] ?? '-',
+                    r['dozen']?.toString() ?? '-',
+                    (r['neededWeight'] as num?)?.toStringAsFixed(1) ?? '-',
+                    r['lotName'] ?? '-',
+                    r['lotNo'] ?? '-',
+                    r['dia'] ?? '-',
+                    'Set ${r['setNo']?.toString() ?? '-'}',
+                    r['rackName'] ?? '-',
+                    r['palletNumber'] ?? '-',
+                    (r['setWeight'] as num?)?.toStringAsFixed(2) ?? '-',
+                  ],
+                )
+                .toList(),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Total Set Rows: ${rows.length}',
+                style: pw.TextStyle(font: boldFont, fontSize: 9),
+              ),
+              pw.Text(
+                'Total Weight: ${totalWt.toStringAsFixed(2)} kg',
+                style: pw.TextStyle(font: boldFont, fontSize: 9),
+              ),
+            ],
+          ),
+          pw.Spacer(),
+          pw.Divider(thickness: 0.5, color: PdfColors.grey),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Generated via IDEAL innerwear ERP',
+                style: pw.TextStyle(
+                  font: font,
+                  fontSize: 7,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.Text(
+                'Printed: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
+                style: pw.TextStyle(
+                  font: font,
+                  fontSize: 7,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'SetLevel_Allocation_$planId',
     );
   }
 }

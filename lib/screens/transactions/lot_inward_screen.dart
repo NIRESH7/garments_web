@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -94,22 +95,37 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _inTime = DateFormat('hh:mm a').format(DateTime.now());
     _loadUserRole();
     _loadMasterData();
-    
+
     if (widget.editInward != null) {
       _populateEditData();
     }
-    
+
     // Add listener for Lot Number to check for existing lot
     _lotNumberController.addListener(() {
       // Debounce could be added here if needed, but for now direct call on loose focus or simple delay if typing fast?
       // Actually, let's just call it. Backend calls are cheap enough or user pauses.
       // Better: only call if length > 0.
       if (_lotNumberController.text.isNotEmpty && _selectedLotName != null) {
-         // To avoid too many calls, maybe we can rely on focus node or just simple debouncing?
-         // For simplicity now, let's call it.
-         _checkExistingLot();
+        // To avoid too many calls, maybe we can rely on focus node or just simple debouncing?
+        // For simplicity now, let's call it.
+        _checkExistingLot();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    for (var r in _rows) {
+      r.dispose();
+    }
+    _inwardNoController.dispose();
+    _lotNumberController.dispose();
+    _rateController.dispose();
+    _gsmController.dispose();
+    _vehicleController.dispose();
+    _dcController.dispose();
+    _complaintController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserRole() async {
@@ -199,12 +215,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       _rows = (data['diaEntries'] as List).map((e) {
         final row = InwardRow();
         row.dia = e['dia'];
-        row.rolls = (e['roll'] ?? 0) is int ? e['roll'] : (e['roll'] as num).toInt();
-        row.sets = (e['sets'] ?? 0) is int ? e['sets'] : (e['sets'] as num).toInt();
+        row.rolls = (e['roll'] ?? 0) is int
+            ? e['roll']
+            : (e['roll'] as num).toInt();
+        row.sets = (e['sets'] ?? 0) is int
+            ? e['sets']
+            : (e['sets'] as num).toInt();
         row.deliveredWeight = (e['delivWt'] ?? 0).toDouble();
-        row.recRoll = (e['recRoll'] ?? 0) is int ? e['recRoll'] : (e['recRoll'] as num).toInt();
+        row.recRoll = (e['recRoll'] ?? 0) is int
+            ? e['recRoll']
+            : (e['recRoll'] as num).toInt();
         row.recWeight = (e['recWt'] ?? 0).toDouble();
         row.rate = (e['rate'] ?? 0).toDouble();
+        row.syncControllersFromValues();
         _updateRowMath(row);
         return row;
       }).toList();
@@ -335,7 +358,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       // But if we are fundamentally changing lot, we might want to?
       // User case: "First time receive 5 colors... After 2 days same lot... DIA details automatic ah varum"
       // This implies we should PRE-FILL the rows with the DIAs from the previous lot.
-      
+
       try {
         final details = await _api.getLotDetails(name, no);
         if (details.isNotEmpty) {
@@ -353,11 +376,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               _rows.add(InwardRow());
             }
           });
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Found existing lot details. Rows auto-populated.'),
+                content: Text(
+                  'Found existing lot details. Rows auto-populated.',
+                ),
                 backgroundColor: Colors.blue,
                 duration: Duration(seconds: 2),
               ),
@@ -380,7 +405,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     if (val != null) {
       // Trigger check for existing lot
       _checkExistingLot();
-      
+
       final group = await _api.getItemGroupByName(val);
       setState(() {
         if (group != null) {
@@ -1187,11 +1212,24 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 6),
-              _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow(
+                'Name',
+                item['lotName']?.toString() ?? '',
+                fontSize: 6,
+              ),
               _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 6),
-              _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow(
+                'Col',
+                item['colour']?.toString() ?? '',
+                fontSize: 6,
+              ),
               _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
-              _buildPdfRow('Wt', '${item['weight']} kg', fontSize: 6, isBoldValue: true),
+              _buildPdfRow(
+                'Wt',
+                '${item['weight']} kg',
+                fontSize: 6,
+                isBoldValue: true,
+              ),
               _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 5),
             ],
           ),
@@ -1249,7 +1287,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         pdf.addPage(
           pw.Page(
             pageFormat: pageFormat,
-            margin: const pw.EdgeInsets.all(2), // Minimal margin for small sticker
+            margin: const pw.EdgeInsets.all(
+              2,
+            ), // Minimal margin for small sticker
             build: (pw.Context context) {
               if (isSingle) {
                 return _buildSingleSticker(item1);
@@ -1318,7 +1358,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
-  pw.Widget _buildPdfRow(String label, String value, {double fontSize = 10, bool isBoldValue = false}) {
+  pw.Widget _buildPdfRow(
+    String label,
+    String value, {
+    double fontSize = 10,
+    bool isBoldValue = false,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
@@ -1328,7 +1373,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             width: 30, // Reduced width for small label
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fontSize),
+              style: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: fontSize,
+              ),
             ),
           ),
           pw.Expanded(
@@ -1336,7 +1384,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               value,
               style: pw.TextStyle(
                 fontSize: fontSize,
-                fontWeight: isBoldValue ? pw.FontWeight.bold : pw.FontWeight.normal,
+                fontWeight: isBoldValue
+                    ? pw.FontWeight.bold
+                    : pw.FontWeight.normal,
               ),
               maxLines: 2,
               overflow: pw.TextOverflow.clip,
@@ -1410,7 +1460,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 ),
           title: Text(
             _currentPage == 0
-                ? (widget.editInward != null ? 'Edit Lot Inward' : 'Lot Inward Entry')
+                ? (widget.editInward != null
+                      ? 'Edit Lot Inward'
+                      : 'Lot Inward Entry')
                 : 'Sticker & Storage Details',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
@@ -1743,27 +1795,31 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           // ROLL
           _buildTableCell(
             width: 80,
-            child: _buildTableInput(row.rolls, (v) {
+            child: _buildTableInput(row.rollsController, (v) {
               row.rolls = int.tryParse(v) ?? 0;
+              // Auto-Calculate Sets: rolls / 11, rounded
               row.sets = (row.rolls / 11).round();
+              row.setsController.text = row.sets == 0
+                  ? ''
+                  : row.sets.toString();
               _updateRowMath(row);
-            }, key: ValueKey('rolls_${row.rolls}')),
+            }, key: ValueKey('rolls_${row.id}')),
           ),
           // SETS
           _buildTableCell(
             width: 80,
-            child: _buildTableInput(row.sets, (v) {
+            child: _buildTableInput(row.setsController, (v) {
               row.sets = int.tryParse(v) ?? 0;
               _updateRowMath(row);
-            }, key: ValueKey('sets_${row.sets}')),
+            }, key: ValueKey('sets_${row.id}')),
           ),
           // DELIV. WT
           _buildTableCell(
             width: 100,
-            child: _buildTableInput(row.deliveredWeight, (v) {
+            child: _buildTableInput(row.delivWtController, (v) {
               row.deliveredWeight = double.tryParse(v) ?? 0;
               _updateRowMath(row);
-            }),
+            }, key: ValueKey('deliv_${row.id}')),
           ),
           // REC. ROLL
           _buildTableCell(
@@ -1797,10 +1853,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildTableInput(row.recWeight, (v) {
+                _buildTableInput(row.recWtController, (v) {
                   row.recWeight = double.tryParse(v) ?? 0;
                   _updateRowMath(row);
-                }),
+                }, key: ValueKey('rec_${row.id}')),
                 if (row.prevRecWt > 0)
                   Text(
                     '(Prev: ${row.prevRecWt.toStringAsFixed(1)})',
@@ -1816,9 +1872,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           // RATE
           _buildTableCell(
             width: 80,
-            child: _buildTableInput(row.rate, (v) {
+            child: _buildTableInput(row.rateController, (v) {
               row.rate = double.tryParse(v) ?? 0;
-            }),
+            }, key: ValueKey('rate_${row.id}')),
           ),
           // DIFF
           _buildTableCell(
@@ -1871,7 +1927,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       color: Colors.grey,
                       size: 20,
                     ),
-                    onPressed: () => setState(() => _rows.removeAt(idx)),
+                    onPressed: () {
+                      row.dispose();
+                      setState(() => _rows.removeAt(idx));
+                    },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   )
@@ -1903,7 +1962,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildTableInput(num val, Function(String) chg, {Key? key}) {
+  Widget _buildTableInput(
+    TextEditingController ctrl,
+    Function(String) chg, {
+    Key? key,
+  }) {
     return Container(
       key: key,
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
@@ -1920,7 +1983,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         ],
       ),
       child: TextFormField(
-        initialValue: val == 0 ? '' : val.toString(),
+        controller: ctrl,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
@@ -2481,14 +2544,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   : 0.0;
             }
           }
-          setState(() => _rows.add(InwardRow()..rate = defaultRate));
+          final newRow = InwardRow()..rate = defaultRate;
+          newRow.syncControllersFromValues();
+          setState(() => _rows.add(newRow));
         },
         icon: const Icon(Icons.add, size: 20),
         label: const Text(
           "Add Row",
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        style: TextButton.styleFrom(foregroundColor: Theme.of(context).primaryColor),
+        style: TextButton.styleFrom(
+          foregroundColor: Theme.of(context).primaryColor,
+        ),
       ),
     ],
   );
@@ -2627,7 +2694,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         for (var sRow in diaData.rows) {
           totalRecWeight += sRow.totalWeight;
           // Count non-empty weights as rolls
-          totalRecRolls += sRow.setWeights.where((w) => w.trim().isNotEmpty).length;
+          totalRecRolls += sRow.setWeights
+              .where((w) => w.trim().isNotEmpty)
+              .length;
         }
         mainRow.recWeight = totalRecWeight;
         mainRow.recRoll = totalRecRolls;
@@ -2802,6 +2871,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 }
 
 class InwardRow {
+  final String id =
+      DateTime.now().millisecondsSinceEpoch.toString() +
+      Random().nextInt(1000).toString();
   String? dia;
   int rolls = 0;
   int sets = 0;
@@ -2811,10 +2883,43 @@ class InwardRow {
   double rate = 0;
   double difference = 0;
   double lossPercent = 0;
-  
+
   // Previous totals for recurring lots
   double prevRecWt = 0;
   int prevRecRolls = 0;
+
+  // Text Controllers for stable focus and live updates
+  late TextEditingController rollsController;
+  late TextEditingController setsController;
+  late TextEditingController delivWtController;
+  late TextEditingController recWtController;
+  late TextEditingController rateController;
+
+  InwardRow() {
+    rollsController = TextEditingController();
+    setsController = TextEditingController();
+    delivWtController = TextEditingController();
+    recWtController = TextEditingController();
+    rateController = TextEditingController();
+  }
+
+  void syncControllersFromValues() {
+    rollsController.text = rolls == 0 ? '' : rolls.toString();
+    setsController.text = sets == 0 ? '' : sets.toString();
+    delivWtController.text = deliveredWeight == 0
+        ? ''
+        : deliveredWeight.toString();
+    recWtController.text = recWeight == 0 ? '' : recWeight.toString();
+    rateController.text = rate == 0 ? '' : rate.toString();
+  }
+
+  void dispose() {
+    rollsController.dispose();
+    setsController.dispose();
+    delivWtController.dispose();
+    recWtController.dispose();
+    rateController.dispose();
+  }
 
   // New Getter for Value
   double get value => rate * recWeight;

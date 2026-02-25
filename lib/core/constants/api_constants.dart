@@ -2,9 +2,9 @@ class ApiConstants {
   static const String baseUrl = 'http://localhost:5001/api';
   static const String serverUrl = 'http://localhost:5001';
   // static const String baseUrl =
-  //     'http://13.220.94.83:5001/api'; 
+  //     'http://13.220.94.83:5001/api';
   // static const String serverUrl =
-  //     'http://13.220.94.83:5001';  
+  //     'http://13.220.94.83:5001';
 
   static const String login = '/auth/login';
   static const String register = '/auth/register';
@@ -44,6 +44,7 @@ class ApiConstants {
       '/production/cutting-orders/fifo-allocation';
   static const String allocateLots =
       '/production/cutting-orders'; // will append /:id/allocate
+  // allocationReport: append /:id/allocation-report
 
   // User
   static const String profile = '/users/profile';

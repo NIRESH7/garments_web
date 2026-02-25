@@ -979,16 +979,51 @@ class MobileApiService {
 
   Future<bool> saveLotAllocation(
     String planId,
-    List<Map<String, dynamic>> lotAllocations,
-  ) async {
+    List<Map<String, dynamic>> lotAllocations, {
+    String? day,
+    String? date,
+    String? itemName,
+    String? size,
+    double? dozen,
+    double? neededWeight,
+    bool postOutward = false,
+  }) async {
     try {
       final response = await _client.post(
         '${ApiConstants.allocateLots}/$planId/allocate',
-        data: {'lotAllocations': lotAllocations},
+        data: {
+          'lotAllocations': lotAllocations,
+          if (day != null) 'day': day,
+          if (date != null) 'date': date,
+          if (itemName != null) 'itemName': itemName,
+          if (size != null) 'size': size,
+          if (dozen != null) 'dozen': dozen,
+          if (neededWeight != null) 'neededWeight': neededWeight,
+          'postOutward': postOutward,
+        },
       );
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAllocationReport(
+    String planId, {
+    String? day,
+    String? date,
+  }) async {
+    try {
+      final response = await _client.get(
+        '${ApiConstants.allocateLots}/$planId/allocation-report',
+        queryParameters: {
+          if (day != null) 'day': day,
+          if (date != null) 'date': date,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return null;
     }
   }
 

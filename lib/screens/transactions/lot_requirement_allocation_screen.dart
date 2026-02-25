@@ -1,22 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:garments/services/mobile_api_service.dart';
 import 'package:garments/core/theme/color_palette.dart';
 import 'package:garments/services/lot_allocation_print_service.dart';
-import 'package:garments/core/storage/storage_service.dart';
 import 'package:garments/widgets/app_drawer.dart';
 import 'package:garments/widgets/custom_dropdown_field.dart';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const List<String> _kWeekDays = [
   'Monday',
   'Tuesday',
   'Wednesday',
   'Thursday',
   'Friday',
-  'Saturday'
+  'Saturday',
 ];
 
+// ─── Model: one saved item-entry for the current day ─────────────────────────
+class _DayEntry {
+  final String itemName;
+  final String size;
+  final double dozen;
+  final double dozenWeight;
+  final String dia;
+  final double neededWeight;
+  final List<Map<String, dynamic>> sets; // FIFO set rows
 
+  _DayEntry({
+    required this.itemName,
+    required this.size,
+    required this.dozen,
+    required this.dozenWeight,
+    required this.dia,
+    required this.neededWeight,
+    required this.sets,
+  });
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 class LotRequirementAllocationScreen extends StatefulWidget {
   const LotRequirementAllocationScreen({super.key});
 
@@ -28,83 +50,106 @@ class LotRequirementAllocationScreen extends StatefulWidget {
 class _LotRequirementAllocationScreenState
     extends State<LotRequirementAllocationScreen> {
   final _api = MobileApiService();
+
   bool _isLoading = false;
   bool _isAllocating = false;
   bool _isSaving = false;
+  bool _postOutward = false;
+  int _tabIndex = 0; // 0 = ENTRY, 1 = REPORT
 
-  // Data from API
+  // Master data
   List<dynamic> _allPlans = [];
   List<String> _masterItemNames = [];
   List<String> _masterSizes = [];
   List<String> _dias = [];
   List<dynamic> _assignments = [];
 
-  // Form State
+  // Plan selection
   String? _selectedPlanId;
+
+  // Day / Date
+  String _selectedDay = 'Monday';
+  DateTime _selectedDate = DateTime.now();
+
+  // Current item form
   String? _selectedItem;
   String? _selectedSize;
   String? _selectedDia;
-
-  final TextEditingController _dozenController = TextEditingController();
-  final TextEditingController _dozenWeightController = TextEditingController();
-  final TextEditingController _lotNameController = TextEditingController();
-  final TextEditingController _gsmController = TextEditingController();
-  final TextEditingController _efficiencyController = TextEditingController();
-  final TextEditingController _wasteController = TextEditingController();
-  final TextEditingController _foldingWeightController =
-      TextEditingController();
-
+  final _dozenCtrl = TextEditingController();
+  final _dozenWeightCtrl = TextEditingController();
+  final _foldingWtCtrl = TextEditingController();
+  final _gsmCtrl = TextEditingController();
+  final _efficiencyCtrl = TextEditingController();
+  final _wasteCtrl = TextEditingController();
   double _dozenWeight = 0;
-  List<Map<String, dynamic>> _allocations = [];
-  List<Map<String, dynamic>> _allWeekAllocations = [];
-  String _selectedDay = 'Monday';
-  final _printServiceWeekly = LotAllocationPrintService();
 
+  // Current FIFO result
+  List<Map<String, dynamic>> _currentSets = [];
+  int _totalSets = 0;
+  double _remainingRolls = 0;
 
+  // All entries recorded this session (per day)
+  // Map<day, List<_DayEntry>>
+  final Map<String, List<_DayEntry>> _dayEntries = {};
+
+  // Report tab data
+  List<Map<String, dynamic>> _reportRows = [];
+  bool _isLoadingReport = false;
+  String? _reportDay;
+  DateTime? _reportDate;
+
+  final _printService = LotAllocationPrintService();
+
+  // ─── Computed ─────────────────────────────────────────────────────────────
   double get _fabricRequiredKg =>
-      (double.tryParse(_dozenController.text) ?? 0) *
-      (_dozenWeight + (double.tryParse(_foldingWeightController.text) ?? 0));
+      (double.tryParse(_dozenCtrl.text) ?? 0) *
+      (_dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0));
+
   int get _rollsRequired =>
       _fabricRequiredKg > 0 ? (_fabricRequiredKg / 20).ceil() : 0;
 
+  int get _setsRequired =>
+      _rollsRequired > 0 ? (_rollsRequired / 11).floor() : 0;
+
+  List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
     _loadInitialData();
-    _dozenController.addListener(() => setState(() {}));
-    _dozenWeightController.addListener(() {
-      setState(() {
-        _dozenWeight = double.tryParse(_dozenWeightController.text) ?? 0;
-      });
+    _dozenCtrl.addListener(() => setState(() {}));
+    _dozenWeightCtrl.addListener(() {
+      setState(
+        () => _dozenWeight = double.tryParse(_dozenWeightCtrl.text) ?? 0,
+      );
     });
-    _efficiencyController.addListener(() {
-      final eff = double.tryParse(_efficiencyController.text) ?? 0;
-      _wasteController.text = (100 - eff).toStringAsFixed(2);
+    _efficiencyCtrl.addListener(() {
+      final eff = double.tryParse(_efficiencyCtrl.text) ?? 0;
+      _wasteCtrl.text = (100 - eff).toStringAsFixed(2);
       setState(() {});
     });
-    _foldingWeightController.addListener(() => setState(() {}));
-    _gsmController.addListener(() => setState(() {}));
-    _lotNameController.addListener(() => setState(() {}));
+    _foldingWtCtrl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _dozenController.dispose();
-    _dozenWeightController.dispose();
-    _lotNameController.dispose();
-    _gsmController.dispose();
-    _efficiencyController.dispose();
-    _wasteController.dispose();
-    _foldingWeightController.dispose();
+    _dozenCtrl.dispose();
+    _dozenWeightCtrl.dispose();
+    _foldingWtCtrl.dispose();
+    _gsmCtrl.dispose();
+    _efficiencyCtrl.dispose();
+    _wasteCtrl.dispose();
     super.dispose();
   }
 
+  // ─── Data loading ─────────────────────────────────────────────────────────
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
       final plans = await _api.getCuttingOrders();
       final categories = await _api.getCategories();
-
+      final assignments = await _api.getAssignments();
       setState(() {
         _allPlans = plans;
         _dias = _getValues(categories, ['Dia']);
@@ -114,10 +159,6 @@ class _LotRequirementAllocationScreenState
           'item',
         ]);
         _masterSizes = _getValues(categories, ['Size', 'size']);
-      });
-
-      final assignments = await _api.getAssignments();
-      setState(() {
         _assignments = assignments;
         _isLoading = false;
       });
@@ -128,7 +169,7 @@ class _LotRequirementAllocationScreenState
   }
 
   List<String> _getValues(List<dynamic> categories, List<String> matchNames) {
-    final List<String> result = [];
+    final result = <String>[];
     final matches = categories.where((c) {
       final name = (c['name'] ?? '').toString().toLowerCase();
       return matchNames.any((m) => name == m.toLowerCase());
@@ -145,52 +186,78 @@ class _LotRequirementAllocationScreenState
     return result;
   }
 
-  void _onPlanSelected(String? planId) {
-    setState(() {
-      _selectedPlanId = planId;
-      _selectedItem = null;
-      _selectedSize = null;
-    });
-  }
-
+  // ─── Item-form auto-fill ──────────────────────────────────────────────────
   void _onItemSelected(String? item) {
     setState(() {
       _selectedItem = item;
       _selectedSize = null;
-      _updateFromAssignments();
+      _selectedDia = null; // Clear dia to let assignment pick it
+      _currentSets = [];
     });
+    _fillFromAssignments();
   }
 
   void _onSizeSelected(String? size) {
     setState(() {
       _selectedSize = size;
-      if (_selectedPlanId != null && _selectedItem != null && size != null) {
-        final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId);
-        final entry = (plan['cuttingEntries'] as List).firstWhere(
-          (e) => e['itemName'] == _selectedItem,
-          orElse: () => null,
-        );
-        if (entry != null) {
-          final dozen = (entry['sizeQuantities'][size] ?? 0).toDouble();
-          _dozenController.text = dozen.toString();
+      _currentSets = [];
+    });
+    _updateRemainingDozen();
+    _fillFromAssignments();
+  }
+
+  void _updateRemainingDozen() {
+    if (_selectedPlanId == null ||
+        _selectedItem == null ||
+        _selectedSize == null) {
+      return;
+    }
+
+    final plan = _allPlans.firstWhere(
+      (p) => p['_id'] == _selectedPlanId,
+      orElse: () => null,
+    );
+    if (plan == null) return;
+
+    final entry = (plan['cuttingEntries'] as List).firstWhere(
+      (e) => e['itemName'] == _selectedItem,
+      orElse: () => null,
+    );
+    if (entry == null) return;
+
+    double plannedDozen = (entry['sizeQuantities'][_selectedSize] ?? 0)
+        .toDouble();
+
+    // 1. Subtract already saved allocations for this specific Item + Size
+    final savedAllocations = plan['lotAllocations'] as List? ?? [];
+    double allocatedInDb = 0;
+    final seen = <String>{};
+    for (var alloc in savedAllocations) {
+      if (alloc['itemName'] == _selectedItem &&
+          alloc['size'] == _selectedSize) {
+        String key = "${alloc['date']}_${alloc['day']}_${alloc['dozen']}";
+        if (!seen.contains(key)) {
+          allocatedInDb += (alloc['dozen'] as num?)?.toDouble() ?? 0;
+          seen.add(key);
         }
       }
-      _updateFromAssignments();
-    });
+    }
+
+    // 2. Subtract unsaved allocations in the current session
+    double allocatedInSession = 0;
+    for (var entry in _currentDayEntries) {
+      if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
+        allocatedInSession += entry.dozen;
+      }
+    }
+
+    double remaining = plannedDozen - allocatedInDb - allocatedInSession;
+    if (remaining < 0) remaining = 0;
+    _dozenCtrl.text = remaining.toString();
   }
 
-  void _onDiaSelected(String? dia) {
-    setState(() {
-      _selectedDia = dia;
-      _updateFromAssignments();
-    });
-  }
-
-  void _updateFromAssignments() {
+  void _fillFromAssignments() {
     if (_selectedItem == null) return;
-
-    // 1. Find all assignments for this item
-    // Find potential matches
     final itemMatches = _assignments
         .where(
           (a) =>
@@ -198,97 +265,49 @@ class _LotRequirementAllocationScreenState
               _selectedItem!.trim().toLowerCase(),
         )
         .toList();
-
     if (itemMatches.isEmpty) return;
 
-    // 2. Try to find the best match (prioritize Size and Dia if selected)
-    dynamic bestMatch;
-
-    // Try exact Match (Item + Size + Dia)
-    if (_selectedSize != null && _selectedDia != null) {
-      bestMatch = itemMatches.firstWhere(
-        (a) =>
-            a['size'].toString().trim().toLowerCase() ==
-                _selectedSize!.trim().toLowerCase() &&
-            a['dia'].toString().trim().toLowerCase() ==
-                _selectedDia!.trim().toLowerCase(),
-        orElse: () => null,
-      );
-    }
-
-    // Try Match (Item + Size)
-    if (bestMatch == null && _selectedSize != null) {
-      bestMatch = itemMatches.firstWhere(
+    dynamic best;
+    if (_selectedSize != null) {
+      best = itemMatches.firstWhere(
         (a) =>
             a['size'].toString().trim().toLowerCase() ==
             _selectedSize!.trim().toLowerCase(),
         orElse: () => null,
       );
     }
+    best ??= itemMatches.first;
 
-    // Fallback to the first assignment for this item
-    bestMatch ??= itemMatches.first;
-
-    // 3. Auto-fill fields from the bestMatch
-    if (bestMatch != null) {
-      // Auto-fill Size if not selected
-      if (_selectedSize == null) {
-        final matchSize = bestMatch['size']?.toString();
-        if (matchSize != null) {
-          _selectedSize = matchSize;
-          // Trigger the plan-sync logic for this size
-          if (_selectedPlanId != null && _selectedItem != null) {
-            final plan = _allPlans.firstWhere(
-              (p) => p['_id'] == _selectedPlanId,
-              orElse: () => null,
-            );
-            if (plan != null) {
-              final entry = (plan['cuttingEntries'] as List).firstWhere(
-                (e) => e['itemName'] == _selectedItem,
-                orElse: () => null,
-              );
-              if (entry != null) {
-                final dozen = (entry['sizeQuantities'][matchSize] ?? 0)
-                    .toDouble();
-                _dozenController.text = dozen.toString();
-              }
-            }
-          }
-        }
-      }
-
-      // Auto-fill Dia if not selected
+    setState(() {
+      if (_selectedSize == null) _selectedSize = best['size']?.toString();
       if (_selectedDia == null) {
-        final matchDia = bestMatch['dia']?.toString();
-        if (matchDia != null && _dias.contains(matchDia)) {
-          _selectedDia = matchDia;
-        }
+        final d = best['dia']?.toString();
+        if (d != null && _dias.contains(d)) _selectedDia = d;
       }
+      _dozenWeightCtrl.text = best['dozenWeight']?.toString() ?? '';
+      _foldingWtCtrl.text = best['foldingWt']?.toString() ?? '';
+      _gsmCtrl.text = best['gsm']?.toString() ?? '';
+      _efficiencyCtrl.text = best['efficiency']?.toString() ?? '';
+      _dozenWeight = double.tryParse(_dozenWeightCtrl.text) ?? 0;
+      if (_efficiencyCtrl.text.isNotEmpty) {
+        final eff = double.tryParse(_efficiencyCtrl.text) ?? 0;
+        _wasteCtrl.text = (100 - eff).toStringAsFixed(2);
+      }
+    });
 
-      // Fill Text Fields
-      _lotNameController.text = bestMatch['lotName']?.toString() ?? '';
-      _gsmController.text = bestMatch['gsm']?.toString() ?? '';
-      _efficiencyController.text = bestMatch['efficiency']?.toString() ?? '';
-      _dozenWeightController.text = bestMatch['dozenWeight']?.toString() ?? '';
-      _foldingWeightController.text = bestMatch['foldingWt']?.toString() ?? '';
-
-      // Update calculations
-      final eff = double.tryParse(_efficiencyController.text) ?? 0;
-      _wasteController.text = (100 - eff).toStringAsFixed(2);
-      _dozenWeight = double.tryParse(_dozenWeightController.text) ?? 0;
-    }
+    // Crucial: After setting the default size, calculate the remaining dozen
+    _updateRemainingDozen();
   }
 
+  // ─── FIFO Allocation ──────────────────────────────────────────────────────
   Future<void> _runAllocation() async {
-    final dozen = double.tryParse(_dozenController.text) ?? 0;
+    final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
     if (_selectedItem == null ||
         _selectedSize == null ||
         _selectedDia == null ||
         dozen <= 0 ||
         _dozenWeight <= 0) {
-      _showError(
-        'Please select Item, Size, Dia and enter positive Dozen & Weight',
-      );
+      _showError('Please select Item, Size, Dia and enter Dozen + Weight');
       return;
     }
 
@@ -299,13 +318,15 @@ class _LotRequirementAllocationScreenState
         _selectedSize!,
         dozen,
         _selectedDia!,
-        _dozenWeight,
+        _dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0),
       );
       setState(() {
         if (result != null) {
-          _allocations = List<Map<String, dynamic>>.from(
+          _currentSets = List<Map<String, dynamic>>.from(
             result['allocations'] ?? [],
           );
+          _totalSets = (result['totalSets'] as num?)?.toInt() ?? 0;
+          _remainingRolls = (result['remainingRolls'] as num?)?.toDouble() ?? 0;
           if (result['success'] == false) {
             _showError(result['message'] ?? 'Insufficient stock');
           }
@@ -318,84 +339,148 @@ class _LotRequirementAllocationScreenState
     }
   }
 
-  void _nextDay() {
-    if (_allocations.isEmpty) {
-      _showError('No allocations for $_selectedDay. Run FIFO first.');
+  // ─── Add current item to day entries ─────────────────────────────────────
+  void _addItemToDay() {
+    if (_currentSets.isEmpty) {
+      _showError('Run FIFO first before adding this item.');
       return;
     }
+    final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
+    final entries = List<_DayEntry>.from(_currentDayEntries);
+    final existingIdx = entries.indexWhere(
+      (e) =>
+          e.itemName == _selectedItem &&
+          e.size == _selectedSize &&
+          e.dia == _selectedDia,
+    );
 
-    // 1. Store current day's allocations
-    for (var a in _allocations) {
-      _allWeekAllocations.add({
-        ...a,
-        'day': _selectedDay,
-        'itemName': _selectedItem,
-        'size': _selectedSize,
-        'dia': _selectedDia,
-        'lotNameAssigned': _lotNameController.text,
-        'gsm': _gsmController.text,
-        'dozenWeight': _dozenWeight,
-        'efficiency': _efficiencyController.text,
-        'foldingWeight': _foldingWeightController.text,
-      });
+    if (existingIdx != -1) {
+      // Merge with existing row
+      final old = entries[existingIdx];
+      // For dozens, if they entered the SAME details twice, we assume they are adding more.
+      // But based on the user's "130 vs 70" feedback, if they meant to subtract,
+      // that logic would be very complex. We'll stick to a standard merge (additive)
+      // for now, which at least solves the "New record create aagadhu" (no duplicate rows).
+      entries[existingIdx] = _DayEntry(
+        itemName: old.itemName,
+        size: old.size,
+        dozen: old.dozen + dozen,
+        dozenWeight: old.dozenWeight,
+        dia: old.dia,
+        neededWeight: old.neededWeight + _fabricRequiredKg,
+        sets: [...old.sets, ..._currentSets],
+      );
+    } else {
+      // Add new row
+      entries.add(
+        _DayEntry(
+          itemName: _selectedItem!,
+          size: _selectedSize!,
+          dozen: dozen,
+          dozenWeight: _dozenWeight,
+          dia: _selectedDia!,
+          neededWeight: _fabricRequiredKg,
+          sets: List.from(_currentSets),
+        ),
+      );
     }
 
-    // 2. Move to next day
-    final currentIndex = _kWeekDays.indexOf(_selectedDay);
-    if (currentIndex < _kWeekDays.length - 1) {
+    setState(() {
+      _dayEntries[_selectedDay] = entries;
+      // Clear form for next item entry
+      _currentSets = [];
+      _selectedItem = null;
+      _selectedSize = null;
+      _selectedDia = null;
+      _dozenCtrl.clear();
+      _dozenWeightCtrl.clear();
+      _foldingWtCtrl.clear();
+      _gsmCtrl.clear();
+      _efficiencyCtrl.clear();
+      _wasteCtrl.clear();
+      _dozenWeight = 0;
+      _totalSets = 0;
+      _remainingRolls = 0;
+    });
+    _showSuccess(
+      'Item added to $_selectedDay. Add another item or click Next Day.',
+    );
+  }
+
+  // ─── Move to next day ─────────────────────────────────────────────────────
+  void _nextDay() {
+    if (_currentDayEntries.isEmpty && _currentSets.isEmpty) {
+      _showError('No entries for $_selectedDay. Add at least one item.');
+      return;
+    }
+    // If user has an un-added allocation, add it automatically
+    if (_currentSets.isNotEmpty) {
+      _addItemToDay();
+      return; // addItemToDay already shows success
+    }
+
+    final idx = _kWeekDays.indexOf(_selectedDay);
+    if (idx < _kWeekDays.length - 1) {
       setState(() {
-        _selectedDay = _kWeekDays[currentIndex + 1];
-        _allocations = []; // Clear for next day
-        // Keep plan selected but clear item-specifics if desired, 
-        // or keep them if client wants to reuse same setup
-        _selectedItem = null;
-        _selectedSize = null;
-        _selectedDia = null;
-        _lotNameController.clear();
-        _dozenController.clear();
-        _dozenWeightController.clear();
+        _selectedDay = _kWeekDays[idx + 1];
       });
-      _showSuccess('Monday Data Recorded. Now select for $_selectedDay');
+      _showSuccess(
+        '$_selectedDay recorded. Now entering ${_kWeekDays[idx + 1]}.',
+      );
     }
   }
 
-  Future<void> _saveWeeklyAllocation() async {
-    // Collect Saturday's data if not already added
-    if (_selectedDay == 'Saturday' && _allocations.isNotEmpty) {
-      for (var a in _allocations) {
-        if (!_allWeekAllocations.any((aw) => aw['day'] == 'Saturday' && aw['lotNo'] == a['lotNo'])) {
-           _allWeekAllocations.add({
-            ...a,
-            'day': 'Saturday',
-            'itemName': _selectedItem,
-            'size': _selectedSize,
-            'dia': _selectedDia,
-            'lotNameAssigned': _lotNameController.text,
-            'gsm': _gsmController.text,
-            'dozenWeight': _dozenWeight,
-            'efficiency': _efficiencyController.text,
-            'foldingWeight': _foldingWeightController.text,
-          });
-        }
-      }
+  // ─── Save entire week / save current day ──────────────────────────────────
+  Future<void> _saveDayAllocation({bool allWeek = false}) async {
+    if (_selectedPlanId == null) {
+      _showError('No plan selected.');
+      return;
     }
 
-    if (_selectedPlanId == null || _allWeekAllocations.isEmpty) {
+    // Collect which days to save
+    List<String> daysToSave = allWeek
+        ? _dayEntries.keys.toList()
+        : [_selectedDay];
+
+    // If current day has unsaved FIFO sets, add them first
+    if (_currentSets.isNotEmpty) _addItemToDay();
+
+    final bool hasAny = daysToSave.any(
+      (d) => (_dayEntries[d] ?? []).isNotEmpty,
+    );
+    if (!hasAny) {
       _showError('No allocations to save.');
       return;
     }
 
     setState(() => _isSaving = true);
     try {
-      final success = await _api.saveLotAllocation(
-        _selectedPlanId!,
-        _allWeekAllocations,
-      );
-      if (success) {
-        _showSuccess('Weekly Allocations Saved Successfully');
-        Navigator.pop(context);
+      for (final day in daysToSave) {
+        final entries = _dayEntries[day] ?? [];
+        for (final entry in entries) {
+          final success = await _api.saveLotAllocation(
+            _selectedPlanId!,
+            entry.sets,
+            day: day,
+            date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+            itemName: entry.itemName,
+            size: entry.size,
+            dozen: entry.dozen,
+            neededWeight: entry.neededWeight,
+            postOutward: _postOutward,
+          );
+          if (!success) throw Exception('Save failed for ${entry.itemName}');
+        }
+      }
+      _showSuccess(allWeek ? 'Full week saved!' : '$_selectedDay saved!');
+      await _loadInitialData(); // Refresh plan data (especially lotAllocations)
+      if (!allWeek) {
+        setState(() {
+          _dayEntries.remove(_selectedDay);
+        });
       } else {
-        _showError('Failed to save allocations');
+        setState(() => _dayEntries.clear());
+        Navigator.pop(context);
       }
     } catch (e) {
       _showError('Save failed: $e');
@@ -404,124 +489,368 @@ class _LotRequirementAllocationScreenState
     }
   }
 
-  void _printWeekly() {
-    if (_allWeekAllocations.isEmpty && _allocations.isEmpty) {
-      _showError('No details to print.');
+  // ─── Load report ──────────────────────────────────────────────────────────
+  Future<void> _loadReport() async {
+    // 100% guarantee no active text fields or dropdowns corrupt semantics
+    // during the loading state tree rebuild.
+    FocusScope.of(context).unfocus();
+
+    if (_selectedPlanId == null) {
+      _showError('Select a plan first.');
       return;
     }
-
-    final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId);
-    final planId = plan['planId'] ?? 'N/A';
-    final planPeriod = plan['planPeriod'] ?? 'N/A';
-
-    // Temporary list for print if not saved yet
-    List<Map<String, dynamic>> printList = List.from(_allWeekAllocations);
-    if (_allocations.isNotEmpty) {
-      for (var a in _allocations) {
-        if (!printList.any((pl) => pl['day'] == _selectedDay && pl['lotNo'] == a['lotNo'])) {
-          printList.add({...a, 'day': _selectedDay});
-        }
-      }
+    setState(() => _isLoadingReport = true);
+    try {
+      final data = await _api.getAllocationReport(
+        _selectedPlanId!,
+        day: _reportDay,
+        date: _reportDate != null
+            ? DateFormat('yyyy-MM-dd').format(_reportDate!)
+            : null,
+      );
+      setState(() {
+        _reportRows = data != null
+            ? List<Map<String, dynamic>>.from(data['rows'] ?? [])
+            : [];
+      });
+    } catch (e) {
+      _showError('Failed to load report: $e');
+    } finally {
+      setState(() => _isLoadingReport = false);
     }
-
-    _printServiceWeekly.printWeeklyAllocations(planId, planPeriod, printList);
   }
 
-  void _showError(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  // ─── Print ────────────────────────────────────────────────────────────────
+  void _printReport() {
+    if (_reportRows.isEmpty) {
+      _showError('Load the report first.');
+      return;
+    }
+    final plan = _allPlans.firstWhere(
+      (p) => p['_id'] == _selectedPlanId,
+      orElse: () => {},
+    );
+    _printService.printSetLevelReport(
+      plan['planId'] ?? 'N/A',
+      plan['planPeriod'] ?? '',
+      _reportDay,
+      _reportRows,
+    );
   }
 
-  void _showSuccess(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
-  }
+  // ─── Snackbars ────────────────────────────────────────────────────────────
+  void _showError(String msg) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+
+  void _showSuccess(String msg) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
+
+  // ═════════════════════════════════ BUILD ══════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
+    final primary = Theme.of(context).primaryColor;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('LOT REQUIREMENT ALLOCATION'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: _printWeekly,
-            tooltip: 'Print Weekly Plan',
-          ),
+          if (_tabIndex == 1)
+            IconButton(
+              icon: const Icon(Icons.print),
+              onPressed: _printReport,
+              tooltip: 'Print Report',
+            ),
         ],
       ),
-
       drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader('PLAN SELECTION', primaryColor),
-                  _buildPlanCard(),
-                  const SizedBox(height: 20),
-                  if (_selectedPlanId != null) ...[
-                    _buildSectionHeader('REQUIREMENT DETAILS', primaryColor),
-                    _buildRequirementCard(),
-                    const SizedBox(height: 20),
-                    _buildSectionHeader('WEIGHT & CALCULATION', primaryColor),
-                    _buildCalculationCard(primaryColor),
-                    const SizedBox(height: 20),
-                    _buildSectionHeader('FIFO ALLOCATIONS', primaryColor),
-                    _buildAllocationTable(primaryColor),
-                    const SizedBox(height: 30),
-                    _buildSaveButton(primaryColor),
-                  ],
-                  const SizedBox(height: 50),
-                ],
-              ),
+          : Column(
+              children: [
+                // ── Tab bar — explicit color so always visible ────────────────
+                // ── Tab bar — simple neat tab bar with primary color ─────────
+                Material(
+                  color: Colors.white,
+                  elevation: 1,
+                  child: Row(
+                    children: [
+                      _buildTab(0, Icons.add_chart_outlined, 'ENTRY', primary),
+                      _buildTab(1, Icons.bar_chart_rounded, 'REPORT', primary),
+                    ],
+                  ),
+                ),
+                // ── Content — ONLY active tab mounted (prevents cross-tab
+                // setState-during-layout semantics assertion crash).
+                // State is safe: all vars live in parent, controllers too.
+                Expanded(
+                  child: _tabIndex == 0
+                      ? _buildEntryTab(primary)
+                      : _buildReportTab(primary),
+                ),
+              ],
             ),
     );
   }
 
-  Widget _buildSectionHeader(String title, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
-          color: color,
+  Widget _buildTab(int idx, IconData icon, String label, Color primary) {
+    final selected = _tabIndex == idx;
+    final activeColor = primary;
+    final inactiveColor = Colors.grey.shade500;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _tabIndex = idx),
+        splashColor: primary.withOpacity(0.1),
+        highlightColor: primary.withOpacity(0.05),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? primary : Colors.transparent,
+                width: 3,
+              ),
+            ),
+            // Removed the fill color for a simple, neat look
+            color: Colors.transparent,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: selected ? activeColor : inactiveColor,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                  color: selected ? activeColor : inactiveColor,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPlanCard() {
+  // ─── TAB 1: Entry ─────────────────────────────────────────────────────────
+  Widget _buildEntryTab(Color primary) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Plan + Day + Date
+          _sectionHeader('PLAN & DAY SELECTION', primary),
+          _buildPlanDayCard(primary),
+          const SizedBox(height: 20),
+
+          if (_selectedPlanId != null) ...[
+            // Current day's already-added items
+            if (_currentDayEntries.isNotEmpty) ...[
+              _sectionHeader(
+                '$_selectedDay — ADDED ITEMS (${_currentDayEntries.length})',
+                Colors.teal,
+              ),
+              _buildAddedItemsList(primary),
+              const SizedBox(height: 20),
+            ],
+
+            // New item entry form
+            _sectionHeader('ADD ITEM FOR $_selectedDay', primary),
+            _buildItemFormCard(primary),
+            const SizedBox(height: 20),
+
+            // Calculation summary
+            _buildCalcSummary(primary),
+            const SizedBox(height: 20),
+
+            // FIFO Allocation Table
+            _sectionHeader(
+              _currentSets.isEmpty
+                  ? 'FIFO ALLOCATIONS'
+                  : 'FIFO ALLOCATIONS — ${_currentSets.length} set rows'
+                        ' | $_totalSets full sets'
+                        '${_remainingRolls > 0 ? " + ${_remainingRolls.toStringAsFixed(1)} partial rolls" : ""}',
+              primary,
+            ),
+            _buildFifoTable(primary),
+            const SizedBox(height: 20),
+
+            // Action buttons
+            _buildActionButtons(primary),
+          ],
+
+          const SizedBox(height: 60),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlanDayCard(Color primary) {
     return Card(
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: DropdownButtonFormField<String>(
-          value: _selectedPlanId,
-          decoration: const InputDecoration(labelText: 'Select Saved Plan'),
-          items: _allPlans
-              .map(
-                (p) => DropdownMenuItem(
-                  value: p['_id'].toString(),
-                  child: Text('${p['planType']} - ${p['planPeriod']}'),
+        child: Column(
+          children: [
+            // Plan dropdown
+            DropdownButtonFormField<String>(
+              value: _selectedPlanId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Select Plan'),
+              items: _allPlans
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: p['_id'].toString(),
+                      child: Text(
+                        '${p['planName'] != null && p['planName'] != '' ? p['planName'] : p['planId']} (${p['planType']} – ${p['planPeriod']})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() {
+                _selectedPlanId = v;
+                _dayEntries.clear();
+                _currentSets = [];
+              }),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                // Day
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedDay,
+                    decoration: const InputDecoration(labelText: 'Day'),
+                    items: _kWeekDays
+                        .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                        .toList(),
+                    onChanged: (v) => setState(() {
+                      _selectedDay = v!;
+                      _currentSets = [];
+                    }),
+                  ),
                 ),
-              )
-              .toList(),
-          onChanged: _onPlanSelected,
+                const SizedBox(width: 16),
+                // Date picker
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2024),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null)
+                        setState(() => _selectedDate = picked);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Date',
+                        suffixIcon: Icon(Icons.calendar_today, size: 18),
+                      ),
+                      child: Text(
+                        DateFormat('dd-MM-yyyy').format(_selectedDate),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Post outward toggle
+            Row(
+              children: [
+                Switch(
+                  value: _postOutward,
+                  onChanged: (v) => setState(() => _postOutward = v),
+                  activeColor: Colors.green,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _postOutward
+                        ? '✅ Auto-post outward (stock will be deducted)'
+                        : 'Post Outward on Save (stock deduction)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _postOutward ? Colors.green.shade700 : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildRequirementCard() {
+  Widget _buildAddedItemsList(Color primary) {
+    return Card(
+      elevation: 2,
+      color: Colors.teal.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: _currentDayEntries.asMap().entries.map((e) {
+            final idx = e.key;
+            final entry = e.value;
+            final setCount = entry.sets.length;
+            return ListTile(
+              dense: true,
+              leading: CircleAvatar(
+                radius: 14,
+                backgroundColor: Colors.teal,
+                child: Text(
+                  '${idx + 1}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+              title: Text(
+                '${entry.itemName} — ${entry.size} — Dia ${entry.dia}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              subtitle: Text(
+                '${entry.dozen} doz | ${entry.neededWeight.toStringAsFixed(1)} kg | $setCount set rows',
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.red,
+                  size: 20,
+                ),
+                onPressed: () => setState(() {
+                  final list = List<_DayEntry>.from(_currentDayEntries);
+                  list.removeAt(idx);
+                  _dayEntries[_selectedDay] = list;
+                }),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItemFormCard(Color primary) {
     List<String> sizes = _masterSizes;
     if (_selectedPlanId != null && _selectedItem != null) {
       final plan = _allPlans.firstWhere(
@@ -538,9 +867,7 @@ class _LotRequirementAllocationScreenState
               .where((k) => (entry['sizeQuantities'][k] ?? 0) > 0)
               .map((k) => k.toString())
               .toList();
-          if (planSizes.isNotEmpty) {
-            sizes = planSizes;
-          }
+          if (planSizes.isNotEmpty) sizes = planSizes;
         }
       }
     }
@@ -562,27 +889,12 @@ class _LotRequirementAllocationScreenState
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedDay,
-                    decoration: const InputDecoration(labelText: 'Selection Day'),
-                    items: _kWeekDays
-                        .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedDay = val!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
                   child: CustomDropdownField(
                     label: 'Size',
                     items: sizes,
                     value: sizes.contains(_selectedSize) ? _selectedSize : null,
                     onChanged: _onSizeSelected,
-                    hint: 'Select Size',
+                    hint: 'Size',
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -591,64 +903,60 @@ class _LotRequirementAllocationScreenState
                     label: 'Dia',
                     items: _dias,
                     value: _selectedDia,
-                    onChanged: _onDiaSelected,
-                    hint: 'Select Dia',
+                    onChanged: (v) => setState(() {
+                      _selectedDia = v;
+                      _currentSets = [];
+                    }),
+                    hint: 'Dia',
                   ),
                 ),
               ],
-            ),
-
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _lotNameController,
-              decoration: const InputDecoration(
-                labelText: 'Assigned Lot Name',
-                hintText: 'Enter Lot Name',
-              ),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
-                    controller: _gsmController,
+                    controller: _dozenCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'GSM'),
+                    decoration: const InputDecoration(labelText: 'Dozen'),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: TextFormField(
-                    controller: _efficiencyController,
+                    controller: _dozenWeightCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Dozen Weight (kg)',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _foldingWtCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Folding Wt (kg)',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    controller: _efficiencyCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Efficiency %',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _foldingWeightController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Folding Weight (Kg)',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    controller: _wasteController,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Waste %',
-                      filled: true,
-                      fillColor: Color(0xFFF1F5F9),
                     ),
                   ),
                 ),
@@ -660,7 +968,7 @@ class _LotRequirementAllocationScreenState
     );
   }
 
-  Widget _buildCalculationCard(Color primaryColor) {
+  Widget _buildCalcSummary(Color primary) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -668,67 +976,49 @@ class _LotRequirementAllocationScreenState
         child: Column(
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _dozenController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Dozen (Modify)',
-                      helperText: 'Modify planned dozen if needed',
-                    ),
-                  ),
+                _calcChip(
+                  'Required Weight',
+                  '${_fabricRequiredKg.toStringAsFixed(2)} KG',
+                  primary,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    controller: _dozenWeightController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Dozen Weight (Kg)',
-                    ),
-                  ),
-                ),
+                _calcChip('Rolls Needed', '~$_rollsRequired Rolls', primary),
               ],
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: primaryColor.withOpacity(0.1)),
-              ),
-              child: Row(
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _calcChip('Sets Required', '~$_setsRequired Sets', Colors.teal),
+                _calcChip('1 Set', '= 11 Rolls', Colors.grey),
+              ],
+            ),
+            if (_totalSets > 0) ...[
+              const Divider(height: 20),
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildCalcItem(
-                    'Required Weight',
-                    '${_fabricRequiredKg.toStringAsFixed(2)} KG',
-                    primaryColor,
-                  ),
-                  _buildCalcItem(
-                    'Rolls Need',
-                    '~$_rollsRequired Rolls',
-                    primaryColor,
-                  ),
+                  _calcChip('FIFO Full Sets', '$_totalSets', Colors.green),
+                  _calcChip('Partial Rolls', '$_remainingRolls', Colors.orange),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
+            ],
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              height: 45,
+              height: 48,
               child: ElevatedButton.icon(
                 onPressed: _isAllocating ? null : _runAllocation,
-                icon: const Icon(LucideIcons.zap, size: 18),
+                icon: Icon(
+                  _isAllocating ? Icons.hourglass_empty : LucideIcons.zap,
+                  size: 18,
+                ),
                 label: Text(
                   _isAllocating ? 'ALLOCATING...' : 'AUTO FIFO ALLOCATE',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
+                  backgroundColor: primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -742,18 +1032,18 @@ class _LotRequirementAllocationScreenState
     );
   }
 
-  Widget _buildCalcItem(String label, String value, Color color) {
+  Widget _calcChip(String label, String value, Color color) {
     return Column(
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
+          style: const TextStyle(fontSize: 11, color: Colors.black54),
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
             color: color,
           ),
@@ -762,19 +1052,19 @@ class _LotRequirementAllocationScreenState
     );
   }
 
-  Widget _buildAllocationTable(Color primaryColor) {
+  Widget _buildFifoTable(Color primary) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: _allocations.isEmpty
+      child: _currentSets.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(20),
               child: Center(
                 child: Text(
-                  'No allocations yet. Run FIFO to see lots.',
+                  'No allocations yet. Run FIFO to see set-wise rows.',
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
@@ -782,91 +1072,575 @@ class _LotRequirementAllocationScreenState
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
+                headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                columnSpacing: 14,
                 columns: const [
-                  DataColumn(label: Text('LOT NAME')),
-                  DataColumn(label: Text('LOT NO')),
-                  DataColumn(label: Text('SET')),
-                  DataColumn(label: Text('DIA')),
-                  DataColumn(label: Text('RACK')),
-                  DataColumn(label: Text('PALLET NO')),
-                  DataColumn(label: Text('DOZEN')),
-                ],
-                rows: _allocations
-                    .map(
-                      (a) => DataRow(
-                        cells: [
-                          DataCell(Text(a['lotName'] ?? '')),
-                          DataCell(Text(a['lotNo'] ?? '-')),
-                          DataCell(Text(a['setNum']?.toString() ?? '-')),
-                          DataCell(Text(a['dia']?.toString() ?? '')),
-                          DataCell(Text(a['rackName'] ?? '')),
-                          DataCell(Text(a['palletNumber'] ?? '')),
-                          DataCell(Text(a['dozen']?.toString() ?? '0')),
-                        ],
+                  DataColumn(
+                    label: Text(
+                      'LOT NAME',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
                       ),
-                    )
-                    .toList(),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'LOT NO',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'DIA',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'SET NO',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'RACK',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'PALLET',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'LOT BALANCE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'SET WEIGHT',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+                rows: _currentSets.asMap().entries.map((e) {
+                  final i = e.key;
+                  final a = e.value;
+                  final isEven = i % 2 == 0;
+                  return DataRow(
+                    color: WidgetStateProperty.all(
+                      isEven ? Colors.white : Colors.grey.shade50,
+                    ),
+                    cells: [
+                      DataCell(
+                        Text(
+                          a['lotName']?.toString() ?? '-',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          a['lotNo']?.toString() ?? '-',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          a['dia']?.toString() ?? '-',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.teal.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.teal.withOpacity(0.4),
+                            ),
+                          ),
+                          child: Text(
+                            'Set ${a['setNo']?.toString() ?? '-'}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.teal,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          a['rackName']?.toString() ?? '-',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          a['palletNumber']?.toString() ?? '-',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          '${(a['lotBalance'] as num?)?.toStringAsFixed(2) ?? '0'} kg',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          '${(a['setWeight'] as num?)?.toStringAsFixed(2) ?? '0'} kg',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.deepPurple,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
               ),
             ),
     );
   }
 
-  Widget _buildSaveButton(Color primaryColor) {
+  Widget _buildActionButtons(Color primary) {
     final bool isSaturday = _selectedDay == 'Saturday';
+    final bool hasCurrentSets = _currentSets.isNotEmpty;
+    final bool hasDayEntries = _currentDayEntries.isNotEmpty;
 
     return Column(
       children: [
-        if (!isSaturday)
+        // Add Item to Day (if FIFO results ready)
+        if (hasCurrentSets)
           SizedBox(
             width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _nextDay,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _addItemToDay,
+              icon: const Icon(Icons.add_task),
+              label: const Text('ADD THIS ITEM TO DAY'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
+                backgroundColor: Colors.teal,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text(
-                'NEXT DAY',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+
+        if (hasCurrentSets) const SizedBox(height: 12),
+
+        // Save current day only
+        if (hasDayEntries || hasCurrentSets)
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _isSaving
+                  ? null
+                  : () => _saveDayAllocation(allWeek: false),
+              icon: const Icon(Icons.save),
+              label: Text(
+                'SAVE $_selectedDay (${_currentDayEntries.length + (hasCurrentSets ? 1 : 0)} items)',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: primary,
+                side: BorderSide(color: primary),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
-        if (!isSaturday) const SizedBox(height: 16),
-        Center(
-          child: ElevatedButton(
-            onPressed: _isSaving ? null : _saveWeeklyAllocation,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-              backgroundColor: ColorPalette.success,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : Text(
-                    isSaturday ? 'SAVE WEEKLY ALLOCATION' : 'SAVE CURRENT ONLY',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+
+        if (hasDayEntries || hasCurrentSets) const SizedBox(height: 12),
+
+        // Next day or Save weekly
+        Row(
+          children: [
+            if (!isSaturday)
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _nextDay,
+                  icon: const Icon(Icons.arrow_forward),
+                  label: const Text('NEXT DAY'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-          ),
+                ),
+              ),
+            if (!isSaturday && _dayEntries.length > 1)
+              const SizedBox(width: 12),
+            if (_dayEntries.length > 1 || isSaturday)
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isSaving
+                      ? null
+                      : () => _saveDayAllocation(allWeek: true),
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.save),
+                  label: const Text('SAVE ENTIRE WEEK'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorPalette.success,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
+    );
+  }
+
+  // ─── TAB 2: Report ────────────────────────────────────────────────────────
+  Widget _buildReportTab(Color primary) {
+    // Wrap the entire report tab in ExcludeSemantics because the Flutter
+    // semantics engine has a bug with dropdowns + dynamic scrollable lists
+    // rebuilding simultaneously, throwing !semantics.parentDataDirty.
+    return ExcludeSemantics(
+      child: Column(
+        children: [
+          // Filters
+          Container(
+            color: Colors.grey.shade50,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                DropdownButtonFormField<String>(
+                  value: _selectedPlanId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Select Plan'),
+                  items: _allPlans
+                      .map(
+                        (p) => DropdownMenuItem(
+                          value: p['_id'].toString(),
+                          child: Text(
+                            '${p['planName'] != null && p['planName'] != '' ? p['planName'] : p['planId']} (${p['planType']} – ${p['planPeriod']})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedPlanId = v),
+                ),
+                const SizedBox(height: 12),
+                // Row 2: Day + Date picker
+                Row(
+                  children: [
+                    // Day filter
+                    Expanded(
+                      child: DropdownButtonFormField<String?>(
+                        value: _reportDay,
+                        decoration: const InputDecoration(
+                          labelText: 'Day',
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('All Days'),
+                          ),
+                          ..._kWeekDays.map(
+                            (d) => DropdownMenuItem(value: d, child: Text(d)),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _reportDay = v),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Date filter
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _reportDate ?? DateTime.now(),
+                            firstDate: DateTime(2024),
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) {
+                            setState(() => _reportDate = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Date',
+                            isDense: true,
+                            suffixIcon: Icon(Icons.calendar_today, size: 16),
+                          ),
+                          child: Text(
+                            _reportDate != null
+                                ? DateFormat('dd-MM-yyyy').format(_reportDate!)
+                                : 'All Dates',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Clear date
+                    if (_reportDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () => setState(() => _reportDate = null),
+                        tooltip: 'Clear date',
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Row 3: Load button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoadingReport ? null : _loadReport,
+                    icon: _isLoadingReport
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.search),
+                    label: const Text('LOAD REPORT'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Report table
+          Expanded(
+            child: _isLoadingReport
+                ? const Center(child: CircularProgressIndicator())
+                : _reportRows.isEmpty
+                ? Center(
+                    child: Text(
+                      'No data. Select a plan and tap LOAD.',
+                      style: TextStyle(color: Colors.grey.shade500),
+                    ),
+                  )
+                : _buildReportListView(primary),
+          ),
+
+          // Footer summary
+          if (_reportRows.isNotEmpty)
+            Container(
+              color: Colors.grey.shade100, // <--- The culprit RenderColoredBox!
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  Text(
+                    '${_reportRows.length} sets',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    'Tot: ${_reportRows.fold<double>(0.0, (s, r) => s + ((r['setWeight'] as num?)?.toDouble() ?? 0)).toStringAsFixed(2)} kg',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _printReport,
+                    icon: const Icon(Icons.print, size: 16),
+                    label: const Text('PRINT'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Report list view (avoids nested SingleChildScrollView assertion) ─────
+  // Uses ListView.builder for vertical scroll + SingleChildScrollView (horizontal)
+  // wrapping a fixed-width Row for each data row. No nesting two scrollables.
+  Widget _buildReportListView(Color primary) {
+    // Native DataTable implementation! This entirely sidesteps manually
+    // managing constraints, widths, Containers, Rows, and rendering bounds,
+    // leaning completely on Flutter's heavily-tested intrinsic table layout.
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(primary.withOpacity(0.1)),
+          columnSpacing: 16,
+          headingTextStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+            fontSize: 12,
+          ),
+          dataTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
+          columns: const [
+            DataColumn(label: Text('Day')),
+            DataColumn(label: Text('Item')),
+            DataColumn(label: Text('Size')),
+            DataColumn(label: Text('Dozen')),
+            DataColumn(label: Text('Need Wt.')),
+            DataColumn(label: Text('Lot Name')),
+            DataColumn(label: Text('Lot No')),
+            DataColumn(label: Text('Dia')),
+            DataColumn(label: Text('Set No')),
+            DataColumn(label: Text('Rack')),
+            DataColumn(label: Text('Pallet')),
+            DataColumn(label: Text('Set Wt.')),
+          ],
+          rows: _reportRows.map((r) {
+            return DataRow(
+              cells: [
+                DataCell(Text(r['day']?.toString() ?? '-')),
+                DataCell(Text(r['itemName']?.toString() ?? '-')),
+                DataCell(Text(r['size']?.toString() ?? '-')),
+                DataCell(Text(r['dozen']?.toString() ?? '-')),
+                DataCell(
+                  Text(
+                    '${(r['neededWeight'] as num?)?.toStringAsFixed(1) ?? '-'} kg',
+                  ),
+                ),
+                DataCell(Text(r['lotName']?.toString() ?? '-')),
+                DataCell(Text(r['lotNo']?.toString() ?? '-')),
+                DataCell(
+                  Text(
+                    r['dia']?.toString() ?? '-',
+                    style: const TextStyle(color: Colors.blue),
+                  ),
+                ),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.teal.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      'Set ${r['setNo']?.toString() ?? '-'}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
+                    ),
+                  ),
+                ),
+                DataCell(Text(r['rackName']?.toString() ?? '-')),
+                DataCell(Text(r['palletNumber']?.toString() ?? '-')),
+                DataCell(
+                  Text(
+                    '${(r['setWeight'] as num?)?.toStringAsFixed(2) ?? '-'} kg',
+                    style: const TextStyle(
+                      color: Colors.deepPurple,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 2),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          color: color,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 }
