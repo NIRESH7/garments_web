@@ -98,6 +98,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
   String? _listeningForRowId; // which row is currently being listened to
+  int? _listeningForStickerRowIdx; // index in diaData.rows
+  int? _listeningForSetIdx; // set index
 
   @override
   void initState() {
@@ -129,6 +131,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     for (var r in _rows) {
       r.dispose();
     }
+    // Dispose sticker data controllers
+    _stickerData.forEach((dia, data) {
+      for (var row in data.rows) {
+        row.dispose();
+      }
+    });
+
     _inwardNoController.dispose();
     _lotNumberController.dispose();
     _rateController.dispose();
@@ -187,28 +196,91 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
     _speech.listen(
       onResult: (result) {
+        final words = result.recognizedWords.toLowerCase()
+            .replaceAll(',', '.')
+            .replaceAll('point', '.')
+            .replaceAll('dot', '.')
+            .replaceAll('decimal', '.');
+            
+        final regExp = RegExp(r'\d+\.?\d*');
+        final match = regExp.firstMatch(words);
+        
+        if (match != null) {
+          final value = match.group(0)!;
+          setState(() {
+            row.recWtController.text = value;
+            row.recWeight = double.tryParse(value) ?? 0;
+            _updateRowMath(row);
+          });
+        }
+        
         if (result.finalResult) {
-          final words = result.recognizedWords.toLowerCase().replaceAll(
-            ',',
-            '.',
-          );
-          // Extract first number found in the spoken text
-          final regExp = RegExp(r'\d+\.?\d*');
-          final match = regExp.firstMatch(words);
-          if (match != null) {
-            final value = match.group(0)!;
-            setState(() {
-              row.recWtController.text = value;
-              row.recWeight = double.tryParse(value) ?? 0;
-              _updateRowMath(row);
-            });
-          }
           setState(() => _isListening = false);
         }
       },
       listenFor: const Duration(seconds: 10),
       pauseFor: const Duration(seconds: 3),
-      partialResults: false,
+      partialResults: true,
+      localeId: 'en_US',
+    );
+  }
+
+  void _startVoiceInputForSetWeight(StickerRow row, int rowIdx, int setIdx) async {
+    if (_isListening) {
+      _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    var status = await Permission.microphone.status;
+    if (!status.isGranted) {
+      status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        _showError('Microphone permission is required for voice input.');
+        return;
+      }
+    }
+
+    if (!_speech.isAvailable) {
+      _showError('Voice recognition not available on this device.');
+      return;
+    }
+
+    setState(() {
+      _isListening = true;
+      _listeningForStickerRowIdx = rowIdx;
+      _listeningForSetIdx = setIdx;
+      _listeningForRowId = null; // Clear main row listening if any
+    });
+
+    _speech.listen(
+      onResult: (result) {
+        final words = result.recognizedWords.toLowerCase()
+            .replaceAll(',', '.')
+            .replaceAll('point', '.')
+            .replaceAll('dot', '.')
+            .replaceAll('decimal', '.');
+            
+        final regExp = RegExp(r'\d+\.?\d*');
+        final match = regExp.firstMatch(words);
+        
+        if (match != null) {
+          final value = match.group(0)!;
+          setState(() {
+            if (row.controllers.length > setIdx) {
+              row.controllers[setIdx].text = value;
+              row.setWeights[setIdx] = value;
+            }
+          });
+        }
+        
+        if (result.finalResult) {
+          setState(() => _isListening = false);
+        }
+      },
+      listenFor: const Duration(seconds: 10),
+      pauseFor: const Duration(seconds: 3),
+      partialResults: true,
       localeId: 'en_US',
     );
   }
@@ -2345,12 +2417,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     ),
                     ...List.generate(sets, (i) {
                       if (r.setWeights.length <= i) r.setWeights.add('');
+                      if (r.controllers.length <= i) {
+                        r.controllers.add(
+                          TextEditingController(text: r.setWeights[i]),
+                        );
+                      }
                       return _buildGridCell(
                         "",
                         100,
                         child: _buildTableInputText(
-                          r.setWeights[i],
+                          r.controllers[i],
                           (v) => setState(() => r.setWeights[i] = v),
+                          onMicTap: () => _startVoiceInputForSetWeight(r, idx, i),
+                          isListening: _isListening && _listeningForStickerRowIdx == idx && _listeningForSetIdx == i,
                         ),
                       );
                     }),
@@ -2413,19 +2492,38 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildTableInputText(String val, Function(String) chg) {
+  Widget _buildTableInputText(
+    TextEditingController controller,
+    Function(String) chg, {
+    VoidCallback? onMicTap,
+    bool isListening = false,
+  }) {
     return TextFormField(
-      initialValue: val,
+      controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
       ],
       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
       textAlign: TextAlign.center,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         hintText: '-',
         border: InputBorder.none,
         isDense: true,
+        suffixIcon:
+            onMicTap != null
+                ? IconButton(
+                  icon: Icon(
+                    Icons.mic,
+                    size: 16,
+                    color: isListening ? Colors.red : Colors.blue,
+                  ),
+                  onPressed: onMicTap,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  splashRadius: 16,
+                )
+                : null,
       ),
       onChanged: chg,
     );
@@ -3041,6 +3139,7 @@ class InwardRow {
 class StickerRow {
   String? colour;
   List<String> setWeights = [];
+  List<TextEditingController> controllers = [];
 
   double get totalWeight {
     final sum = setWeights.fold(0.0, (sum, w) {
@@ -3048,6 +3147,12 @@ class StickerRow {
       return sum + val;
     });
     return double.parse(sum.toStringAsFixed(3));
+  }
+
+  void dispose() {
+    for (var c in controllers) {
+      c.dispose();
+    }
   }
 }
 
