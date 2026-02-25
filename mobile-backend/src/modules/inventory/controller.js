@@ -101,9 +101,9 @@ const createInward = asyncHandler(async (req, res) => {
                         console.log(`  Updating existing DIA: ${newEntry.dia}`);
                         existingEntry.roll = (Number(existingEntry.roll) || 0) + (Number(newEntry.roll) || 0);
                         existingEntry.sets = (Number(existingEntry.sets) || 0) + (Number(newEntry.sets) || 0);
-                        existingEntry.delivWt = (Number(existingEntry.delivWt) || 0) + (Number(newEntry.delivWt) || 0);
+                        existingEntry.delivWt = Number(((Number(existingEntry.delivWt) || 0) + (Number(newEntry.delivWt) || 0)).toFixed(2));
                         existingEntry.recRoll = (Number(existingEntry.recRoll) || 0) + (Number(newEntry.recRoll) || 0);
-                        existingEntry.recWt = (Number(existingEntry.recWt) || 0) + (Number(newEntry.recWt) || 0);
+                        existingEntry.recWt = Number(((Number(existingEntry.recWt) || 0) + (Number(newEntry.recWt) || 0)).toFixed(2));
                         existingEntry.rate = Number(newEntry.rate) || existingEntry.rate;
                     } else {
                         console.log(`  Adding new DIA: ${newEntry.dia}`);
@@ -135,7 +135,7 @@ const createInward = asyncHandler(async (req, res) => {
                             if (existingRow) {
                                 console.log(`    Appending to existing colour: ${newRow.colour}`);
                                 existingRow.setWeights = [...(existingRow.setWeights || []), ...(newRow.setWeights || [])];
-                                existingRow.totalWeight = (Number(existingRow.totalWeight) || 0) + (Number(newRow.totalWeight) || 0);
+                                existingRow.totalWeight = Number(((Number(existingRow.totalWeight) || 0) + (Number(newRow.totalWeight) || 0)).toFixed(2));
                             } else {
                                 console.log(`    Adding new colour: ${newRow.colour}`);
                                 existingStorage.rows.push(newRow);

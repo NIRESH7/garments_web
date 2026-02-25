@@ -10,6 +10,7 @@ import {
     deleteParty,
     createItemGroup,
     getItemGroups,
+    getItemGroupByGroupName,
     updateItemGroup,
     deleteItemGroup,
     deleteCategoryValue,
@@ -51,6 +52,9 @@ router.route('/parties/:id')
 router.route('/item-groups')
     .post(createItemGroup)
     .get(getItemGroups);
+
+// Must come before /:id route to avoid 'by-name' being treated as an ID
+router.get('/item-groups/by-name', getItemGroupByGroupName);
 
 router.route('/item-groups/:id')
     .put(updateItemGroup)

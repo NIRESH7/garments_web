@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 import 'lot_inward_screen.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -106,17 +107,11 @@ class InwardDetailScreen extends StatelessWidget {
     try {
       final service = InwardPrintService();
       final pdfBytes = await service.generatePdfBytes(inward);
-      
+
       final filename = 'Lot_Inward_${inward['lotNo'] ?? 'Details'}.pdf';
 
       await Share.shareXFiles(
-        [
-          XFile.fromData(
-            pdfBytes,
-            mimeType: 'application/pdf',
-            name: filename,
-          )
-        ],
+        [XFile.fromData(pdfBytes, mimeType: 'application/pdf', name: filename)],
         text: 'Inward Details - Lot ${inward['lotNo'] ?? ''}',
         subject: 'Lot Inward PDF',
       );
@@ -365,7 +360,7 @@ class InwardDetailScreen extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Val: ${value.toStringAsFixed(2)}',
+                    'Val: ${FormatUtils.formatCurrency(value)}',
                     style: const TextStyle(
                       color: Colors.blue,
                       fontWeight: FontWeight.bold,
@@ -391,11 +386,14 @@ class InwardDetailScreen extends StatelessWidget {
               Expanded(
                 child: _buildSmallInfo(
                   'Del. Wt',
-                  '${entry['delWt'] ?? 0} Kg', // Corrected key
+                  '${FormatUtils.formatWeight(entry['delWt'])} Kg', // Corrected key
                 ),
               ),
               Expanded(
-                child: _buildSmallInfo('Rec. Wt', '${entry['recWt'] ?? 0} Kg'),
+                child: _buildSmallInfo(
+                  'Rec. Wt',
+                  '${FormatUtils.formatWeight(entry['recWt'])} Kg',
+                ),
               ),
             ],
           ),
@@ -860,7 +858,12 @@ class InwardDetailScreen extends StatelessWidget {
     );
   }
 
-  pw.Widget _buildPdfRow(String label, String value, {double fontSize = 10, bool isBoldValue = false}) {
+  pw.Widget _buildPdfRow(
+    String label,
+    String value, {
+    double fontSize = 10,
+    bool isBoldValue = false,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 1),
       child: pw.Row(
@@ -869,7 +872,10 @@ class InwardDetailScreen extends StatelessWidget {
             width: 30,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: fontSize),
+              style: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: fontSize,
+              ),
             ),
           ),
           pw.Expanded(
@@ -877,7 +883,9 @@ class InwardDetailScreen extends StatelessWidget {
               value,
               style: pw.TextStyle(
                 fontSize: fontSize,
-                fontWeight: isBoldValue ? pw.FontWeight.bold : pw.FontWeight.normal,
+                fontWeight: isBoldValue
+                    ? pw.FontWeight.bold
+                    : pw.FontWeight.normal,
               ),
             ),
           ),
@@ -902,11 +910,24 @@ class InwardDetailScreen extends StatelessWidget {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 6),
-              _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow(
+                'Name',
+                item['lotName']?.toString() ?? '',
+                fontSize: 6,
+              ),
               _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 6),
-              _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow(
+                'Col',
+                item['colour']?.toString() ?? '',
+                fontSize: 6,
+              ),
               _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
-              _buildPdfRow('Wt', '${item['weight']} kg', fontSize: 6, isBoldValue: true),
+              _buildPdfRow(
+                'Wt',
+                '${item['weight']} kg',
+                fontSize: 6,
+                isBoldValue: true,
+              ),
               _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 5),
             ],
           ),
@@ -988,13 +1009,7 @@ class InwardDetailScreen extends StatelessWidget {
       final filename = 'Stickers_${inward['lotNo'] ?? 'Details'}.pdf';
 
       await Share.shareXFiles(
-        [
-          XFile.fromData(
-            pdfBytes,
-            mimeType: 'application/pdf',
-            name: filename,
-          )
-        ],
+        [XFile.fromData(pdfBytes, mimeType: 'application/pdf', name: filename)],
         text: 'Stickers - Lot ${inward['lotNo'] ?? ''}',
         subject: 'Sticker Labels PDF',
       );
@@ -1013,7 +1028,7 @@ class InwardDetailScreen extends StatelessWidget {
   ) async {
     try {
       final pdf = _generateStickersPdf(stickerList);
-      
+
       final pageFormat = stickerList.length == 1
           ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
           : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
@@ -1025,9 +1040,9 @@ class InwardDetailScreen extends StatelessWidget {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error printing stickers: $e")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error printing stickers: $e")));
       }
     }
   }

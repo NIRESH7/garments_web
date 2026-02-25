@@ -34,6 +34,7 @@ import '../screens/reports/godown_stock_report_screen.dart';
 import '../screens/reports/rack_pallet_report_screen.dart';
 import '../screens/tasks/admin_task_management_screen.dart';
 import '../screens/tasks/worker_task_dashboard_screen.dart';
+import '../screens/reports/cut_order_plan_report_screen.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
@@ -262,13 +263,19 @@ class AppDrawer extends ConsumerWidget {
                       "Rack & Pallet Wise Report",
                       RackPalletReportScreen(),
                     ),
+                    _buildSubItem(
+                      context,
+                      "Cut Order Plan Report",
+                      const CutOrderPlanReportScreen(),
+                    ),
                   ],
                 ),
 
                 ListTile(
                   leading: const Icon(LucideIcons.palette),
                   title: const Text('App Theme'),
-                  onTap: () => _navigateTo(context, const ThemeSettingsScreen()),
+                  onTap: () =>
+                      _navigateTo(context, const ThemeSettingsScreen()),
                 ),
                 ListTile(
                   leading: const Icon(LucideIcons.bot),

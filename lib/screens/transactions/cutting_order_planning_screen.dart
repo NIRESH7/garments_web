@@ -29,6 +29,8 @@ class _CuttingOrderPlanningScreenState
       ? [75, 80, 85, 90, 95, 100, 105, 110]
       : [50, 55, 60, 65, 70, 75];
   final List<Map<String, dynamic>> _cuttingEntries = [];
+  List<dynamic> _previousEntries = [];
+  bool _isCheckingPrev = false;
 
   @override
   void initState() {
@@ -96,6 +98,27 @@ class _CuttingOrderPlanningScreenState
       });
       _cuttingEntries[index]['totalDozens'] = total;
     });
+  }
+
+  Future<void> _checkPreviousPlanning() async {
+    final name = _planNameCtrl.text.trim();
+    if (name.isEmpty) return;
+
+    setState(() => _isCheckingPrev = true);
+    try {
+      final prev = await _api.getPreviousPlanningEntries(
+        name,
+        startDate: _startDate?.toIso8601String(),
+        endDate: _endDate?.toIso8601String(),
+      );
+      setState(() {
+        _previousEntries = prev;
+        _isCheckingPrev = false;
+      });
+    } catch (e) {
+      setState(() => _isCheckingPrev = false);
+      print('Error checking previous planning: $e');
+    }
   }
 
   Future<void> _savePlanningSheet() async {
@@ -198,6 +221,10 @@ class _CuttingOrderPlanningScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildEntryTable(),
+                          if (_previousEntries.isNotEmpty) ...[
+                            const SizedBox(height: 30),
+                            _buildPreviousEntriesTable(),
+                          ],
                           const SizedBox(height: 30),
                         ],
                       ),
@@ -268,12 +295,26 @@ class _CuttingOrderPlanningScreenState
           children: [
             TextFormField(
               controller: _planNameCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'PLAN NAME / REMARKS',
                 hintText: 'e.g. Summer Collection 2026',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.edit_note),
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.edit_note),
+                suffixIcon: _isCheckingPrev
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
               ),
+              onChanged: (val) {
+                // Debounce or simple timer? For now, simple check
+                _checkPreviousPlanning();
+              },
             ),
             const SizedBox(height: 16),
             Row(
@@ -349,6 +390,7 @@ class _CuttingOrderPlanningScreenState
                       );
                       if (date != null) {
                         setState(() => _startDate = date);
+                        _checkPreviousPlanning();
                       }
                     },
                   ),
@@ -376,6 +418,7 @@ class _CuttingOrderPlanningScreenState
                       );
                       if (date != null) {
                         setState(() => _endDate = date);
+                        _checkPreviousPlanning();
                       }
                     },
                   ),
@@ -548,6 +591,64 @@ class _CuttingOrderPlanningScreenState
                   );
                 }),
               ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreviousEntriesTable() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.history, color: Colors.grey, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'PREVIOUS ENTRIES (Already Planned)',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 15,
+              headingRowHeight: 40,
+              dataRowMinHeight: 35,
+              dataRowMaxHeight: 45,
+              columns: [
+                const DataColumn(label: Text('ITEM NAME')),
+                ..._sizes.map((s) => DataColumn(label: Text(s.toString()))),
+                const DataColumn(label: Text('TOTAL')),
+              ],
+              rows: _previousEntries.map((entry) {
+                final qty = entry['sizeQuantities'] as Map<String, dynamic>;
+                return DataRow(
+                  cells: [
+                    DataCell(Text(entry['itemName'].toString())),
+                    ..._sizes.map(
+                      (s) =>
+                          DataCell(Text(qty[s.toString()]?.toString() ?? '0')),
+                    ),
+                    DataCell(Text(entry['totalDozens']?.toString() ?? '0')),
+                  ],
+                );
+              }).toList(),
             ),
           ),
         ),

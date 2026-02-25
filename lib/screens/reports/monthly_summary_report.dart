@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 
 import '../../widgets/custom_dropdown_field.dart';
@@ -144,7 +145,7 @@ class _MonthlySummaryReportScreenState
               ),
               const SizedBox(height: 4),
               Text(
-                '${numRolls.toInt()} Rolls',
+                '${FormatUtils.formatQuantity(numRolls)} Rolls',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -153,7 +154,7 @@ class _MonthlySummaryReportScreenState
             ],
           ),
           Text(
-            '${numWeight.toDouble().toStringAsFixed(2)} Kg',
+            '${FormatUtils.formatWeight(numWeight)} Kg',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,

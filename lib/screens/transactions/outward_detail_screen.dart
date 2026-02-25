@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/outward_print_service.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/utils/format_utils.dart';
 
 class OutwardDetailScreen extends StatelessWidget {
   final Map<String, dynamic> outward;
@@ -107,7 +108,9 @@ class OutwardDetailScreen extends StatelessWidget {
       sb.writeln("-----------------------");
       sb.writeln("TOTAL SUMMARY");
       sb.writeln("Total Rolls: $grandTotalRolls");
-      sb.writeln("Total Weight: ${grandTotalWeight.toStringAsFixed(2)} Kg");
+      sb.writeln(
+        "Total Weight: ${FormatUtils.formatWeight(grandTotalWeight)} Kg",
+      );
       sb.writeln("-----------------------");
       sb.writeln("");
 
@@ -326,7 +329,7 @@ class OutwardDetailScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'Total: ${totalWeight.toStringAsFixed(2)} Kg',
+                    'Total: ${FormatUtils.formatWeight(totalWeight)} Kg',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.orange,
@@ -369,7 +372,7 @@ class OutwardDetailScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                '${item['total_weight'] ?? 0} Kg',
+                '${FormatUtils.formatWeight(item['total_weight'])} Kg',
                 style: const TextStyle(
                   color: Colors.orange,
                   fontWeight: FontWeight.bold,
@@ -417,7 +420,7 @@ class OutwardDetailScreen extends StatelessWidget {
                       Expanded(
                         child: _buildSmallInfo(
                           'Weight',
-                          '${col['weight'] ?? 0} Kg',
+                          '${FormatUtils.formatWeight(col['weight'])} Kg',
                         ),
                       ),
                       Expanded(
@@ -440,7 +443,7 @@ class OutwardDetailScreen extends StatelessWidget {
                 Expanded(
                   child: _buildSmallInfo(
                     'Balance',
-                    '${item['balance_weight'] ?? 0} Kg',
+                    '${FormatUtils.formatWeight(item['balance_weight'])} Kg',
                   ),
                 ),
               ],

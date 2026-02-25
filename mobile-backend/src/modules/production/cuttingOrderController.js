@@ -357,6 +357,104 @@ const deleteCuttingOrder = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Get previous planning entries by planName and dates
+// @route   GET /api/production/cutting-orders/previous-entries
+const getPreviousPlanning = asyncHandler(async (req, res) => {
+    const { planName, startDate, endDate } = req.query;
+
+    if (!planName) {
+        res.status(400);
+        throw new Error('planName is required');
+    }
+
+    const query = {
+        planName: { $regex: new RegExp(`^${planName.trim()}$`, 'i') },
+    };
+
+    if (startDate && endDate) {
+        query.startDate = { $gte: new Date(startDate) };
+        query.endDate = { $lte: new Date(endDate) };
+    }
+
+    const orders = await CuttingOrder.find(query).sort({ createdAt: -1 });
+
+    // Aggregate entries to show a unified view of what's already planned
+    const aggregatedEntries = [];
+    orders.forEach(order => {
+        order.cuttingEntries.forEach(entry => {
+            const existingIdx = aggregatedEntries.findIndex(e => e.itemName === entry.itemName);
+            if (existingIdx > -1) {
+                // Merge size quantities
+                Object.keys(entry.sizeQuantities).forEach(size => {
+                    aggregatedEntries[existingIdx].sizeQuantities[size] = (aggregatedEntries[existingIdx].sizeQuantities[size] || 0) + (entry.sizeQuantities[size] || 0);
+                });
+                aggregatedEntries[existingIdx].totalDozens += (entry.totalDozens || 0);
+            } else {
+                aggregatedEntries.push({
+                    itemName: entry.itemName,
+                    sizeQuantities: JSON.parse(JSON.stringify(entry.sizeQuantities)),
+                    totalDozens: entry.totalDozens
+                });
+            }
+        });
+    });
+
+    res.json(aggregatedEntries);
+});
+
+// @desc    Get Cut Order Plan Report with Pending Dozen calculation
+// @route   GET /api/production/cutting-orders/report
+const getCuttingPlanReport = asyncHandler(async (req, res) => {
+    const { startDate, endDate, itemName, size } = req.query;
+
+    const query = {};
+    if (startDate || endDate) {
+        query.date = {};
+        if (startDate) query.date.$gte = new Date(startDate);
+        if (endDate) query.date.$lte = new Date(endDate);
+    }
+
+    const orders = await CuttingOrder.find(query).sort({ date: -1 });
+
+    const report = [];
+
+    orders.forEach(order => {
+        // First, handle the planned quantities from cuttingEntries
+        order.cuttingEntries.forEach(entry => {
+            if (itemName && entry.itemName.toLowerCase() !== itemName.toLowerCase()) return;
+
+            Object.keys(entry.sizeQuantities).forEach(sz => {
+                if (size && sz !== size) return;
+
+                const planned = entry.sizeQuantities[sz] || 0;
+                if (planned <= 0) return;
+
+                // Find matching allocations for this plan, item, and size
+                const allocated = order.lotAllocations
+                    .filter(alloc => alloc.itemName === entry.itemName && alloc.size === sz)
+                    .reduce((sum, alloc) => sum + (alloc.dozen || 0), 0);
+
+                report.push({
+                    planId: order.planId,
+                    planName: order.planName,
+                    planType: order.planType,
+                    date: order.date,
+                    itemName: entry.itemName,
+                    size: sz,
+                    planned,
+                    issued: allocated,
+                    pending: Math.max(0, planned - allocated)
+                });
+            });
+        });
+    });
+
+    // If size filter is applied but planned was 0, maybe there are only allocations?
+    // (Unlikely in this workflow but good for robustness)
+
+    res.json(report);
+});
+
 export {
     createCuttingOrder,
     getCuttingOrders,
@@ -365,4 +463,6 @@ export {
     getFifoAllocation,
     saveLotAllocation,
     getAllocationReport,
+    getPreviousPlanning,
+    getCuttingPlanReport,
 };

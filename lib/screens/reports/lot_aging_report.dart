@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 
 class LotAgingReportScreen extends StatefulWidget {
@@ -119,8 +120,8 @@ class _LotAgingReportScreenState extends State<LotAgingReportScreen> {
                       _buildDataRow(
                         LucideIcons.package,
                         'Rolls / Weight',
-                        '${item['rolls']} Rolls / '
-                            '${(item['weight'] as num).toStringAsFixed(2)} Kg',
+                        '${FormatUtils.formatQuantity(item['rolls'])} Rolls / '
+                            '${FormatUtils.formatWeight(item['weight'])} Kg',
                       ),
                     ],
                   ),

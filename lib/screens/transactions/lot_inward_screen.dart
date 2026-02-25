@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/mobile_api_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/utils/format_utils.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_dropdown_field.dart';
@@ -85,9 +88,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   List<String> _parties = [];
   List<String> _rackNames = [];
   List<String> _palletNos = [];
+  // Colours mapped from Item Group Master for the selected lot
+  List<String> _lotMappedColours = [];
   bool _isLoading = true;
   bool _isSaving = false;
   String? _userRole;
+
+  // Voice input
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  String? _listeningForRowId; // which row is currently being listened to
 
   @override
   void initState() {
@@ -95,6 +105,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _inTime = DateFormat('hh:mm a').format(DateTime.now());
     _loadUserRole();
     _loadMasterData();
+    _initSpeech();
 
     if (widget.editInward != null) {
       _populateEditData();
@@ -132,6 +143,74 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     final role = await StorageService().getRole();
     setState(() => _userRole = role);
     print('DEBUG: User Role loaded: $_userRole');
+  }
+
+  Future<void> _initSpeech() async {
+    await _speech.initialize(
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          if (mounted) setState(() => _isListening = false);
+        }
+      },
+      onError: (error) {
+        if (mounted) setState(() => _isListening = false);
+      },
+    );
+    if (mounted) setState(() {});
+  }
+
+  /// Starts voice recognition and writes the recognized number into row.recWtController
+  void _startVoiceInputForRow(InwardRow row) async {
+    if (_isListening) {
+      _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    // Check microphone permission explicitly
+    var status = await Permission.microphone.status;
+    if (!status.isGranted) {
+      status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        _showError('Microphone permission is required for voice input.');
+        return;
+      }
+    }
+
+    if (!_speech.isAvailable) {
+      _showError('Voice recognition not available on this device.');
+      return;
+    }
+    setState(() {
+      _isListening = true;
+      _listeningForRowId = row.id;
+    });
+    _speech.listen(
+      onResult: (result) {
+        if (result.finalResult) {
+          final words = result.recognizedWords.toLowerCase().replaceAll(
+            ',',
+            '.',
+          );
+          // Extract first number found in the spoken text
+          final regExp = RegExp(r'\d+\.?\d*');
+          final match = regExp.firstMatch(words);
+          if (match != null) {
+            final value = match.group(0)!;
+            setState(() {
+              row.recWtController.text = value;
+              row.recWeight = double.tryParse(value) ?? 0;
+              _updateRowMath(row);
+            });
+          }
+          setState(() => _isListening = false);
+        }
+      },
+      listenFor: const Duration(seconds: 10),
+      pauseFor: const Duration(seconds: 3),
+      partialResults: false,
+      localeId: 'en_US',
+    );
   }
 
   Future<void> _loadMasterData() async {
@@ -398,27 +477,25 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Future<void> _onLotNameChanged(String? val) async {
     setState(() {
       _selectedLotName = val;
-      _stickerData.clear(); // Ensure fresh start for storage details
+      _stickerData.clear();
       _completedStickerDias.clear();
+      _lotMappedColours = [];
     });
 
     if (val != null) {
-      // Trigger check for existing lot
       _checkExistingLot();
 
       final group = await _api.getItemGroupByName(val);
       setState(() {
         if (group != null) {
-          // Include all master colours + any specific lot colours
-          _colours = List<String>.from({
-            ..._masterColours,
-            ...List<String>.from(group['colours'] ?? []),
-          });
+          final groupColours = List<String>.from(group['colours'] ?? []);
+          _lotMappedColours = groupColours;
 
-          // Carry over GSM and Rate
+          // Merge: all master colours + any group-specific colours
+          _colours = List<String>.from({..._masterColours, ...groupColours});
+
           _gsmController.text = (group['gsm'] ?? '').toString();
 
-          // Only set rate if it's currently 0 or empty, allowing Party rate to take precedence if already set
           if (_rateController.text.isEmpty ||
               _rateController.text == "0.0" ||
               _rateController.text == "0") {
@@ -426,6 +503,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           }
         } else {
           _colours = List<String>.from(_masterColours);
+          _lotMappedColours = [];
         }
       });
     }
@@ -541,9 +619,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
         if (dia != null) sb.writeln("DIA: $dia");
         sb.writeln("Rolls: $recRoll");
-        sb.writeln(
-          "Received Weight: ${recWt is num ? recWt.toStringAsFixed(2) : recWt} Kg",
-        );
+        sb.writeln("Received Weight: ${FormatUtils.formatWeight(recWt)} Kg");
         sb.writeln("");
       }
 
@@ -557,7 +633,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       sb.writeln("-----------------------");
       sb.writeln("TOTAL SUMMARY");
       sb.writeln("Total Rolls: $totalRolls");
-      sb.writeln("Total Weight: ${totalWeight.toStringAsFixed(2)} Kg");
+      sb.writeln("Total Weight: ${FormatUtils.formatWeight(totalWeight)} Kg");
       sb.writeln("-----------------------");
       sb.writeln("");
 
@@ -622,8 +698,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       if ((storageTotal - recWt).abs() > 0.0001) {
         _showError(
           "Weight Mismatch for DIA $dia!\n\n"
-          "Total Rec. Wt (Page 1): ${recWt.toStringAsFixed(3)} Kg\n"
-          "Sum of Storage (Page 2): ${storageTotal.toStringAsFixed(3)} Kg\n\n"
+          "Total Rec. Wt (Page 1): ${FormatUtils.formatWeight(recWt)} Kg\n"
+          "Sum of Storage (Page 2): ${FormatUtils.formatWeight(storageTotal)} Kg\n\n"
           "Please correct the weights to match exactly.",
         );
         return;
@@ -1409,14 +1485,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         .where((d) => !_completedStickerDias.contains(d))
         .toList();
 
-    // If no pending, allow navigating to the first one for editing
     final nextDia = pendingDias.isNotEmpty
         ? pendingDias.first
         : diasWithRolls.first;
 
     setState(() {
       _selectedStickerDia = nextDia;
-      _stickerData.putIfAbsent(nextDia, () => StickerDiaData());
+      _stickerData.putIfAbsent(nextDia, () {
+        final diaData = StickerDiaData();
+        // Auto-populate colour rows from Item Group Master mapping
+        if (_lotMappedColours.isNotEmpty) {
+          diaData.rows = _lotMappedColours
+              .map((c) => StickerRow()..colour = c)
+              .toList();
+        }
+        return diaData;
+      });
       _currentPage = 1;
     });
   }
@@ -1853,10 +1937,38 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildTableInput(row.recWtController, (v) {
-                  row.recWeight = double.tryParse(v) ?? 0;
-                  _updateRowMath(row);
-                }, key: ValueKey('rec_${row.id}')),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTableInput(row.recWtController, (v) {
+                        row.recWeight = double.tryParse(v) ?? 0;
+                        _updateRowMath(row);
+                      }, key: ValueKey('rec_${row.id}')),
+                    ),
+                    // Voice input button
+                    GestureDetector(
+                      onTap: () => _startVoiceInputForRow(row),
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: (_isListening && _listeningForRowId == row.id)
+                              ? Colors.red.shade100
+                              : Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          (_isListening && _listeningForRowId == row.id)
+                              ? Icons.mic
+                              : Icons.mic_none,
+                          size: 16,
+                          color: (_isListening && _listeningForRowId == row.id)
+                              ? Colors.red
+                              : Colors.blue.shade400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 if (row.prevRecWt > 0)
                   Text(
                     '(Prev: ${row.prevRecWt.toStringAsFixed(1)})',
@@ -1948,7 +2060,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }) {
     return Container(
       width: width,
-      height: 48,
+      height: 60,
       decoration: BoxDecoration(
         border: Border(
           right: isLast
@@ -2713,16 +2825,17 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           .toList();
 
       if (remaining.isNotEmpty) {
-        // Move to next DIA
+        // Move to next DIA — auto-populate its colours if not yet done
         _selectedStickerDia = remaining.first;
-        // Ensure the sticker data structure exists for the new DIA
-        if (!_stickerData.containsKey(_selectedStickerDia)) {
-          _stickerData[_selectedStickerDia!] = StickerDiaData();
-        }
-        // Stay on sticker page (assuming logic elsewhere renders sticker page based on some state,
-        // usually _currentPage needs to be 1 for sticker page if checking screens, but based on code flow it seems we are already there.
-        // If `_buildStickerPage` is shown when `_currentPage == 1`.
-        // The previous code set `_currentPage = 0`, so I should only do that if NO remaining.
+        _stickerData.putIfAbsent(_selectedStickerDia!, () {
+          final diaData = StickerDiaData();
+          if (_lotMappedColours.isNotEmpty) {
+            diaData.rows = _lotMappedColours
+                .map((c) => StickerRow()..colour = c)
+                .toList();
+          }
+          return diaData;
+        });
       } else {
         _selectedStickerDia = null;
         _currentPage = 0; // Back to main page only if all done

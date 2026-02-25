@@ -53,5 +53,9 @@
 	<string>This app needs camera access to scan QR/Barcodes for inward stickers.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to photolibrary to pick signature images.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for voice input of weight values.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app uses speech recognition to allow you to speak weight values into the inward entry form.</string>
 </dict>
 </plist>

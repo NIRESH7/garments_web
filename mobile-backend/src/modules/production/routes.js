@@ -12,6 +12,8 @@ import {
     getFifoAllocation,
     saveLotAllocation,
     getAllocationReport,
+    getPreviousPlanning,
+    getCuttingPlanReport,
 } from './cuttingOrderController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -25,6 +27,9 @@ router
 router.route('/assignments/:id').delete(protect, deleteAssignment);
 
 router.get('/cutting-orders/fifo-allocation', protect, getFifoAllocation);
+
+router.get('/cutting-orders/previous-entries', protect, getPreviousPlanning);
+router.get('/cutting-orders/report', protect, getCuttingPlanReport);
 
 router
     .route('/cutting-orders')

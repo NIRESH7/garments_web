@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 import '../masters/masters_dashboard.dart';
 import '../transactions/lot_inward_screen.dart';
@@ -218,7 +219,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const LotRequirementAllocationScreen(),
+                    builder: (context) =>
+                        const LotRequirementAllocationScreen(),
                   ),
                 );
               },
@@ -251,7 +253,8 @@ class _DynamicDataHomeTab extends ConsumerStatefulWidget {
   const _DynamicDataHomeTab();
 
   @override
-  ConsumerState<_DynamicDataHomeTab> createState() => _DynamicDataHomeTabState();
+  ConsumerState<_DynamicDataHomeTab> createState() =>
+      _DynamicDataHomeTabState();
 }
 
 class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
@@ -434,7 +437,9 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
               ),
               child: CircleAvatar(
                 radius: 24,
-                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                backgroundColor: Theme.of(
+                  context,
+                ).primaryColor.withOpacity(0.1),
                 backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
                     ? NetworkImage(
                         '${ApiConstants.serverUrl}${_avatarUrl!.startsWith('/') ? '' : '/'}$_avatarUrl',
@@ -771,7 +776,7 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
                     ],
                   ),
                   Text(
-                    '${inward['total_weight']} Kg',
+                    '${FormatUtils.formatWeight(inward['total_weight'])} Kg',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: ColorPalette.success,
@@ -843,7 +848,7 @@ class _StockCard extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            '$weight Kg',
+            '${FormatUtils.formatWeight(weight)} Kg',
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -852,7 +857,7 @@ class _StockCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$rolls Rolls',
+            '${FormatUtils.formatQuantity(rolls)} Rolls',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,

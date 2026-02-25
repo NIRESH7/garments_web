@@ -44,7 +44,9 @@ class ApiConstants {
       '/production/cutting-orders/fifo-allocation';
   static const String allocateLots =
       '/production/cutting-orders'; // will append /:id/allocate
-  // allocationReport: append /:id/allocation-report
+  static const String previousPlanningEntries =
+      '/production/cutting-orders/previous-entries';
+  static const String cuttingPlanReport = '/production/cutting-orders/report';
 
   // User
   static const String profile = '/users/profile';

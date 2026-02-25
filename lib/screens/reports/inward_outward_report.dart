@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 
 class InwardOutwardReportScreen extends StatefulWidget {
@@ -132,11 +133,11 @@ class _InwardOutwardReportScreenState extends State<InwardOutwardReportScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          '$rolls Rolls',
+          '${FormatUtils.formatQuantity(rolls)} Rolls',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         Text(
-          '${(weight as num).toStringAsFixed(2)} Kg',
+          '${FormatUtils.formatWeight(weight)} Kg',
           style: const TextStyle(
             fontSize: 12,
             color: ColorPalette.textSecondary,
@@ -157,7 +158,7 @@ class _InwardOutwardReportScreenState extends State<InwardOutwardReportScreen> {
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
         ),
         Text(
-          '${diffWeight.toStringAsFixed(2)} Kg',
+          '${FormatUtils.formatWeight(diffWeight)} Kg',
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,

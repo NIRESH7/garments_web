@@ -116,7 +116,7 @@ const getHomeData = asyncHandler(async (req, res) => {
             recentInwards: recentInwardsRaw.map(i => ({
                 lot_number: i.lotNo,
                 from_party: i.lotName,
-                total_weight: i.diaEntries?.reduce((a, c) => a + (c.recWt || 0), 0) || 0,
+                total_weight: (i.diaEntries?.reduce((a, c) => a + (parseFloat(c.recWt) || 0), 0) || 0).toFixed(2),
                 created_at: i.inwardDate
             })),
             metrics: {

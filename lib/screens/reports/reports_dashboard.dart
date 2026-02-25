@@ -14,6 +14,7 @@ import 'shade_card_report_screen.dart';
 import 'rack_pallet_report_screen.dart';
 import 'lot_allocation_summary_report.dart';
 import 'task_progress_report.dart';
+import 'cut_order_plan_report_screen.dart';
 
 class ReportsDashboard extends StatelessWidget {
   const ReportsDashboard({super.key});
@@ -39,6 +40,19 @@ class ReportsDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _ReportCard(
+            title: 'Cut Order Plan Report',
+            subtitle: 'Planned vs Issued (Pending Dozen)',
+            icon: LucideIcons.scissors,
+            color: Colors.orange.shade800,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CutOrderPlanReportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _ReportCard(
             title: 'Daily Allocation Summary',
             subtitle: 'Day-by-day lot requirement report',
             icon: LucideIcons.calendarCheck,
@@ -58,9 +72,7 @@ class ReportsDashboard extends StatelessWidget {
             color: Colors.brown,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => RackPalletReportScreen(),
-              ),
+              MaterialPageRoute(builder: (context) => RackPalletReportScreen()),
             ),
           ),
           const SizedBox(height: 16),
@@ -116,7 +128,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-/*
+          /*
           _ReportCard(
             title: 'Stock Overview',
             subtitle: 'Lot name, rolls, and weights',

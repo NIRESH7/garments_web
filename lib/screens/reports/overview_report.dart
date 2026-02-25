@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 
 class OverviewReportScreen extends StatefulWidget {
@@ -86,7 +87,7 @@ class _OverviewReportScreenState extends State<OverviewReportScreen> {
           _SummaryStat(label: 'GRAND TOTAL ROLLS', value: '$_grandTotalRolls'),
           _SummaryStat(
             label: 'GRAND TOTAL WEIGHT',
-            value: '${_grandTotalWeight.toStringAsFixed(2)} Kg',
+            value: '${FormatUtils.formatWeight(_grandTotalWeight)} Kg',
           ),
         ],
       ),
@@ -143,11 +144,11 @@ class _OverviewReportScreenState extends State<OverviewReportScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${item['rolls'] ?? 0} Rolls',
+                '${FormatUtils.formatQuantity(item['rolls'])} Rolls',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               Text(
-                '${((item['weight'] ?? 0) as num).toStringAsFixed(2)} Kg',
+                '${FormatUtils.formatWeight(item['weight'])} Kg',
                 style: const TextStyle(
                   color: ColorPalette.success,
                   fontWeight: FontWeight.bold,

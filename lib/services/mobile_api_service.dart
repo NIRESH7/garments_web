@@ -784,11 +784,14 @@ class MobileApiService {
 
   Future<Map<String, dynamic>?> getItemGroupByName(String name) async {
     try {
-      final groups = await getItemGroups();
-      return groups.firstWhere(
-        (g) => g['groupName'] == name,
-        orElse: () => null,
+      final response = await _client.get(
+        '${ApiConstants.itemGroups}/by-name',
+        queryParameters: {'name': name},
       );
+      if (response.statusCode == 200 && response.data != null) {
+        return Map<String, dynamic>.from(response.data);
+      }
+      return null;
     } catch (e) {
       return null;
     }
@@ -1024,6 +1027,48 @@ class MobileApiService {
       return response.data;
     } catch (e) {
       return null;
+    }
+  }
+
+  Future<List<dynamic>> getPreviousPlanningEntries(
+    String planName, {
+    String? startDate,
+    String? endDate,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.previousPlanningEntries,
+        queryParameters: {
+          'planName': planName,
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getCuttingPlanReport({
+    String? startDate,
+    String? endDate,
+    String? itemName,
+    String? size,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.cuttingPlanReport,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (itemName != null) 'itemName': itemName,
+          if (size != null) 'size': size,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return [];
     }
   }
 

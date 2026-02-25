@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
+import '../../core/utils/format_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
@@ -320,7 +321,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           item['dia']?.toString() ?? '-',
           item['colour']?.toString() ?? '-', // New Column
           item['rolls']?.toString() ?? '0',
-          '${(item['weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+          '${FormatUtils.formatWeight(item['weight'])}',
           '$aging',
         ];
       }).toList(),
@@ -370,7 +371,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           v['lotNo'],
           v['lotName'],
           '${v['rolls']}',
-          '${v['weight'].toStringAsFixed(1)} Kg',
+          '${FormatUtils.formatWeight(v['weight'])} Kg',
           'Pending',
         ];
       }).toList(),
@@ -394,8 +395,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           inward['lotNo'] ?? '-',
           inward['lotName'] ?? '-',
           '${entry['recRoll'] ?? entry['roll']}',
-          '${weight.toStringAsFixed(1)}',
-          '${(weight * rate).toStringAsFixed(0)}',
+          '${FormatUtils.formatWeight(weight)}',
+          '${FormatUtils.formatCurrency(weight * rate)}',
         ]);
       }
     }
@@ -447,7 +448,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             (e.value['lots'] as Set).join(', '),
             e.key,
             '${e.value['rolls']}',
-            '${(e.value['weight'] as num).toStringAsFixed(1)}',
+            '${FormatUtils.formatWeight(e.value['weight'])}',
           ];
         }).toList(),
       );
@@ -480,7 +481,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           out['dia']?.toString() ?? '-',
           out['process'] ?? '-',
           '${items.length}',
-          weight.toStringAsFixed(1),
+          FormatUtils.formatWeight(weight),
         ];
       }).toList(),
     );
@@ -505,11 +506,11 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           item['lot_number'] ?? '-',
           item['lot_name'] ?? '-',
           '${item['rec_rolls'] ?? 0}',
-          '${(item['rec_weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+          '${FormatUtils.formatWeight(item['rec_weight'])}',
           '${item['deliv_rolls'] ?? 0}',
-          '${(item['deliv_weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+          '${FormatUtils.formatWeight(item['deliv_weight'])}',
           '${item['balance_rolls'] ?? 0}',
-          '${(item['balance_weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+          '${FormatUtils.formatWeight(item['balance_weight'])}',
           item['status'] ?? '-',
         ];
       }).toList(),

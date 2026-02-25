@@ -185,6 +185,25 @@ const getItemGroups = asyncHandler(async (req, res) => {
     res.json(itemGroups);
 });
 
+// @desc    Get item group by group name (for lot auto-fill)
+// @route   GET /api/master/item-groups/by-name?name=...
+// @access  Private
+const getItemGroupByGroupName = asyncHandler(async (req, res) => {
+    const { name } = req.query;
+    if (!name) {
+        res.status(400);
+        throw new Error('name query param is required');
+    }
+    const group = await ItemGroup.findOne({
+        groupName: { $regex: new RegExp(`^${name.trim()}$`, 'i') }
+    });
+    if (group) {
+        res.json(group);
+    } else {
+        res.status(404).json(null);
+    }
+});
+
 // --- LOT HANDLERS ---
 const createLot = asyncHandler(async (req, res) => {
     const { lotNumber, partyName, process, remarks } = req.body;
@@ -304,6 +323,7 @@ export {
     deleteParty,
     createItemGroup,
     getItemGroups,
+    getItemGroupByGroupName,
     updateItemGroup,
     deleteItemGroup,
     deleteCategoryValue,

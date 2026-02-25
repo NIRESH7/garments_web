@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 import 'item_assignment_screen.dart';
 
@@ -212,7 +213,7 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
                 ),
               ),
               Text(
-                '${item['dozenWeight']} Kg',
+                '${FormatUtils.formatWeight(item['dozenWeight'])} Kg',
                 style: const TextStyle(
                   color: ColorPalette.success,
                   fontWeight: FontWeight.bold,

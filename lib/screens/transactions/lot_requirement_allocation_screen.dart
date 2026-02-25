@@ -82,6 +82,7 @@ class _LotRequirementAllocationScreenState
   final _efficiencyCtrl = TextEditingController();
   final _wasteCtrl = TextEditingController();
   double _dozenWeight = 0;
+  double _pendingDozenForSelection = 0;
 
   // Current FIFO result
   List<Map<String, dynamic>> _currentSets = [];
@@ -253,7 +254,10 @@ class _LotRequirementAllocationScreenState
 
     double remaining = plannedDozen - allocatedInDb - allocatedInSession;
     if (remaining < 0) remaining = 0;
-    _dozenCtrl.text = remaining.toString();
+    setState(() {
+      _pendingDozenForSelection = remaining;
+      _dozenCtrl.text = remaining.toString();
+    });
   }
 
   void _fillFromAssignments() {
@@ -919,7 +923,17 @@ class _LotRequirementAllocationScreenState
                   child: TextFormField(
                     controller: _dozenCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Dozen'),
+                    decoration: InputDecoration(
+                      labelText: 'Dozen',
+                      suffixText: _pendingDozenForSelection > 0
+                          ? 'Pending: ${_pendingDozenForSelection.toStringAsFixed(1)}'
+                          : null,
+                      suffixStyle: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
