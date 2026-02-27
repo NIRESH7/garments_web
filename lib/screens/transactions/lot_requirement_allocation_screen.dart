@@ -87,7 +87,6 @@ class _LotRequirementAllocationScreenState
   // Current FIFO result
   List<Map<String, dynamic>> _currentSets = [];
   int _totalSets = 0;
-  double _remainingRolls = 0;
 
   // All entries recorded this session (per day)
   // Map<day, List<_DayEntry>>
@@ -109,8 +108,7 @@ class _LotRequirementAllocationScreenState
   int get _rollsRequired =>
       _fabricRequiredKg > 0 ? (_fabricRequiredKg / 20).ceil() : 0;
 
-  int get _setsRequired =>
-      _rollsRequired > 0 ? (_rollsRequired / 11).floor() : 0;
+  int get _setsRequired => (_rollsRequired / 11).round();
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
 
@@ -330,7 +328,6 @@ class _LotRequirementAllocationScreenState
             result['allocations'] ?? [],
           );
           _totalSets = (result['totalSets'] as num?)?.toInt() ?? 0;
-          _remainingRolls = (result['remainingRolls'] as num?)?.toDouble() ?? 0;
           if (result['success'] == false) {
             _showError(result['message'] ?? 'Insufficient stock');
           }
@@ -404,11 +401,71 @@ class _LotRequirementAllocationScreenState
       _wasteCtrl.clear();
       _dozenWeight = 0;
       _totalSets = 0;
-      _remainingRolls = 0;
     });
     _showSuccess(
       'Item added to $_selectedDay. Add another item or click Next Day.',
     );
+  }
+
+  List<Map<String, dynamic>> _getGroupedSets(List<Map<String, dynamic>> sets) {
+    if (sets.isEmpty) return [];
+    final Map<String, Map<String, dynamic>> grouped = {};
+    for (var s in sets) {
+      final setNo = (s['setNo'] as num?)?.toInt() ?? 0;
+      if (setNo == 0) continue;
+
+      final itemName = s['itemName']?.toString() ?? '';
+      final size = s['size']?.toString() ?? '';
+      final dia = s['dia']?.toString() ?? '';
+      final key = "${itemName}_${size}_${dia}_$setNo";
+
+      if (!grouped.containsKey(key)) {
+        grouped[key] = Map<String, dynamic>.from(s)
+          ..['lotNames'] = [s['lotName']?.toString() ?? '']
+          ..['lotNos'] = [s['lotNo']?.toString() ?? '']
+          ..['racks'] = [s['rackName']?.toString() ?? '']
+          ..['pallets'] = [s['palletNumber']?.toString() ?? ''];
+      } else {
+        final existing = grouped[key]!;
+        final lotName = s['lotName']?.toString() ?? '';
+        final lotNo = s['lotNo']?.toString() ?? '';
+        final rack = s['rackName']?.toString() ?? '';
+        final pallet = s['palletNumber']?.toString() ?? '';
+
+        if (!(existing['lotNames'] as List).contains(lotName)) {
+          (existing['lotNames'] as List).add(lotName);
+        }
+        if (!(existing['lotNos'] as List).contains(lotNo)) {
+          (existing['lotNos'] as List).add(lotNo);
+        }
+        if (!(existing['racks'] as List).contains(rack)) {
+          (existing['racks'] as List).add(rack);
+        }
+        if (!(existing['pallets'] as List).contains(pallet)) {
+          (existing['pallets'] as List).add(pallet);
+        }
+
+        existing['setWeight'] =
+            (existing['setWeight'] as num) + (s['setWeight'] as num);
+        existing['lotBalance'] = s['lotBalance']; // Keep latest
+      }
+    }
+
+    return grouped.values
+        .map(
+          (v) => Map<String, dynamic>.from(v)
+            ..['lotName'] = (v['lotNames'] as List)
+                .where((e) => e != "")
+                .join(', ')
+            ..['lotNo'] = (v['lotNos'] as List).where((e) => e != "").join(', ')
+            ..['rackName'] = (v['racks'] as List)
+                .where((e) => e != "")
+                .join(', ')
+            ..['palletNumber'] = (v['pallets'] as List)
+                .where((e) => e != "")
+                .join(', '),
+        )
+        .toList();
   }
 
   // ─── Move to next day ─────────────────────────────────────────────────────
@@ -683,9 +740,7 @@ class _LotRequirementAllocationScreenState
             _sectionHeader(
               _currentSets.isEmpty
                   ? 'FIFO ALLOCATIONS'
-                  : 'FIFO ALLOCATIONS — ${_currentSets.length} set rows'
-                        ' | $_totalSets full sets'
-                        '${_remainingRolls > 0 ? " + ${_remainingRolls.toStringAsFixed(1)} partial rolls" : ""}',
+                  : 'FIFO ALLOCATIONS — $_totalSets Sets Allocated',
               primary,
             ),
             _buildFifoTable(primary),
@@ -813,7 +868,7 @@ class _LotRequirementAllocationScreenState
           children: _currentDayEntries.asMap().entries.map((e) {
             final idx = e.key;
             final entry = e.value;
-            final setCount = entry.sets.length;
+
             return ListTile(
               dense: true,
               leading: CircleAvatar(
@@ -832,7 +887,7 @@ class _LotRequirementAllocationScreenState
                 ),
               ),
               subtitle: Text(
-                '${entry.dozen} doz | ${entry.neededWeight.toStringAsFixed(1)} kg | $setCount set rows',
+                '${entry.dozen} doz | ${entry.neededWeight.toStringAsFixed(1)} kg | ${_getGroupedSets(entry.sets).length} Sets',
                 style: const TextStyle(fontSize: 12),
               ),
               trailing: IconButton(
@@ -918,22 +973,30 @@ class _LotRequirementAllocationScreenState
             ),
             const SizedBox(height: 16),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: TextFormField(
-                    controller: _dozenCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Dozen',
-                      suffixText: _pendingDozenForSelection > 0
-                          ? 'Pending: ${_pendingDozenForSelection.toStringAsFixed(1)}'
-                          : null,
-                      suffixStyle: const TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        controller: _dozenCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Dozen'),
                       ),
-                    ),
+                      if (_pendingDozenForSelection > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, left: 4),
+                          child: Text(
+                            'Pending: ${_pendingDozenForSelection % 1 == 0 ? _pendingDozenForSelection.toInt() : _pendingDozenForSelection.toStringAsFixed(1)}',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -1004,17 +1067,16 @@ class _LotRequirementAllocationScreenState
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _calcChip('Sets Required', '~$_setsRequired Sets', Colors.teal),
+                _calcChip('Sets Required', '$_setsRequired Sets', Colors.teal),
                 _calcChip('1 Set', '= 11 Rolls', Colors.grey),
               ],
             ),
             if (_totalSets > 0) ...[
               const Divider(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _calcChip('FIFO Full Sets', '$_totalSets', Colors.green),
-                  _calcChip('Partial Rolls', '$_remainingRolls', Colors.orange),
+                  _calcChip('FIFO Sets Allocated', '$_totalSets', Colors.green),
                 ],
               ),
             ],
@@ -1162,7 +1224,7 @@ class _LotRequirementAllocationScreenState
                     ),
                   ),
                 ],
-                rows: _currentSets.asMap().entries.map((e) {
+                rows: _getGroupedSets(_currentSets).asMap().entries.map((e) {
                   final i = e.key;
                   final a = e.value;
                   final isEven = i % 2 == 0;
@@ -1584,60 +1646,68 @@ class _LotRequirementAllocationScreenState
             DataColumn(label: Text('Pallet')),
             DataColumn(label: Text('Set Wt.')),
           ],
-          rows: _reportRows.map((r) {
-            return DataRow(
-              cells: [
-                DataCell(Text(r['day']?.toString() ?? '-')),
-                DataCell(Text(r['itemName']?.toString() ?? '-')),
-                DataCell(Text(r['size']?.toString() ?? '-')),
-                DataCell(Text(r['dozen']?.toString() ?? '-')),
-                DataCell(
-                  Text(
-                    '${(r['neededWeight'] as num?)?.toStringAsFixed(1) ?? '-'} kg',
-                  ),
-                ),
-                DataCell(Text(r['lotName']?.toString() ?? '-')),
-                DataCell(Text(r['lotNo']?.toString() ?? '-')),
-                DataCell(
-                  Text(
-                    r['dia']?.toString() ?? '-',
-                    style: const TextStyle(color: Colors.blue),
-                  ),
-                ),
-                DataCell(
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.teal.withOpacity(0.4)),
-                    ),
-                    child: Text(
-                      'Set ${r['setNo']?.toString() ?? '-'}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal,
+          rows:
+              _getGroupedSets(
+                _reportRows
+                    .where((r) => r['setNo'] != null)
+                    .toList()
+                    .cast<Map<String, dynamic>>(),
+              ).map((r) {
+                return DataRow(
+                  cells: [
+                    DataCell(Text(r['day']?.toString() ?? '-')),
+                    DataCell(Text(r['itemName']?.toString() ?? '-')),
+                    DataCell(Text(r['size']?.toString() ?? '-')),
+                    DataCell(Text(r['dozen']?.toString() ?? '-')),
+                    DataCell(
+                      Text(
+                        '${(r['neededWeight'] as num?)?.toStringAsFixed(1) ?? '-'} kg',
                       ),
                     ),
-                  ),
-                ),
-                DataCell(Text(r['rackName']?.toString() ?? '-')),
-                DataCell(Text(r['palletNumber']?.toString() ?? '-')),
-                DataCell(
-                  Text(
-                    '${(r['setWeight'] as num?)?.toStringAsFixed(2) ?? '-'} kg',
-                    style: const TextStyle(
-                      color: Colors.deepPurple,
-                      fontWeight: FontWeight.w600,
+                    DataCell(Text(r['lotName']?.toString() ?? '-')),
+                    DataCell(Text(r['lotNo']?.toString() ?? '-')),
+                    DataCell(
+                      Text(
+                        r['dia']?.toString() ?? '-',
+                        style: const TextStyle(color: Colors.blue),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.teal.withOpacity(0.4),
+                          ),
+                        ),
+                        child: Text(
+                          'Set ${r['setNo']?.toString() ?? '-'}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal,
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataCell(Text(r['rackName']?.toString() ?? '-')),
+                    DataCell(Text(r['palletNumber']?.toString() ?? '-')),
+                    DataCell(
+                      Text(
+                        '${(r['setWeight'] as num?)?.toStringAsFixed(2) ?? '-'} kg',
+                        style: const TextStyle(
+                          color: Colors.deepPurple,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
         ),
       ),
     );

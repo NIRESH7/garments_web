@@ -103,14 +103,17 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight }) {
         remainingWeight -= allocatedWt;
     }
 
-    const totalSets = Math.floor(globalRollsCounted / ROLLS_PER_SET);
-    const remainingRolls = parseFloat((globalRollsCounted % ROLLS_PER_SET).toFixed(2));
+    const decimalSets = globalRollsCounted / ROLLS_PER_SET;
+    const roundedSets = Math.round(decimalSets);
+
+    // Filter granular setRows to include only rows up to roundedSets
+    const filteredRows = setRows.filter(r => r.setNo <= roundedSets);
 
     return {
-        setRows,
+        setRows: filteredRows,
         totalRolls: parseFloat(globalRollsCounted.toFixed(2)),
-        totalSets,
-        remainingRolls,
+        totalSets: roundedSets,
+        remainingRolls: 0,
         shortfall: remainingWeight,
     };
 }

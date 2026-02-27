@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -30,6 +29,8 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final stickers = _extractStickers();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inward Details'),
@@ -57,47 +58,61 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeaderCard(),
-            const SizedBox(height: 16),
-            _buildPartyCard(),
-            const SizedBox(height: 16),
-            _buildQualityCard(),
-            const SizedBox(height: 16),
-            _buildCheckCard(
-              title: 'GSM Check',
-              statusField: 'gsmStatus',
-              imageField: 'gsmImage',
+      body: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                _buildHeaderCard(),
+                const SizedBox(height: 16),
+                _buildPartyCard(),
+                const SizedBox(height: 16),
+                _buildQualityCard(),
+                const SizedBox(height: 16),
+                _buildCheckCard(
+                  title: 'GSM Check',
+                  statusField: 'gsmStatus',
+                  imageField: 'gsmImage',
+                ),
+                const SizedBox(height: 16),
+                _buildCheckCard(
+                  title: 'Shade Matching',
+                  statusField: 'shadeStatus',
+                  imageField: 'shadeImage',
+                ),
+                const SizedBox(height: 16),
+                _buildCheckCard(
+                  title: 'Washing Check',
+                  statusField: 'washingStatus',
+                  imageField: 'washingImage',
+                ),
+                const SizedBox(height: 16),
+                if (inward['complaintText'] != null &&
+                    inward['complaintText'].toString().isNotEmpty)
+                  _buildComplaintCard(),
+                const SizedBox(height: 16),
+                _buildDiaEntriesCard(),
+                const SizedBox(height: 16),
+                _buildSignaturesCard(),
+                const SizedBox(height: 16),
+                _buildStickerHeader(context, stickers),
+              ]),
             ),
-            const SizedBox(height: 16),
-            _buildCheckCard(
-              title: 'Shade Matching',
-              statusField: 'shadeStatus',
-              imageField: 'shadeImage',
+          ),
+          if (_showStickers && stickers.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) =>
+                      _buildStickerItem(context, stickers[index]),
+                  childCount: stickers.length,
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
-            _buildCheckCard(
-              title: 'Washing Check',
-              statusField: 'washingStatus',
-              imageField: 'washingImage',
-            ),
-            const SizedBox(height: 16),
-            if (inward['complaintText'] != null &&
-                inward['complaintText'].toString().isNotEmpty)
-              _buildComplaintCard(),
-            const SizedBox(height: 16),
-            _buildDiaEntriesCard(),
-            const SizedBox(height: 16),
-            _buildSignaturesCard(),
-            const SizedBox(height: 16),
-            _buildStickerPreviewsCard(context),
-            const SizedBox(height: 32),
-          ],
-        ),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        ],
       ),
     );
   }
@@ -679,10 +694,8 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
     }
   }
 
-  Widget _buildStickerPreviewsCard(BuildContext context) {
+  List<Map<String, dynamic>> _extractStickers() {
     final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
-
-    // Flatten sticker data
     final List<Map<String, dynamic>> stickers = [];
 
     for (var s in storageDetails) {
@@ -722,10 +735,14 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
         }
       }
     }
+    return stickers;
+  }
 
-    if (stickers.isEmpty) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildStickerHeader(
+    BuildContext context,
+    List<Map<String, dynamic>> stickers,
+  ) {
+    if (stickers.isEmpty) return const SizedBox.shrink();
 
     if (!_showStickers) {
       return Card(
@@ -741,8 +758,10 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
                   children: [
                     const Text(
                       'Sticker Previews',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Text(
                       '${stickers.length} stickers available',
@@ -758,185 +777,177 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Sticker Previews',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
+                const Text(
+                  'Sticker Previews',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.visibility_off, size: 16),
+                  label: const Text('Hide'),
+                  onPressed: () => setState(() => _showStickers = false),
+                ),
+              ],
+            ),
+            const Divider(),
+            Row(
+              children: [
+                Expanded(
+                  child: SwitchListTile(
+                    title: const Text(
+                      'Show QR Codes',
+                      style: TextStyle(fontSize: 14),
                     ),
-                    TextButton.icon(
-                      icon: const Icon(Icons.visibility_off, size: 16),
-                      label: const Text('Hide'),
-                      onPressed: () => setState(() => _showStickers = false),
+                    subtitle: const Text(
+                      'Turn on to see scannable tags',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: _showAllQRs,
+                    dense: true,
+                    onChanged: (val) => setState(() => _showAllQRs = val),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.print, color: Colors.blue),
+                      tooltip: 'Print All Stickers',
+                      onPressed: () => _printStickersAsPdf(context, stickers),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.share, color: Colors.blue),
+                      tooltip: 'Share All Stickers',
+                      onPressed: () => _shareStickersAsPdf(context, stickers),
                     ),
                   ],
                 ),
-                const Divider(),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SwitchListTile(
-                        title: const Text(
-                          'Show QR Codes',
-                          style: TextStyle(fontSize: 14),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickerItem(BuildContext context, Map<String, dynamic> item) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black, width: 2),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildStickerRow('LOT NO', item['lotNo']),
+              _buildStickerRow('Lot Name', item['lotName']),
+              _buildStickerRow('Dia', item['dia']),
+              _buildStickerRow('Colour', item['colour']),
+              _buildStickerRow('Set No', '#${item['setNo']}'),
+              _buildStickerRow('Roll Wt', '${item['weight']} kg'),
+              _buildStickerRow('Date', item['date']),
+              const SizedBox(height: 12),
+              if (_showAllQRs)
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.black),
                         ),
-                        subtitle: const Text(
-                          'Turn on to see scannable tags',
-                          style: TextStyle(fontSize: 12),
+                        child: QrImageView(
+                          data:
+                              'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                          version: QrVersions.auto,
+                          size: 100.0,
                         ),
-                        value: _showAllQRs,
-                        dense: true,
-                        onChanged: (val) => setState(() => _showAllQRs = val),
                       ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'SCAN FOR AUTH',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
                     ),
-                    Row(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.print, color: Colors.blue),
-                          tooltip: 'Print All Stickers',
-                          onPressed: () =>
-                              _printStickersAsPdf(context, stickers),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.share, color: Colors.blue),
-                          tooltip: 'Share All Stickers',
-                          onPressed: () =>
-                              _shareStickersAsPdf(context, stickers),
+                        Icon(Icons.qr_code, color: Colors.grey, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'QR Code Hidden',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.print, color: Colors.blue),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Print Sticker',
+                  onPressed: () {
+                    _printStickersAsPdf(context, [item]);
+                  },
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.share, color: Colors.blue),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Share Sticker PDF',
+                  onPressed: () {
+                    _shareStickersAsPdf(context, [item]);
+                  },
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        ...stickers.map((item) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black, width: 2),
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStickerRow('LOT NO', item['lotNo']),
-                    _buildStickerRow('Lot Name', item['lotName']),
-                    _buildStickerRow('Dia', item['dia']),
-                    _buildStickerRow('Colour', item['colour']),
-                    _buildStickerRow('Set No', '#${item['setNo']}'),
-                    _buildStickerRow('Roll Wt', '${item['weight']} kg'),
-                    _buildStickerRow('Date', item['date']),
-                    const SizedBox(height: 12),
-                    if (_showAllQRs)
-                      Center(
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.black),
-                              ),
-                              child: QrImageView(
-                                data:
-                                    'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
-                                version: QrVersions.auto,
-                                size: 100.0,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'SCAN FOR AUTH',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.qr_code, color: Colors.grey, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'QR Code Hidden',
-                                style:
-                                    TextStyle(color: Colors.grey, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.print, color: Colors.blue),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Print Sticker',
-                        onPressed: () {
-                          _printStickersAsPdf(context, [item]);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.share, color: Colors.blue),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Share Sticker PDF',
-                        onPressed: () {
-                          _shareStickersAsPdf(context, [item]);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
+        ],
+      ),
     );
   }
 
