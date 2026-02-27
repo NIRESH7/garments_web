@@ -196,15 +196,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
     _speech.listen(
       onResult: (result) {
-        final words = result.recognizedWords.toLowerCase()
+        final words = result.recognizedWords
+            .toLowerCase()
             .replaceAll(',', '.')
             .replaceAll('point', '.')
             .replaceAll('dot', '.')
             .replaceAll('decimal', '.');
-            
+
         final regExp = RegExp(r'\d+\.?\d*');
         final match = regExp.firstMatch(words);
-        
+
         if (match != null) {
           final value = match.group(0)!;
           setState(() {
@@ -213,7 +214,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             _updateRowMath(row);
           });
         }
-        
+
         if (result.finalResult) {
           setState(() => _isListening = false);
         }
@@ -225,7 +226,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  void _startVoiceInputForSetWeight(StickerRow row, int rowIdx, int setIdx) async {
+  void _startVoiceInputForSetWeight(
+    StickerRow row,
+    int rowIdx,
+    int setIdx,
+  ) async {
     if (_isListening) {
       _speech.stop();
       setState(() => _isListening = false);
@@ -255,15 +260,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     _speech.listen(
       onResult: (result) {
-        final words = result.recognizedWords.toLowerCase()
+        final words = result.recognizedWords
+            .toLowerCase()
             .replaceAll(',', '.')
             .replaceAll('point', '.')
             .replaceAll('dot', '.')
             .replaceAll('decimal', '.');
-            
+
         final regExp = RegExp(r'\d+\.?\d*');
         final match = regExp.firstMatch(words);
-        
+
         if (match != null) {
           final value = match.group(0)!;
           setState(() {
@@ -273,7 +279,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             }
           });
         }
-        
+
         if (result.finalResult) {
           setState(() => _isListening = false);
         }
@@ -447,11 +453,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               String imgPath = v['photo'].toString();
               // Normalize image path: if it's a server path (starts with uploads or /uploads), prepend server URL
               if (!imgPath.startsWith('http')) {
-                if (imgPath.startsWith('/uploads')) {
-                  imgPath = '${ApiConstants.serverUrl}$imgPath';
-                } else if (imgPath.startsWith('uploads')) {
-                  imgPath = '${ApiConstants.serverUrl}/$imgPath';
-                }
+                imgPath = ApiConstants.getImageUrl(imgPath);
               }
               _colourImages[valStr] = imgPath;
               print('DEBUG: Image found for $valStr: $imgPath');
@@ -2428,8 +2430,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         child: _buildTableInputText(
                           r.controllers[i],
                           (v) => setState(() => r.setWeights[i] = v),
-                          onMicTap: () => _startVoiceInputForSetWeight(r, idx, i),
-                          isListening: _isListening && _listeningForStickerRowIdx == idx && _listeningForSetIdx == i,
+                          onMicTap: () =>
+                              _startVoiceInputForSetWeight(r, idx, i),
+                          isListening:
+                              _isListening &&
+                              _listeningForStickerRowIdx == idx &&
+                              _listeningForSetIdx == i,
                         ),
                       );
                     }),
@@ -2510,20 +2516,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         hintText: '-',
         border: InputBorder.none,
         isDense: true,
-        suffixIcon:
-            onMicTap != null
-                ? IconButton(
-                  icon: Icon(
-                    Icons.mic,
-                    size: 16,
-                    color: isListening ? Colors.red : Colors.blue,
-                  ),
-                  onPressed: onMicTap,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  splashRadius: 16,
-                )
-                : null,
+        suffixIcon: onMicTap != null
+            ? IconButton(
+                icon: Icon(
+                  Icons.mic,
+                  size: 16,
+                  color: isListening ? Colors.red : Colors.blue,
+                ),
+                onPressed: onMicTap,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: 16,
+              )
+            : null,
       ),
       onChanged: chg,
     );

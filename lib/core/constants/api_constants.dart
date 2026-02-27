@@ -3,6 +3,8 @@ class ApiConstants {
   // static const String serverUrl = 'http://192.168.29.179:5001';
   static const String baseUrl = 'http://13.220.94.83:5001/api';
   static const String serverUrl = 'http://13.220.94.83:5001';
+  static const String s3BaseUrl =
+      'https://garments-app-storage.s3.us-east-1.amazonaws.com';
 
   static const String login = '/auth/login';
   static const String register = '/auth/register';
@@ -67,11 +69,19 @@ class ApiConstants {
   static String getImageUrl(dynamic path) {
     if (path == null || path.toString().isEmpty) return '';
     String imageUrl = path.toString();
+
     // If it's a full S3 URL or already absolute, return as is
     if (imageUrl.startsWith('http')) return imageUrl;
 
-    // Handle relative local paths: remove leading slash and prepend serverUrl
+    // Handle relative paths: remove leading slash
     imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-    return '$serverUrl/$imageUrl';
+
+    // If the path starts with 'uploads/', use S3 base URL as requested
+    if (imageUrl.startsWith('uploads/')) {
+      return '${ApiConstants.s3BaseUrl}/$imageUrl';
+    }
+
+    // Fallback to serverUrl for other relative paths
+    return '${ApiConstants.serverUrl}/$imageUrl';
   }
 }

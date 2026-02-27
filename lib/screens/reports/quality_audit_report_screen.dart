@@ -176,7 +176,8 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  (item['complaintText'] != null && item['complaintText'].toString().isNotEmpty)
+                  (item['complaintText'] != null &&
+                          item['complaintText'].toString().isNotEmpty)
                       ? item['complaintText']
                       : 'None',
                   style: const TextStyle(color: Colors.red),
@@ -224,7 +225,7 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
                 ),
 
                 _buildResolutionDetails(item),
-                
+
                 const Divider(height: 32),
 
                 // Signatures
@@ -264,7 +265,7 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
-                '${ApiConstants.serverUrl}/$path',
+                ApiConstants.getImageUrl(path),
                 fit: BoxFit.cover,
                 errorBuilder: (ctx, err, stack) =>
                     const Center(child: Icon(Icons.broken_image, size: 20)),
@@ -302,7 +303,7 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
           ),
           child: hasSig
               ? Image.network(
-                  '${ApiConstants.serverUrl}/$path',
+                  ApiConstants.getImageUrl(path),
                   fit: BoxFit.contain,
                 )
               : const Center(
@@ -326,15 +327,19 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
     final resolution = item['complaintResolution'] ?? 'Pending';
     final reply = item['complaintReply'] ?? 'No reply recorded.';
     final arrestLot = item['complaintArrestLotNo'];
-    
+
     String findDateStr = 'N/A';
     if (item['complaintFindDate'] != null) {
-      findDateStr = DateFormat('dd-MM-yyyy').format(DateTime.parse(item['complaintFindDate']));
+      findDateStr = DateFormat(
+        'dd-MM-yyyy',
+      ).format(DateTime.parse(item['complaintFindDate']));
     }
-    
+
     String completionDateStr = 'N/A';
     if (item['complaintCompletionDate'] != null) {
-      completionDateStr = DateFormat('dd-MM-yyyy').format(DateTime.parse(item['complaintCompletionDate']));
+      completionDateStr = DateFormat(
+        'dd-MM-yyyy',
+      ).format(DateTime.parse(item['complaintCompletionDate']));
     }
 
     return Container(
@@ -369,8 +374,13 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
           _buildDetailRow('Completion Date:', completionDateStr),
           if (arrestLot != null && arrestLot.toString().isNotEmpty)
             _buildDetailRow('Complaint Arrest Lot No:', arrestLot),
-            
-          _buildDetailRow('Complaint Cleared?', (item['isComplaintCleared'] == true) ? 'Yes - Resolved' : 'No - Pending'),
+
+          _buildDetailRow(
+            'Complaint Cleared?',
+            (item['isComplaintCleared'] == true)
+                ? 'Yes - Resolved'
+                : 'No - Pending',
+          ),
         ],
       ),
     );
@@ -386,7 +396,11 @@ class _QualityAuditReportScreenState extends State<QualityAuditReportScreen> {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black87),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Colors.black87,
+              ),
             ),
           ),
           Expanded(

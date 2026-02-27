@@ -171,9 +171,7 @@ class _ShadeCardReportScreenState extends State<ShadeCardReportScreen> {
                 borderRadius: BorderRadius.circular(12),
                 image: photo != null
                     ? DecorationImage(
-                        image: NetworkImage(
-                          '${ApiConstants.serverUrl}${photo.startsWith('/') ? photo : '/$photo'}',
-                        ),
+                        image: NetworkImage(ApiConstants.getImageUrl(photo)),
                         fit: BoxFit.cover,
                       )
                     : null,

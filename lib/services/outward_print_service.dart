@@ -18,11 +18,7 @@ class OutwardPrintService {
   Future<pw.MemoryImage?> _loadNetImage(String? path) async {
     if (path == null || path.isEmpty) return null;
     try {
-      String url = path;
-      if (!url.startsWith('http')) {
-        url = url.startsWith('/') ? url.substring(1) : url;
-        url = '${ApiConstants.serverUrl}/$url';
-      }
+      String url = ApiConstants.getImageUrl(path);
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         return pw.MemoryImage(response.bodyBytes);

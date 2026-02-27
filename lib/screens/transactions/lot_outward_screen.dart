@@ -188,11 +188,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               if (v['photo'] != null && v['photo'].toString().isNotEmpty) {
                 String imgPath = v['photo'].toString();
                 if (!imgPath.startsWith('http')) {
-                  if (imgPath.startsWith('/uploads')) {
-                    imgPath = '${ApiConstants.serverUrl}$imgPath';
-                  } else if (imgPath.startsWith('uploads')) {
-                    imgPath = '${ApiConstants.serverUrl}/$imgPath';
-                  }
+                  imgPath = ApiConstants.getImageUrl(imgPath);
                 }
                 _colourImages[val] = imgPath;
               }
@@ -350,7 +346,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(11),
                     child: Image.network(
-                      '${ApiConstants.serverUrl}$_editInchargeSigUrl',
+                      ApiConstants.getImageUrl(_editInchargeSigUrl),
                       fit: BoxFit.contain,
                     ),
                   )
@@ -358,7 +354,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(11),
                     child: Image.network(
-                      '${ApiConstants.serverUrl}$_editAuthorizedSigUrl',
+                      ApiConstants.getImageUrl(_editAuthorizedSigUrl),
                       fit: BoxFit.contain,
                     ),
                   )

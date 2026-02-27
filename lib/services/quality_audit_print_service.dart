@@ -7,7 +7,8 @@ import '../core/constants/api_constants.dart';
 import 'package:http/http.dart' as http;
 
 class QualityAuditPrintService {
-  static final QualityAuditPrintService _instance = QualityAuditPrintService._internal();
+  static final QualityAuditPrintService _instance =
+      QualityAuditPrintService._internal();
   factory QualityAuditPrintService() => _instance;
   QualityAuditPrintService._internal();
 
@@ -20,7 +21,7 @@ class QualityAuditPrintService {
     Future<pw.MemoryImage?> _getMemoryImage(String? path) async {
       if (path == null || path.isEmpty) return null;
       try {
-        final url = '${ApiConstants.serverUrl}/${path.startsWith('/') ? path.substring(1) : path}';
+        final url = ApiConstants.getImageUrl(path);
         final response = await http.get(Uri.parse(url));
         if (response.statusCode == 200) {
           return pw.MemoryImage(response.bodyBytes);
@@ -33,12 +34,12 @@ class QualityAuditPrintService {
 
     for (var item in reports) {
       final isCleared = item['isComplaintCleared'] ?? false;
-      
+
       // Fetch signatures and images
       final inchargeSig = await _getMemoryImage(item['lotInchargeSignature']);
       final authSig = await _getMemoryImage(item['authorizedSignature']);
       final mdSig = await _getMemoryImage(item['mdSignature']);
-      
+
       final qualityImg = await _getMemoryImage(item['qualityImage']);
       final complaintImg = await _getMemoryImage(item['complaintImage']);
 
@@ -50,7 +51,10 @@ class QualityAuditPrintService {
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                PrintUtils.buildCompanyHeader(pw.Font.helveticaBold(), pw.Font.helvetica()),
+                PrintUtils.buildCompanyHeader(
+                  pw.Font.helveticaBold(),
+                  pw.Font.helvetica(),
+                ),
                 pw.SizedBox(height: 10),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -63,7 +67,10 @@ class QualityAuditPrintService {
                         color: PdfColors.red900,
                       ),
                     ),
-                    pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 10)),
+                    pw.Text(
+                      'Date: $dateStr',
+                      style: const pw.TextStyle(fontSize: 10),
+                    ),
                   ],
                 ),
                 pw.Divider(thickness: 0.5),
@@ -75,7 +82,9 @@ class QualityAuditPrintService {
                   decoration: pw.BoxDecoration(
                     color: isCleared ? PdfColors.green50 : PdfColors.red50,
                     borderRadius: pw.BorderRadius.circular(8),
-                    border: pw.Border.all(color: isCleared ? PdfColors.green200 : PdfColors.red200),
+                    border: pw.Border.all(
+                      color: isCleared ? PdfColors.green200 : PdfColors.red200,
+                    ),
                   ),
                   child: pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -85,9 +94,15 @@ class QualityAuditPrintService {
                         children: [
                           pw.Text(
                             'LOT: ${item['lotNo']} - ${item['lotName']}',
-                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
+                            style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
-                          pw.Text('Party: ${item['fromParty']}', style: const pw.TextStyle(fontSize: 12)),
+                          pw.Text(
+                            'Party: ${item['fromParty']}',
+                            style: const pw.TextStyle(fontSize: 12),
+                          ),
                         ],
                       ),
                       pw.Text(
@@ -103,13 +118,22 @@ class QualityAuditPrintService {
                 pw.SizedBox(height: 15),
 
                 // Complaint Section
-                pw.Text('Complaint Details:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text(item['complaintText'] ?? 'None', style: const pw.TextStyle(color: PdfColors.red)),
+                pw.Text(
+                  'Complaint Details:',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(
+                  item['complaintText'] ?? 'None',
+                  style: const pw.TextStyle(color: PdfColors.red),
+                ),
                 pw.SizedBox(height: 10),
 
                 // Resolution if any
                 if (item['complaintResolution'] != null) ...[
-                  pw.Text('Resolution & Reply:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  pw.Text(
+                    'Resolution & Reply:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
                   pw.Text(item['complaintReply'] ?? 'No reply recorded.'),
                   pw.Text('Action: ${item['complaintResolution']}'),
                   pw.SizedBox(height: 10),
@@ -126,7 +150,10 @@ class QualityAuditPrintService {
                         child: pw.Column(
                           children: [
                             pw.Image(qualityImg, fit: pw.BoxFit.cover),
-                            pw.Text('Quality Image', style: const pw.TextStyle(fontSize: 8)),
+                            pw.Text(
+                              'Quality Image',
+                              style: const pw.TextStyle(fontSize: 8),
+                            ),
                           ],
                         ),
                       ),
@@ -137,7 +164,10 @@ class QualityAuditPrintService {
                         child: pw.Column(
                           children: [
                             pw.Image(complaintImg, fit: pw.BoxFit.cover),
-                            pw.Text('Complaint Image', style: const pw.TextStyle(fontSize: 8)),
+                            pw.Text(
+                              'Complaint Image',
+                              style: const pw.TextStyle(fontSize: 8),
+                            ),
                           ],
                         ),
                       ),

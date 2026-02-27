@@ -382,7 +382,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(4),
                                       child: Image.network(
-                                        '${ApiConstants.baseUrl.replaceAll('/api', '')}$photoUrl',
+                                        ApiConstants.getImageUrl(photoUrl),
                                         width: 40,
                                         height: 40,
                                         fit: BoxFit.cover,
