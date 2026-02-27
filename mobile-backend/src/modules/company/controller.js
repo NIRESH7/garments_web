@@ -1,5 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Company from './model.js';
+import { getFilePath } from '../../utils/fileUtils.js';
 
 // @desc    Get company info
 // @route   GET /api/company
@@ -23,7 +24,7 @@ const updateCompany = asyncHandler(async (req, res) => {
 
     let logo = req.body.logo;
     if (req.file) {
-        logo = `/${req.file.path.replace(/\\/g, '/')}`;
+        logo = getFilePath(req.file);
     }
 
     if (company) {

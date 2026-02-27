@@ -77,7 +77,9 @@ class _InwardListScreenState extends State<InwardListScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 image: DecorationImage(
                                   image: NetworkImage(
-                                    '${ApiConstants.serverUrl}${item['qualityImage']}',
+                                    ApiConstants.getImageUrl(
+                                      item['qualityImage'],
+                                    ),
                                   ),
                                   fit: BoxFit.cover,
                                 ),

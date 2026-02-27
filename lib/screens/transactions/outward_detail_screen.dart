@@ -48,14 +48,6 @@ class OutwardDetailScreen extends StatelessWidget {
     );
   }
 
-  String _getImageUrl(dynamic path) {
-    if (path == null || path.toString().isEmpty) return '';
-    String imageUrl = path.toString();
-    if (imageUrl.startsWith('http')) return imageUrl;
-    imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-    return '${ApiConstants.serverUrl}/$imageUrl';
-  }
-
   Future<void> _shareDetails(BuildContext context) async {
     try {
       final sb = StringBuffer();
@@ -214,7 +206,7 @@ class OutwardDetailScreen extends StatelessWidget {
           ),
           child: hasImage
               ? Image.network(
-                  _getImageUrl(imagePath),
+                  ApiConstants.getImageUrl(imagePath),
                   fit: BoxFit.contain,
                   errorBuilder: (ctx, err, stack) => const Icon(
                     Icons.broken_image,

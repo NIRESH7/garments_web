@@ -2,6 +2,7 @@ import asyncHandler from 'express-async-handler';
 import Inward from './inwardModel.js';
 import Outward from './outwardModel.js';
 import Notification from '../notification/model.js';
+import { getFilePath } from '../../utils/fileUtils.js';
 
 // --- INWARD HANDLERS ---
 
@@ -45,13 +46,13 @@ const createInward = asyncHandler(async (req, res) => {
 
         if (req.files) {
             if (req.files.lotInchargeSignature) {
-                finalLotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
+                finalLotInchargeSignature = getFilePath(req.files.lotInchargeSignature[0]);
             }
             if (req.files.authorizedSignature) {
-                finalAuthorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
+                finalAuthorizedSignature = getFilePath(req.files.authorizedSignature[0]);
             }
             if (req.files.mdSignature) {
-                finalMdSignature = `/${req.files.mdSignature[0].path.replace(/\\/g, '/')}`;
+                finalMdSignature = getFilePath(req.files.mdSignature[0]);
             }
         }
 
@@ -547,11 +548,11 @@ const createOutward = asyncHandler(async (req, res) => {
 
     if (req.files) {
         if (req.files.lotInchargeSignature) {
-            finalLotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
+            finalLotInchargeSignature = getFilePath(req.files.lotInchargeSignature[0]);
             lotInchargeSignTime = lotInchargeSignTime || new Date();
         }
         if (req.files.authorizedSignature) {
-            finalAuthorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
+            finalAuthorizedSignature = getFilePath(req.files.authorizedSignature[0]);
             authorizedSignTime = authorizedSignTime || new Date();
         }
     }
@@ -696,11 +697,11 @@ const updateOutward = asyncHandler(async (req, res) => {
 
         if (req.files) {
             if (req.files.lotInchargeSignature) {
-                outward.lotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
+                outward.lotInchargeSignature = getFilePath(req.files.lotInchargeSignature[0]);
                 outward.lotInchargeSignTime = new Date();
             }
             if (req.files.authorizedSignature) {
-                outward.authorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
+                outward.authorizedSignature = getFilePath(req.files.authorizedSignature[0]);
                 outward.authorizedSignTime = new Date();
             }
         }
@@ -1115,13 +1116,13 @@ const updateInward = asyncHandler(async (req, res) => {
 
         if (req.files) {
             if (req.files.lotInchargeSignature) {
-                inward.lotInchargeSignature = `/${req.files.lotInchargeSignature[0].path.replace(/\\/g, '/')}`;
+                inward.lotInchargeSignature = getFilePath(req.files.lotInchargeSignature[0]);
             }
             if (req.files.authorizedSignature) {
-                inward.authorizedSignature = `/${req.files.authorizedSignature[0].path.replace(/\\/g, '/')}`;
+                inward.authorizedSignature = getFilePath(req.files.authorizedSignature[0]);
             }
             if (req.files.mdSignature) {
-                inward.mdSignature = `/${req.files.mdSignature[0].path.replace(/\\/g, '/')}`;
+                inward.mdSignature = getFilePath(req.files.mdSignature[0]);
             }
         }
 

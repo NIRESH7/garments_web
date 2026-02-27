@@ -117,17 +117,6 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
     );
   }
 
-  String _getImageUrl(dynamic path) {
-    if (path == null || path.toString().isEmpty) return '';
-    String imageUrl = path.toString();
-    if (imageUrl.startsWith('http')) return imageUrl;
-
-    // Remove any redundant leading slashes to avoid // in URL
-    imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-
-    return '${ApiConstants.serverUrl}/$imageUrl';
-  }
-
   Future<void> _shareDetails(BuildContext context) async {
     try {
       final service = InwardPrintService();
@@ -237,7 +226,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  _getImageUrl(image),
+                  ApiConstants.getImageUrl(image),
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -293,7 +282,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  _getImageUrl(inward['complaintImage']),
+                  ApiConstants.getImageUrl(inward['complaintImage']),
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -598,7 +587,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
           ),
           child: hasImage
               ? Image.network(
-                  _getImageUrl(imagePath),
+                  ApiConstants.getImageUrl(imagePath),
                   fit: BoxFit.contain,
                   errorBuilder: (ctx, err, stack) => const Icon(
                     Icons.broken_image,
