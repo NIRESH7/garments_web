@@ -1565,103 +1565,175 @@ class _LotRequirementAllocationScreenState
     );
   }
 
-  // ─── Report list view (avoids nested SingleChildScrollView assertion) ─────
-  // Uses ListView.builder for vertical scroll + SingleChildScrollView (horizontal)
-  // wrapping a fixed-width Row for each data row. No nesting two scrollables.
+  // ─── Report list view — DAY-GROUPED format matching the layout image ────────
   Widget _buildReportListView(Color primary) {
-    // Native DataTable implementation! This entirely sidesteps manually
-    // managing constraints, widths, Containers, Rows, and rendering bounds,
-    // leaning completely on Flutter's heavily-tested intrinsic table layout.
+    // ── 1. Group report rows by day ──────────────────────────────────────────
+    final Map<String, List<Map<String, dynamic>>> byDay = {};
+    for (final row in _reportRows) {
+      final day = row['day']?.toString() ?? 'Unknown';
+      byDay.putIfAbsent(day, () => []).add(row);
+    }
+
+    // Preserve weekday order
+    final orderedDays = _kWeekDays.where(byDay.containsKey).toList();
+    for (final d in byDay.keys) {
+      if (!orderedDays.contains(d)) orderedDays.add(d);
+    }
+
+    // ── 2. Within each day, group by (itemName + size + lotNo) ──────────────
+    Map<String, Map<String, dynamic>> groupByLot(List<Map<String, dynamic>> rows) {
+      final Map<String, Map<String, dynamic>> g = {};
+      for (final r in rows) {
+        final key = '${r['itemName']}_${r['size']}_${r['lotNo']}_${r['dia']}';
+        if (!g.containsKey(key)) {
+          g[key] = {
+            'itemName'   : r['itemName'],
+            'size'       : r['size'],
+            'dozen'      : r['dozen'],
+            'neededWeight': r['neededWeight'],
+            'lotName'    : r['lotName'],
+            'lotNo'      : r['lotNo'],
+            'dia'        : r['dia'],
+            'racks'      : <String>{},
+            'pallets'    : <String>{},
+            'setNos'     : <int>[],
+            'totalWeight': 0.0,
+          };
+        }
+        final entry = g[key]!;
+        final setNo  = (r['setNo'] as num?)?.toInt() ?? 0;
+        final wt     = (r['setWeight'] as num?)?.toDouble() ?? 0.0;
+        final rack   = r['rackName']?.toString() ?? '';
+        final pallet = r['palletNumber']?.toString() ?? '';
+        if (setNo > 0 && !(entry['setNos'] as List<int>).contains(setNo)) {
+          (entry['setNos'] as List<int>).add(setNo);
+        }
+        if (rack.isNotEmpty)   (entry['racks'] as Set<String>).add(rack);
+        if (pallet.isNotEmpty) (entry['pallets'] as Set<String>).add(pallet);
+        entry['totalWeight'] = (entry['totalWeight'] as double) + wt;
+      }
+      return g;
+    }
+
+    // ── 3. Helper: "1 TO 3" or "5" ──────────────────────────────────────────
+    String setRange(List<int> nos) {
+      if (nos.isEmpty) return '-';
+      nos.sort();
+      return nos.length == 1 ? '${nos.first}' : '${nos.first} TO ${nos.last}';
+    }
+
+    // ── 4. Column header style ───────────────────────────────────────────────
+    const hStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 11);
+    const dStyle = TextStyle(fontSize: 11);
+
+    final cols = <DataColumn>[
+      const DataColumn(label: Text('ITEM NAME', style: hStyle)),
+      const DataColumn(label: Text('SIZE',      style: hStyle)),
+      const DataColumn(label: Text('DOZEN',     style: hStyle)),
+      const DataColumn(label: Text('NEED WT',   style: hStyle)),
+      const DataColumn(label: Text('LOT NAME',  style: hStyle)),
+      const DataColumn(label: Text('LOT NO',    style: hStyle)),
+      const DataColumn(label: Text('DIA',       style: hStyle)),
+      const DataColumn(label: Text('SET\nREQUIRED', style: hStyle)),
+      const DataColumn(label: Text("SET NO'S",  style: hStyle)),
+      const DataColumn(label: Text('RACK',      style: hStyle)),
+      const DataColumn(label: Text('PALLET',    style: hStyle)),
+      const DataColumn(label: Text('SET WEIGHT',style: hStyle)),
+    ];
+
+    // ── 5. Build widgets ─────────────────────────────────────────────────────
     return SingleChildScrollView(
       scrollDirection: Axis.vertical,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor: WidgetStateProperty.all(primary.withOpacity(0.1)),
-          columnSpacing: 16,
-          headingTextStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-            fontSize: 12,
-          ),
-          dataTextStyle: const TextStyle(fontSize: 12, color: Colors.black87),
-          columns: const [
-            DataColumn(label: Text('Day')),
-            DataColumn(label: Text('Item')),
-            DataColumn(label: Text('Size')),
-            DataColumn(label: Text('Dozen')),
-            DataColumn(label: Text('Need Wt.')),
-            DataColumn(label: Text('Lot Name')),
-            DataColumn(label: Text('Lot No')),
-            DataColumn(label: Text('Dia')),
-            DataColumn(label: Text('Set No')),
-            DataColumn(label: Text('Rack')),
-            DataColumn(label: Text('Pallet')),
-            DataColumn(label: Text('Set Wt.')),
-          ],
-          rows:
-              _getGroupedSets(
-                _reportRows
-                    .where((r) => r['setNo'] != null)
-                    .toList()
-                    .cast<Map<String, dynamic>>(),
-              ).map((r) {
-                return DataRow(
-                  cells: [
-                    DataCell(Text(r['day']?.toString() ?? '-')),
-                    DataCell(Text(r['itemName']?.toString() ?? '-')),
-                    DataCell(Text(r['size']?.toString() ?? '-')),
-                    DataCell(Text(r['dozen']?.toString() ?? '-')),
-                    DataCell(
-                      Text(
-                        '${(r['neededWeight'] as num?)?.toStringAsFixed(1) ?? '-'} kg',
-                      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: orderedDays.map((day) {
+          final dayRows = byDay[day]!;
+          final lotMap  = groupByLot(dayRows);
+          final lots    = lotMap.values.toList();
+
+          final dataRows = lots.asMap().entries.map((e) {
+            final i   = e.key;
+            final lot = e.value;
+            final setNos  = lot['setNos']  as List<int>;
+            final racks   = (lot['racks']   as Set<String>).toList()..sort();
+            final pallets = (lot['pallets'] as Set<String>).toList()..sort();
+            final wt      = lot['totalWeight'] as double;
+            final isEven  = i % 2 == 0;
+
+            return DataRow(
+              color: WidgetStateProperty.all(
+                isEven ? Colors.white : Colors.grey.shade50,
+              ),
+              cells: [
+                DataCell(Text(lot['itemName']?.toString() ?? '-', style: dStyle)),
+                DataCell(Text(lot['size']?.toString()     ?? '-', style: dStyle)),
+                DataCell(Text(lot['dozen']?.toString()    ?? '-', style: dStyle)),
+                DataCell(Text(
+                  '${(lot['neededWeight'] as num?)?.toStringAsFixed(0) ?? '-'}',
+                  style: dStyle,
+                )),
+                DataCell(Text(lot['lotName']?.toString()  ?? '-', style: dStyle)),
+                DataCell(Text(lot['lotNo']?.toString()    ?? '-', style: dStyle)),
+                DataCell(Text(lot['dia']?.toString()      ?? '-',
+                  style: dStyle.copyWith(color: Colors.blue))),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color  : Colors.teal.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border : Border.all(color: Colors.teal.withOpacity(0.4)),
                     ),
-                    DataCell(Text(r['lotName']?.toString() ?? '-')),
-                    DataCell(Text(r['lotNo']?.toString() ?? '-')),
-                    DataCell(
-                      Text(
-                        r['dia']?.toString() ?? '-',
-                        style: const TextStyle(color: Colors.blue),
-                      ),
-                    ),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.teal.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.teal.withOpacity(0.4),
-                          ),
-                        ),
-                        child: Text(
-                          'Set ${r['setNo']?.toString() ?? '-'}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.teal,
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataCell(Text(r['rackName']?.toString() ?? '-')),
-                    DataCell(Text(r['palletNumber']?.toString() ?? '-')),
-                    DataCell(
-                      Text(
-                        '${(r['setWeight'] as num?)?.toStringAsFixed(2) ?? '-'} kg',
-                        style: const TextStyle(
-                          color: Colors.deepPurple,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-        ),
+                    child: Text('${setNos.length}',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal)),
+                  ),
+                ),
+                DataCell(Text(setRange(setNos), style: dStyle.copyWith(fontWeight: FontWeight.w500))),
+                DataCell(Text(racks.join(', '),   style: dStyle)),
+                DataCell(Text(pallets.join(', '), style: dStyle)),
+                DataCell(Text('${wt.toStringAsFixed(2)}',
+                  style: dStyle.copyWith(color: Colors.deepPurple, fontWeight: FontWeight.bold))),
+              ],
+            );
+          }).toList();
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── DAY HEADER — full width (inside vertical scroll = bounded) ─
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.08),
+                  border: Border.all(color: primary.withOpacity(0.3)),
+                ),
+                child: Text(
+                  'DAY - ${day.toUpperCase()}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: primary,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              // ── TABLE — wrapped in its OWN horizontal scroll ───────────────
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade200),
+                  columnSpacing  : 14,
+                  dataRowMinHeight: 40,
+                  dataRowMaxHeight: double.infinity,
+                  columns: cols,
+                  rows   : dataRows,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          );
+        }).toList(),
       ),
     );
   }
