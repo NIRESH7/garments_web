@@ -458,6 +458,30 @@ const getCuttingPlanReport = asyncHandler(async (req, res) => {
     res.json(report);
 });
 
+// @desc    Update cutting order
+// @route   PUT /api/production/cutting-orders/:id
+// @access  Private
+const updateCuttingOrder = asyncHandler(async (req, res) => {
+    const cutOrder = await CuttingOrder.findById(req.params.id);
+
+    if (cutOrder) {
+        cutOrder.planName = req.body.planName || cutOrder.planName;
+        cutOrder.planType = req.body.planType || cutOrder.planType;
+        cutOrder.planPeriod = req.body.planPeriod || cutOrder.planPeriod;
+        cutOrder.startDate = req.body.startDate || cutOrder.startDate;
+        cutOrder.endDate = req.body.endDate || cutOrder.endDate;
+        cutOrder.sizeType = req.body.sizeType || cutOrder.sizeType;
+        cutOrder.cuttingEntries = req.body.cuttingEntries || cutOrder.cuttingEntries;
+        cutOrder.status = req.body.status || cutOrder.status;
+
+        const updatedOrder = await cutOrder.save();
+        res.json(updatedOrder);
+    } else {
+        res.status(404);
+        throw new Error('Cutting Order not found');
+    }
+});
+
 export {
     createCuttingOrder,
     getCuttingOrders,
@@ -468,4 +492,5 @@ export {
     getAllocationReport,
     getPreviousPlanning,
     getCuttingPlanReport,
+    updateCuttingOrder,
 };

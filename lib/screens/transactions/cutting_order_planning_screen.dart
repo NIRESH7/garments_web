@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../services/lot_allocation_print_service.dart';
+import 'cutting_order_list_screen.dart';
 
 class CuttingOrderPlanningScreen extends StatefulWidget {
-  const CuttingOrderPlanningScreen({super.key});
+  final Map<String, dynamic>? initialData;
+  const CuttingOrderPlanningScreen({super.key, this.initialData});
 
   @override
   State<CuttingOrderPlanningScreen> createState() =>
@@ -19,6 +23,8 @@ class _CuttingOrderPlanningScreenState
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isSaving = false;
+  // ── Edit mode ────────────────────────────────────────────────────────────
+  String? _editingId;          // null = create mode, non-null = edit mode
 
   String _planType = 'Monthly';
   String _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
@@ -29,14 +35,16 @@ class _CuttingOrderPlanningScreenState
       ? [75, 80, 85, 90, 95, 100, 105, 110]
       : [50, 55, 60, 65, 70, 75];
   final List<Map<String, dynamic>> _cuttingEntries = [];
-  List<dynamic> _previousEntries = [];
-  bool _isCheckingPrev = false;
 
   @override
   void initState() {
     super.initState();
     _loadMasterData();
-    _addInitialRow();
+    if (widget.initialData != null) {
+      _editEntry(widget.initialData!);
+    } else {
+      _addInitialRow();
+    }
   }
 
   void _addInitialRow() {
@@ -100,27 +108,6 @@ class _CuttingOrderPlanningScreenState
     });
   }
 
-  Future<void> _checkPreviousPlanning() async {
-    final name = _planNameCtrl.text.trim();
-    if (name.isEmpty) return;
-
-    setState(() => _isCheckingPrev = true);
-    try {
-      final prev = await _api.getPreviousPlanningEntries(
-        name,
-        startDate: _startDate?.toIso8601String(),
-        endDate: _endDate?.toIso8601String(),
-      );
-      setState(() {
-        _previousEntries = prev;
-        _isCheckingPrev = false;
-      });
-    } catch (e) {
-      setState(() => _isCheckingPrev = false);
-      print('Error checking previous planning: $e');
-    }
-  }
-
   Future<void> _savePlanningSheet() async {
     if (_isSaving) return;
     if (_cuttingEntries.any((e) => e['itemName'].isEmpty)) {
@@ -139,16 +126,24 @@ class _CuttingOrderPlanningScreenState
         'endDate': _endDate?.toIso8601String(),
         'sizeType': _sizeType,
         'cuttingEntries': _cuttingEntries,
-        'status': 'Planned', // Explicitly mark as planned
+        'status': 'Planned',
       };
 
-      final success = await _api.saveCuttingOrder(data);
+      bool success;
+      if (_editingId != null) {
+        success = await _api.updateCuttingOrder(_editingId!, data);
+      } else {
+        success = await _api.saveCuttingOrder(data);
+      }
+
       if (success) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Planning Sheet Saved Successfully')),
+            SnackBar(content: Text(_editingId != null
+                ? 'Planning Sheet Updated Successfully'
+                : 'Planning Sheet Saved Successfully')),
           );
-          Navigator.pop(context);
+          setState(() => _editingId = null);
         }
       } else {
         _showError('Failed to save planning sheet.');
@@ -162,9 +157,13 @@ class _CuttingOrderPlanningScreenState
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.red),
+          );
+        }
+      });
     }
   }
 
@@ -175,13 +174,178 @@ class _CuttingOrderPlanningScreenState
       return;
     }
 
+    // For current planning sheet (unsaved), cutting quantities are 0
+    final entries = _cuttingEntries.map((e) {
+      final newE = Map<String, dynamic>.from(e);
+      newE['cuttingQuantities'] = {for (var s in _sizes) s.toString(): 0};
+      return newE;
+    }).toList();
+
     _printService.printCuttingOrderPlanning(
       _planType,
       _planPeriod,
       _startDate,
       _endDate,
       _sizeType,
-      _cuttingEntries,
+      entries,
+      _sizes,
+    );
+  }
+
+  // ── Edit a previous entry ─────────────────────────────────────────────────
+  void _editEntry(Map<String, dynamic> entry) {
+    setState(() {
+      _editingId = entry['_id']?.toString();
+      _planNameCtrl.text = entry['planName']?.toString() ?? '';
+      _planType  = entry['planType']?.toString()  ?? 'Monthly';
+      _sizeType  = entry['sizeType']?.toString()  ?? 'Senior';
+      _startDate = entry['startDate'] != null
+          ? DateTime.tryParse(entry['startDate'].toString())
+          : null;
+      _endDate   = entry['endDate'] != null
+          ? DateTime.tryParse(entry['endDate'].toString())
+          : null;
+
+      _cuttingEntries.clear();
+      final entries = entry['cuttingEntries'] as List<dynamic>? ?? [];
+      for (final e in entries) {
+        final qty = (e['sizeQuantities'] as Map?)?.map(
+          (k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0),
+        ) ?? {for (final s in _sizes) s.toString(): 0};
+        _cuttingEntries.add({
+          'itemName': e['itemName']?.toString() ?? '',
+          'sizeQuantities': qty,
+          'totalDozens': e['totalDozens'] ?? 0,
+        });
+      }
+      if (_cuttingEntries.isEmpty) _addInitialRow();
+    });
+
+    // Scroll to top so user sees the form
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Entry loaded for editing — tap UPDATE PLANNING SHEET to save'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+  }
+
+  // ── Preview a previous entry ──────────────────────────────────────────────
+  void _previewEntry(Map<String, dynamic> entry) {
+    final entries = entry['cuttingEntries'] as List<dynamic>? ?? [];
+    final sizes = _sizes;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(entry['planName']?.toString() ?? 'Preview'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Plan Type: ${entry['planType'] ?? '-'}'),
+              Text('Size Type: ${entry['sizeType'] ?? '-'}'),
+              if (entry['startDate'] != null)
+                Text('From: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['startDate'].toString()))}'),
+              if (entry['endDate'] != null)
+                Text('To: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['endDate'].toString()))}'),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 12,
+                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                  columns: [
+                    const DataColumn(label: Text('ITEM', style: TextStyle(fontWeight: FontWeight.bold))),
+                    ...sizes.map((s) => DataColumn(label: Text(s.toString(), style: const TextStyle(fontWeight: FontWeight.bold)))),
+                    const DataColumn(label: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold))),
+                  ],
+                  rows: entries.map((e) {
+                    final qty = e['sizeQuantities'] as Map<String, dynamic>? ?? {};
+                    return DataRow(cells: [
+                      DataCell(Text(e['itemName']?.toString() ?? '')),
+                      ...sizes.map((s) => DataCell(Text(qty[s.toString()]?.toString() ?? '0'))),
+                      DataCell(Text('${e['totalDozens'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CLOSE'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Share a previous entry ────────────────────────────────────────────────
+  void _shareEntry(Map<String, dynamic> entry) {
+    final entries = entry['cuttingEntries'] as List<dynamic>? ?? [];
+    final buf = StringBuffer();
+    buf.writeln('📋 CUTTING ORDER PLAN');
+    buf.writeln('Plan: ${entry['planName'] ?? '-'}');
+    buf.writeln('Type: ${entry['planType'] ?? '-'} | Size: ${entry['sizeType'] ?? '-'}');
+    if (entry['startDate'] != null)
+      buf.writeln('From: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['startDate'].toString()))}');
+    if (entry['endDate'] != null)
+      buf.writeln('To: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['endDate'].toString()))}');
+    buf.writeln();
+    buf.writeln('ITEM             | SIZES       | DOZENS');
+    buf.writeln('-' * 40);
+    for (final e in entries) {
+      final item = e['itemName']?.toString().padRight(16) ?? '';
+      final qty = (e['sizeQuantities'] as Map?)?.values.join(' ') ?? '';
+      final total = e['totalDozens']?.toString() ?? '0';
+      buf.writeln('$item | $qty | $total');
+    }
+    SharePlus.instance.share(ShareParams(text: buf.toString()));
+  }
+
+  // ── Print a previous entry ────────────────────────────────────────────────
+  void _printEntry(Map<String, dynamic> entry) {
+    final allocations = entry['lotAllocations'] as List<dynamic>? ?? [];
+    final entries = (entry['cuttingEntries'] as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    // Ensure sizeQuantities keys are strings and calculate cuttingQuantities
+    for (final e in entries) {
+      final raw = e['sizeQuantities'];
+      if (raw is Map) {
+        e['sizeQuantities'] = raw.map((k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0));
+      }
+
+      final itemName = e['itemName'];
+      final cuttingQty = {for (var s in _sizes) s.toString(): 0};
+      for (final alloc in allocations) {
+        if (alloc['itemName'] == itemName) {
+          final sz = alloc['size']?.toString();
+          if (sz != null && cuttingQty.containsKey(sz)) {
+            cuttingQty[sz] = (cuttingQty[sz] ?? 0) + ((alloc['dozen'] as num?)?.toInt() ?? 0);
+          }
+        }
+      }
+      e['cuttingQuantities'] = cuttingQty;
+    }
+
+    _printService.printCuttingOrderPlanning(
+      entry['planType']?.toString() ?? _planType,
+      entry['planPeriod']?.toString() ?? _planPeriod,
+      entry['startDate'] != null ? DateTime.tryParse(entry['startDate'].toString()) : null,
+      entry['endDate']   != null ? DateTime.tryParse(entry['endDate'].toString())   : null,
+      entry['sizeType']?.toString() ?? _sizeType,
+      entries,
       _sizes,
     );
   }
@@ -197,7 +361,17 @@ class _CuttingOrderPlanningScreenState
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.print),
+            icon: const Icon(LucideIcons.list, color: Colors.blue),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CuttingOrderListScreen()),
+              );
+            },
+            tooltip: 'View Plans',
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.printer),
             onPressed: _printPlanningSheet,
             tooltip: 'Print Planning Sheet',
           ),
@@ -221,10 +395,6 @@ class _CuttingOrderPlanningScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildEntryTable(),
-                          if (_previousEntries.isNotEmpty) ...[
-                            const SizedBox(height: 30),
-                            _buildPreviousEntriesTable(),
-                          ],
                           const SizedBox(height: 30),
                         ],
                       ),
@@ -264,9 +434,11 @@ class _CuttingOrderPlanningScreenState
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text(
-                                'SAVE PLANNING SHEET',
-                                style: TextStyle(
+                            : Text(
+                                _editingId != null
+                                    ? 'UPDATE PLANNING SHEET'
+                                    : 'SAVE PLANNING SHEET',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -300,20 +472,10 @@ class _CuttingOrderPlanningScreenState
                 hintText: 'e.g. Summer Collection 2026',
                 border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.edit_note),
-                suffixIcon: _isCheckingPrev
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
+                suffixIcon: null,
               ),
               onChanged: (val) {
                 // Debounce or simple timer? For now, simple check
-                _checkPreviousPlanning();
               },
             ),
             const SizedBox(height: 16),
@@ -390,7 +552,6 @@ class _CuttingOrderPlanningScreenState
                       );
                       if (date != null) {
                         setState(() => _startDate = date);
-                        _checkPreviousPlanning();
                       }
                     },
                   ),
@@ -418,7 +579,6 @@ class _CuttingOrderPlanningScreenState
                       );
                       if (date != null) {
                         setState(() => _endDate = date);
-                        _checkPreviousPlanning();
                       }
                     },
                   ),
@@ -591,64 +751,6 @@ class _CuttingOrderPlanningScreenState
                   );
                 }),
               ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPreviousEntriesTable() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.history, color: Colors.grey, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'PREVIOUS ENTRIES (Already Planned)',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            border: Border.all(color: Colors.grey.shade200),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columnSpacing: 15,
-              headingRowHeight: 40,
-              dataRowMinHeight: 35,
-              dataRowMaxHeight: 45,
-              columns: [
-                const DataColumn(label: Text('ITEM NAME')),
-                ..._sizes.map((s) => DataColumn(label: Text(s.toString()))),
-                const DataColumn(label: Text('TOTAL')),
-              ],
-              rows: _previousEntries.map((entry) {
-                final qty = entry['sizeQuantities'] as Map<String, dynamic>;
-                return DataRow(
-                  cells: [
-                    DataCell(Text(entry['itemName'].toString())),
-                    ..._sizes.map(
-                      (s) =>
-                          DataCell(Text(qty[s.toString()]?.toString() ?? '0')),
-                    ),
-                    DataCell(Text(entry['totalDozens']?.toString() ?? '0')),
-                  ],
-                );
-              }).toList(),
             ),
           ),
         ),

@@ -83,34 +83,107 @@ class LotAllocationPrintService {
               ],
             ),
             pw.SizedBox(height: 20),
-            pw.Table.fromTextArray(
-              headers: [
-                'Item Name',
-                ...sizes.map((s) => s.toString()),
-                'Total Dozens',
+            pw.Table(
+              border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
+              children: [
+                // Header row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Text('ITEM NAME', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                    ),
+                    ...sizes.map((s) => pw.Padding(
+                          padding: const pw.EdgeInsets.all(5),
+                          child: pw.Center(
+                            child: pw.Text(s.toString(), style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                          ),
+                        )),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                    ),
+                  ],
+                ),
+                // Data rows
+                ...validEntries.map((e) {
+                  final orderQty = e['sizeQuantities'] as Map<String, dynamic>? ?? {};
+                  final cuttingQty = e['cuttingQuantities'] as Map<String, dynamic>? ?? {};
+
+                  int rowOrderTotal = 0;
+                  int rowCuttingTotal = 0;
+
+                  return pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(5),
+                        child: pw.Text(e['itemName'] ?? '', style: pw.TextStyle(font: font, fontSize: 8)),
+                      ),
+                      ...sizes.map((s) {
+                        final sStr = s.toString();
+                        final order = (orderQty[sStr] ?? 0) as int;
+                        final cutting = (cuttingQty[sStr] ?? 0) as int;
+                        final pending = order - cutting;
+
+                        rowOrderTotal += order;
+                        rowCuttingTotal += cutting;
+
+                        return pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              if (order > 0 || cutting > 0) ...[
+                                pw.Text('ORDER-${order}', style: pw.TextStyle(color: PdfColors.green, font: font, fontSize: 7)),
+                                pw.Text('CUTTING-${cutting}', style: pw.TextStyle(color: PdfColors.blue, font: font, fontSize: 7)),
+                                pw.Text('PENDING-${pending}', style: pw.TextStyle(color: PdfColors.red, font: font, fontSize: 7)),
+                              ] else
+                                pw.Text('-', style: pw.TextStyle(font: font, fontSize: 7)),
+                            ],
+                          ),
+                        );
+                      }),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(2),
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('ORDER-${rowOrderTotal}', style: pw.TextStyle(color: PdfColors.green, font: boldFont, fontSize: 7)),
+                            pw.Text('CUTTING-${rowCuttingTotal}', style: pw.TextStyle(color: PdfColors.blue, font: boldFont, fontSize: 7)),
+                            pw.Text('PENDING-${rowOrderTotal - rowCuttingTotal}', style: pw.TextStyle(color: PdfColors.red, font: boldFont, fontSize: 7)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }),
               ],
-              headerStyle: pw.TextStyle(font: boldFont, fontSize: 9),
-              cellStyle: pw.TextStyle(font: font, fontSize: 8),
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey200,
-              ),
-              data: validEntries.map((e) {
-                return [
-                  e['itemName'] ?? '',
-                  ...sizes.map(
-                    (s) => (e['sizeQuantities']?[s.toString()] ?? 0).toString(),
-                  ),
-                  e['totalDozens']?.toString() ?? '0',
-                ];
-              }).toList(),
             ),
             pw.SizedBox(height: 20),
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.end,
               children: [
-                pw.Text(
-                  'Grand Total Dozens: ${validEntries.fold<int>(0, (sum, e) => sum + ((e['totalDozens'] ?? 0) as int))}',
-                  style: pw.TextStyle(font: boldFont, fontSize: 12),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Grand Total ORDER: ${validEntries.fold<int>(0, (sum, e) => sum + ((e['totalDozens'] ?? 0) as int))}',
+                      style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.green),
+                    ),
+                    pw.Text(
+                      'Grand Total CUTTING: ${validEntries.fold<int>(0, (sum, e) => sum + (e['cuttingQuantities'] != null ? (e['cuttingQuantities'] as Map).values.fold<int>(0, (s, v) => s + (v as int)) : 0))}',
+                      style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.blue),
+                    ),
+                    pw.Text(
+                      'Grand Total PENDING: ${validEntries.fold<int>(0, (sum, e) {
+                            final order = (e['totalDozens'] ?? 0) as int;
+                            final cutting = e['cuttingQuantities'] != null ? (e['cuttingQuantities'] as Map).values.fold<int>(0, (s, v) => s + (v as int)) : 0;
+                            return sum + (order - cutting);
+                          })}',
+                      style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.red),
+                    ),
+                  ],
                 ),
               ],
             ),

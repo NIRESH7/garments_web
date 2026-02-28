@@ -966,6 +966,30 @@ class MobileApiService {
       return null;
     }
   }
+  Future<bool> updateCuttingOrder(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.cuttingOrders}/$id',
+        data: data,
+      );
+      return response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300;
+    } catch (e) {
+      print('Update Cutting Order Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteCuttingOrder(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.cuttingOrders}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Delete Cutting Order Error: $e');
+      return false;
+    }
+  }
 
   Future<Map<String, dynamic>?> getFifoAllocation(
     String itemName,

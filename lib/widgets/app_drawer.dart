@@ -23,6 +23,7 @@ import '../screens/transactions/outward_list_screen.dart';
 import '../screens/assessment/item_assignment_list_screen.dart';
 import '../screens/transactions/cutting_order_planning_screen.dart';
 import '../screens/transactions/lot_requirement_allocation_screen.dart';
+import '../screens/transactions/cutting_order_list_screen.dart';
 
 // Reports
 import '../screens/reports/overview_report.dart';
@@ -190,6 +191,11 @@ class AppDrawer extends ConsumerWidget {
                       context,
                       "Cutting Order Planning",
                       const CuttingOrderPlanningScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "View Plan",
+                      const CuttingOrderListScreen(),
                     ),
                     _buildSubItem(
                       context,
