@@ -1,8 +1,10 @@
 class ApiConstants {
-  // static const String baseUrl = 'http://192.168.29.179:5001/api';
-  // static const String serverUrl = 'http://192.168.29.179:5001';
-  static const String baseUrl = 'http://13.220.94.83:5001/api';
-  static const String serverUrl = 'http://13.220.94.83:5001';
+  // static const String baseUrl = 'http://192.168.29.179:5001/api'; // LAN
+  // static const String serverUrl = 'http://192.168.29.179:5001'; // LAN
+  // static const String baseUrl = 'http://13.220.94.83:5001/api'; // Remote AWS
+  // static const String serverUrl = 'http://13.220.94.83:5001'; // Remote AWS
+  static const String baseUrl = 'http://localhost:5001/api'; // Local
+  static const String serverUrl = 'http://localhost:5001'; // Local
   static const String s3BaseUrl =
       'https://garments-app-storage.s3.us-east-1.amazonaws.com';
 

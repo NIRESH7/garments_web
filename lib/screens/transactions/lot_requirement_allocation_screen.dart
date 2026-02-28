@@ -108,7 +108,13 @@ class _LotRequirementAllocationScreenState
   int get _rollsRequired =>
       _fabricRequiredKg > 0 ? (_fabricRequiredKg / 20).ceil() : 0;
 
-  int get _setsRequired => (_rollsRequired / 11).round();
+  // Custom rounding: decimal > 0.5 → ceil (add 1 set), decimal ≤ 0.5 → floor
+  // e.g. 25/11 = 2.27 → 2 sets | 29/11 = 2.63 → 3 sets
+  int get _setsRequired {
+    final raw = _rollsRequired / 11;
+    final decimal = raw - raw.floor();
+    return decimal > 0.5 ? raw.ceil() : raw.floor();
+  }
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
 
@@ -976,27 +982,20 @@ class _LotRequirementAllocationScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextFormField(
-                        controller: _dozenCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Dozen'),
+                  child: TextFormField(
+                    controller: _dozenCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Dozen',
+                      helperText: _pendingDozenForSelection > 0
+                          ? 'Pending: ${_pendingDozenForSelection % 1 == 0 ? _pendingDozenForSelection.toInt() : _pendingDozenForSelection.toStringAsFixed(1)}'
+                          : null,
+                      helperStyle: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
-                      if (_pendingDozenForSelection > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4, left: 4),
-                          child: Text(
-                            'Pending: ${_pendingDozenForSelection % 1 == 0 ? _pendingDozenForSelection.toInt() : _pendingDozenForSelection.toStringAsFixed(1)}',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -1129,191 +1128,145 @@ class _LotRequirementAllocationScreenState
   }
 
   Widget _buildFifoTable(Color primary) {
+    if (_currentSets.isEmpty) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(20),
+          child: Center(
+            child: Text(
+              'No allocations yet. Run FIFO to see lot-wise rows.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Group raw allocations by lot (lotName + lotNo) ──────────────────────
+    final Map<String, Map<String, dynamic>> byLot = {};
+    final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
+
+    for (var s in _currentSets) {
+      final lotName = s['lotName']?.toString() ?? '';
+      final lotNo   = s['lotNo']?.toString() ?? '';
+      final key     = '${lotName}__$lotNo';
+
+      if (!byLot.containsKey(key)) {
+        byLot[key] = {
+          'lotName'   : lotName,
+          'lotNo'     : lotNo,
+          'dia'       : s['dia']?.toString() ?? '-',
+          'racks'     : <String>{},
+          'pallets'   : <String>{},
+          'setNos'    : <int>[],
+          'totalWeight': 0.0,
+        };
+      }
+
+      final entry   = byLot[key]!;
+      final setNo   = (s['setNo'] as num?)?.toInt() ?? 0;
+      final weight  = (s['setWeight'] as num?)?.toDouble() ?? 0.0;
+      final rack    = s['rackName']?.toString() ?? '';
+      final pallet  = s['palletNumber']?.toString() ?? '';
+
+      if (setNo > 0 && !(entry['setNos'] as List<int>).contains(setNo)) {
+        (entry['setNos'] as List<int>).add(setNo);
+      }
+      if (rack.isNotEmpty)   (entry['racks'] as Set<String>).add(rack);
+      if (pallet.isNotEmpty) (entry['pallets'] as Set<String>).add(pallet);
+      entry['totalWeight'] = (entry['totalWeight'] as double) + weight;
+    }
+
+    final rows = byLot.values.toList();
+
+    // ── Helper: format set range, e.g. [1,2,3] → "1 TO 3" / [5] → "5" ──────
+    String setRange(List<int> nos) {
+      if (nos.isEmpty) return '-';
+      nos.sort();
+      if (nos.length == 1) return 'Set ${nos.first}';
+      return 'Set ${nos.first} TO ${nos.last}';
+    }
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: _currentSets.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(
-                child: Text(
-                  'No allocations yet. Run FIFO to see set-wise rows.',
-                  style: TextStyle(color: Colors.grey),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+          columnSpacing: 14,
+          dataRowMinHeight: 44,
+          dataRowMaxHeight: double.infinity,
+          columns: const [
+            DataColumn(label: Text('LOT NAME', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('LOT NO',   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('DIA',      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('SET\nREQUIRED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('SET NO',   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('RACK NAME',style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('PALLET NO',style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('TOTAL\nWEIGHT (kg)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(label: Text('DOZEN',    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+          ],
+          rows: rows.asMap().entries.map((e) {
+            final i   = e.key;
+            final row = e.value;
+            final isEven   = i % 2 == 0;
+            final setNos   = row['setNos'] as List<int>;
+            final racks    = (row['racks']   as Set<String>).toList()..sort();
+            final pallets  = (row['pallets'] as Set<String>).toList()..sort();
+            final weight   = row['totalWeight'] as double;
+            final isLastRow = i == rows.length - 1;
+
+            // Dozen shown only on the last row (total for the allocation)
+            final dozenDisplay = isLastRow
+                ? (dozen % 1 == 0 ? dozen.toInt().toString() : dozen.toStringAsFixed(1))
+                : '';
+
+            return DataRow(
+              color: WidgetStateProperty.all(isEven ? Colors.white : Colors.grey.shade50),
+              cells: [
+                DataCell(Text(row['lotName']?.toString() ?? '-', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+                DataCell(Text(row['lotNo']?.toString() ?? '-',   style: const TextStyle(fontSize: 12))),
+                DataCell(Text(row['dia']?.toString() ?? '-',     style: const TextStyle(fontSize: 12, color: Colors.blue))),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.teal.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      '${setNos.length} Set${setNos.length == 1 ? '' : 's'}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                    ),
+                  ),
                 ),
-              ),
-            )
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                columnSpacing: 14,
-                columns: const [
-                  DataColumn(
-                    label: Text(
-                      'LOT NAME',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'LOT NO',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'DIA',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'SET NO',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'RACK',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'PALLET',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'LOT BALANCE',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'SET WEIGHT',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-                rows: _getGroupedSets(_currentSets).asMap().entries.map((e) {
-                  final i = e.key;
-                  final a = e.value;
-                  final isEven = i % 2 == 0;
-                  return DataRow(
-                    color: WidgetStateProperty.all(
-                      isEven ? Colors.white : Colors.grey.shade50,
-                    ),
-                    cells: [
-                      DataCell(
-                        Text(
-                          a['lotName']?.toString() ?? '-',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          a['lotNo']?.toString() ?? '-',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          a['dia']?.toString() ?? '-',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.teal.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.teal.withOpacity(0.4),
-                            ),
-                          ),
-                          child: Text(
-                            'Set ${a['setNo']?.toString() ?? '-'}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.teal,
-                            ),
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          a['rackName']?.toString() ?? '-',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          a['palletNumber']?.toString() ?? '-',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          '${(a['lotBalance'] as num?)?.toStringAsFixed(2) ?? '0'} kg',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.redAccent,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          '${(a['setWeight'] as num?)?.toStringAsFixed(2) ?? '0'} kg',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.deepPurple,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
+                DataCell(Text(setRange(setNos), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                DataCell(Text(racks.join(', '),   style: const TextStyle(fontSize: 12))),
+                DataCell(Text(pallets.join(', '), style: const TextStyle(fontSize: 12))),
+                DataCell(Text(
+                  '${weight.toStringAsFixed(2)} kg',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                )),
+                DataCell(Text(
+                  dozenDisplay,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primary),
+                )),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
