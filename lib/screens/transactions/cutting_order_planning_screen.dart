@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
@@ -237,118 +236,10 @@ class _CuttingOrderPlanningScreenState
   }
 
   // ── Preview a previous entry ──────────────────────────────────────────────
-  void _previewEntry(Map<String, dynamic> entry) {
-    final entries = entry['cuttingEntries'] as List<dynamic>? ?? [];
-    final sizes = _sizes;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(entry['planName']?.toString() ?? 'Preview'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Plan Type: ${entry['planType'] ?? '-'}'),
-              Text('Size Type: ${entry['sizeType'] ?? '-'}'),
-              if (entry['startDate'] != null)
-                Text('From: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['startDate'].toString()))}'),
-              if (entry['endDate'] != null)
-                Text('To: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['endDate'].toString()))}'),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 12,
-                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                  columns: [
-                    const DataColumn(label: Text('ITEM', style: TextStyle(fontWeight: FontWeight.bold))),
-                    ...sizes.map((s) => DataColumn(label: Text(s.toString(), style: const TextStyle(fontWeight: FontWeight.bold)))),
-                    const DataColumn(label: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ],
-                  rows: entries.map((e) {
-                    final qty = e['sizeQuantities'] as Map<String, dynamic>? ?? {};
-                    return DataRow(cells: [
-                      DataCell(Text(e['itemName']?.toString() ?? '')),
-                      ...sizes.map((s) => DataCell(Text(qty[s.toString()]?.toString() ?? '0'))),
-                      DataCell(Text('${e['totalDozens'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold))),
-                    ]);
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CLOSE'),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ── Share a previous entry ────────────────────────────────────────────────
-  void _shareEntry(Map<String, dynamic> entry) {
-    final entries = entry['cuttingEntries'] as List<dynamic>? ?? [];
-    final buf = StringBuffer();
-    buf.writeln('📋 CUTTING ORDER PLAN');
-    buf.writeln('Plan: ${entry['planName'] ?? '-'}');
-    buf.writeln('Type: ${entry['planType'] ?? '-'} | Size: ${entry['sizeType'] ?? '-'}');
-    if (entry['startDate'] != null)
-      buf.writeln('From: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['startDate'].toString()))}');
-    if (entry['endDate'] != null)
-      buf.writeln('To: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(entry['endDate'].toString()))}');
-    buf.writeln();
-    buf.writeln('ITEM             | SIZES       | DOZENS');
-    buf.writeln('-' * 40);
-    for (final e in entries) {
-      final item = e['itemName']?.toString().padRight(16) ?? '';
-      final qty = (e['sizeQuantities'] as Map?)?.values.join(' ') ?? '';
-      final total = e['totalDozens']?.toString() ?? '0';
-      buf.writeln('$item | $qty | $total');
-    }
-    SharePlus.instance.share(ShareParams(text: buf.toString()));
-  }
 
   // ── Print a previous entry ────────────────────────────────────────────────
-  void _printEntry(Map<String, dynamic> entry) {
-    final allocations = entry['lotAllocations'] as List<dynamic>? ?? [];
-    final entries = (entry['cuttingEntries'] as List<dynamic>? ?? [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-
-    // Ensure sizeQuantities keys are strings and calculate cuttingQuantities
-    for (final e in entries) {
-      final raw = e['sizeQuantities'];
-      if (raw is Map) {
-        e['sizeQuantities'] = raw.map((k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0));
-      }
-
-      final itemName = e['itemName'];
-      final cuttingQty = {for (var s in _sizes) s.toString(): 0};
-      for (final alloc in allocations) {
-        if (alloc['itemName'] == itemName) {
-          final sz = alloc['size']?.toString();
-          if (sz != null && cuttingQty.containsKey(sz)) {
-            cuttingQty[sz] = (cuttingQty[sz] ?? 0) + ((alloc['dozen'] as num?)?.toInt() ?? 0);
-          }
-        }
-      }
-      e['cuttingQuantities'] = cuttingQty;
-    }
-
-    _printService.printCuttingOrderPlanning(
-      entry['planType']?.toString() ?? _planType,
-      entry['planPeriod']?.toString() ?? _planPeriod,
-      entry['startDate'] != null ? DateTime.tryParse(entry['startDate'].toString()) : null,
-      entry['endDate']   != null ? DateTime.tryParse(entry['endDate'].toString())   : null,
-      entry['sizeType']?.toString() ?? _sizeType,
-      entries,
-      _sizes,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

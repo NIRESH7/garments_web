@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:garments/services/mobile_api_service.dart';
 import 'package:garments/services/lot_allocation_print_service.dart';
-import 'package:garments/core/theme/color_palette.dart';
 import 'package:share_plus/share_plus.dart';
 import 'cutting_order_planning_screen.dart';
 
