@@ -52,6 +52,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+/*
           _ReportCard(
             title: 'Daily Allocation Summary',
             subtitle: 'Day-by-day lot requirement report',
@@ -65,6 +66,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+*/
           _ReportCard(
             title: 'Rack & Pallet Wise Report',
             subtitle: 'Stock grouping by storage location',
@@ -89,6 +91,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+/*
           _ReportCard(
             title: 'Client Format Report',
             subtitle: 'Professional stock status summary',
@@ -102,6 +105,7 @@ class ReportsDashboard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+*/
           _ReportCard(
             title: 'Quality Audit & Complaints',
             subtitle: 'Pictures and signatures of lot issues',
