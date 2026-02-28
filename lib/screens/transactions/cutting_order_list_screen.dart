@@ -217,6 +217,42 @@ class _CuttingOrderListScreenState extends State<CuttingOrderListScreen> {
                                     onPressed: () => _printEntry(plan),
                                     tooltip: 'Print',
                                   ),
+                                  IconButton(
+                                    icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('Delete Plan'),
+                                          content: const Text('Are you sure you want to delete this plan?'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () async {
+                                                Navigator.pop(context);
+                                                final success = await _api.deleteCuttingOrder(plan['_id']);
+                                                if (success) {
+                                                  _fetchPlans();
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('Plan deleted successfully')),
+                                                  );
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(content: Text('Failed to delete plan'), backgroundColor: Colors.red),
+                                                  );
+                                                }
+                                              },
+                                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                    tooltip: 'Delete',
+                                  ),
                                 ],
                               ),
                             ),

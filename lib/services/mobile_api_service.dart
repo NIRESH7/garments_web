@@ -1158,4 +1158,13 @@ class MobileApiService {
       return false;
     }
   }
+
+  Future<bool> deleteTask(String taskId) async {
+    try {
+      final response = await _client.delete('${ApiConstants.tasks}/$taskId');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 }

@@ -90,4 +90,19 @@ const updateTaskStatus = asyncHandler(async (req, res) => {
     }
 });
 
-export { createTask, getTasks, getTaskById, addTaskReply, updateTaskStatus };
+// @desc    Delete a task
+// @route   DELETE /api/tasks/:id
+// @access  Private/Admin
+const deleteTask = asyncHandler(async (req, res) => {
+    const task = await Task.findById(req.params.id);
+
+    if (task) {
+        await task.deleteOne();
+        res.json({ message: 'Task removed' });
+    } else {
+        res.status(404);
+        throw new Error('Task not found');
+    }
+});
+
+export { deleteTask, createTask, getTasks, getTaskById, addTaskReply, updateTaskStatus };

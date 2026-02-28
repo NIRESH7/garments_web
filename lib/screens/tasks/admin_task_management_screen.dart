@@ -365,6 +365,42 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                       onPressed: () => _playRemoteAudio(task['voiceDescriptionUrl']),
                       tooltip: 'Listen to description',
                     ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete Task'),
+                          content: const Text('Are you sure you want to delete this task?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                final success = await _api.deleteTask(task['_id']);
+                                if (success) {
+                                  _loadTasks();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Task deleted successfully')),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Failed to delete task'), backgroundColor: Colors.red),
+                                  );
+                                }
+                              },
+                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    tooltip: 'Delete Task',
+                  ),
                   const Icon(Icons.arrow_forward_ios, size: 16),
                 ],
               ),
