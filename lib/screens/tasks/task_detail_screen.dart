@@ -6,6 +6,13 @@ import '../../core/theme/color_palette.dart';
 import 'package:intl/intl.dart';
 import '../../services/task_print_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import '../../core/constants/api_constants.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class TaskDetailScreen extends StatefulWidget {
   final dynamic task;
@@ -18,8 +25,14 @@ class TaskDetailScreen extends StatefulWidget {
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final _api = MobileApiService();
   final _stt = stt.SpeechToText();
+  final _recorder = AudioRecorder();
+  final _audioPlayer = AudioPlayer();
+  final _tts = FlutterTts();
+  
   bool _isListening = false;
+  bool _isRecording = false;
   bool _isSaving = false;
+  String? _recordedPath;
 
   final _workerNameController = TextEditingController();
   final _replyController = TextEditingController();
@@ -30,6 +43,62 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   void initState() {
     super.initState();
     _status = widget.task['status'] ?? 'To Do';
+  }
+
+  @override
+  void dispose() {
+    _recorder.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      if (await _recorder.hasPermission()) {
+        await _tts.speak("Tell me, I am listening");
+        String path = '';
+        if (!kIsWeb) {
+          final dir = await getTemporaryDirectory();
+          path = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
+        
+        await _recorder.start(const RecordConfig(), path: path);
+        setState(() {
+          _isRecording = true;
+          _recordedPath = null;
+        });
+        
+        // Also start speech to text
+        _listen();
+      }
+    } catch (e) {
+      debugPrint('Error starting record: $e');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _recorder.stop();
+      if (_isListening) _listen(); // stop STT
+      
+      setState(() {
+        _isRecording = false;
+        _recordedPath = path;
+      });
+    } catch (e) {
+      debugPrint('Error stopping record: $e');
+    }
+  }
+
+  void _playLocalRecording() async {
+    if (_recordedPath != null) {
+      await _audioPlayer.play(DeviceFileSource(_recordedPath!));
+    }
+  }
+
+  void _playRemoteAudio(String url) async {
+    final fullUrl = ApiConstants.getImageUrl(url);
+    await _audioPlayer.play(UrlSource(fullUrl));
   }
 
   void _listen() async {
@@ -68,7 +137,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       'status': _status,
     };
 
-    final result = await _api.addTaskReply(widget.task['_id'], data);
+    final result = await _api.addTaskReply(
+      widget.task['_id'], 
+      data, 
+      voicePath: _recordedPath,
+    );
     if (result != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Status & Reply Submitted Successfully')),
@@ -186,22 +259,74 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              task['title'] ?? '',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Instruction:',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
-            ),
-            Text(
-              task['description'] ?? 'No instruction provided.',
-              style: const TextStyle(fontSize: 16),
+            Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task['title'] ?? '',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text(
+                          'Instruction:',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, color: Colors.grey),
+                        ),
+                        if (task['voiceDescriptionUrl'] != null &&
+                            task['voiceDescriptionUrl'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: InkWell(
+                              onTap: () =>
+                                  _playRemoteAudio(task['voiceDescriptionUrl']),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(LucideIcons.volume2,
+                                    color: Colors.blue, size: 16),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      task['description'] ?? 'No instruction provided.',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+                if (task['voiceDescriptionUrl'] != null &&
+                    task['voiceDescriptionUrl'].toString().isNotEmpty)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(LucideIcons.volume2, color: Colors.blue),
+                        onPressed: () =>
+                            _playRemoteAudio(task['voiceDescriptionUrl']),
+                        tooltip: 'Listen to instruction',
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
             Row(
@@ -246,11 +371,27 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   final String dateStr = r['submittedAt'] != null 
                     ? DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.parse(r['submittedAt'].toString())) 
                     : 'N/A';
+                  final String? voiceUrl = r['voiceReplyUrl'];
+                  
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      '• $label: ${r['workerName']} - ${r['replyText']} ($dateStr)',
-                      style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '• $label: ${r['workerName']} - ${r['replyText']} ($dateStr)',
+                            style: const TextStyle(fontSize: 13, color: Colors.black87),
+                          ),
+                        ),
+                        if (voiceUrl != null && voiceUrl.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(LucideIcons.volume2, size: 18, color: Colors.blue),
+                            onPressed: () => _playRemoteAudio(voiceUrl),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                      ],
                     ),
                   );
                 },
@@ -312,12 +453,22 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           decoration: InputDecoration(
             labelText: 'Progress Details',
             border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _isListening ? LucideIcons.mic : LucideIcons.micOff,
-                color: _isListening ? Colors.red : primaryColor,
-              ),
-              onPressed: _listen,
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_recordedPath != null)
+                   IconButton(
+                    icon: const Icon(LucideIcons.playCircle, color: Colors.green),
+                    onPressed: _playLocalRecording,
+                  ),
+                IconButton(
+                  icon: Icon(
+                    _isRecording ? LucideIcons.mic : LucideIcons.micOff,
+                    color: _isRecording ? Colors.red : primaryColor,
+                  ),
+                  onPressed: _isRecording ? _stopRecording : _startRecording,
+                ),
+              ],
             ),
           ),
         ),

@@ -4,6 +4,13 @@ import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import './task_detail_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
+import '../../core/constants/api_constants.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AdminTaskManagementScreen extends StatefulWidget {
   const AdminTaskManagementScreen({super.key});
@@ -16,8 +23,15 @@ class AdminTaskManagementScreen extends StatefulWidget {
 class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   final _api = MobileApiService();
   final _stt = stt.SpeechToText();
+  final _audioPlayer = AudioPlayer();
+  final _recorder = AudioRecorder();
+  final _tts = FlutterTts();
+  
   bool _isListening = false;
+  bool _isRecording = false;
   bool _isLoading = false;
+  bool _isSaving = false;
+  String? _recordedPath;
 
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
@@ -31,6 +45,64 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   void initState() {
     super.initState();
     _loadTasks();
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    _recorder.dispose();
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      if (await _recorder.hasPermission()) {
+        await _tts.speak("Tell me, I am listening");
+        String path = '';
+        if (!kIsWeb) {
+          final dir = await getTemporaryDirectory();
+          path = '${dir.path}/task_desc_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
+        
+        await _recorder.start(const RecordConfig(), path: path);
+        setState(() {
+          _isRecording = true;
+          _recordedPath = null;
+        });
+        
+        // Also start speech to text
+        _listen();
+      }
+    } catch (e) {
+      debugPrint('Error starting record: $e');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _recorder.stop();
+      if (_isListening) _listen(); // stop STT
+      
+      setState(() {
+        _isRecording = false;
+        _recordedPath = path;
+      });
+    } catch (e) {
+      debugPrint('Error stopping record: $e');
+    }
+  }
+
+  void _playLocalRecording() async {
+    if (_recordedPath != null) {
+      await _audioPlayer.play(DeviceFileSource(_recordedPath!));
+    }
+  }
+
+  void _playRemoteAudio(String url) async {
+    final fullUrl = ApiConstants.getImageUrl(url);
+    await _audioPlayer.play(UrlSource(fullUrl));
   }
 
   Future<void> _loadTasks() async {
@@ -69,6 +141,8 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       return;
     }
 
+    setState(() => _isSaving = true);
+    
     final data = {
       'title': _titleController.text,
       'description': _descController.text,
@@ -78,6 +152,13 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       'createdAt': DateTime.now().toIso8601String(),
     };
 
+    if (_recordedPath != null) {
+      final voiceUrl = await _api.uploadAudio(_recordedPath!);
+      if (voiceUrl != null) {
+        data['voiceDescriptionUrl'] = voiceUrl;
+      }
+    }
+
     final result = await _api.createTask(data);
     if (result != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,8 +166,10 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       );
       _titleController.clear();
       _descController.clear();
+      setState(() => _recordedPath = null);
       _loadTasks();
     }
+    setState(() => _isSaving = false);
   }
 
   @override
@@ -125,6 +208,26 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            if (_recordedPath != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.checkCircle, color: Colors.green, size: 16),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Voice description recorded',
+                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
             TextField(
               controller: _titleController,
               decoration: const InputDecoration(
@@ -139,12 +242,22 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
               decoration: InputDecoration(
                 labelText: 'Task Description',
                 border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _isListening ? LucideIcons.mic : LucideIcons.micOff,
-                    color: _isListening ? Colors.red : primaryColor,
-                  ),
-                  onPressed: _listen,
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_recordedPath != null)
+                      IconButton(
+                        icon: const Icon(LucideIcons.playCircle, color: Colors.green),
+                        onPressed: _playLocalRecording,
+                      ),
+                    IconButton(
+                      icon: Icon(
+                        _isRecording ? LucideIcons.mic : LucideIcons.micOff,
+                        color: _isRecording ? Colors.red : primaryColor,
+                      ),
+                      onPressed: _isRecording ? _stopRecording : _startRecording,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -182,7 +295,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _createTask,
+              onPressed: _isSaving ? null : _createTask,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: primaryColor,
@@ -191,10 +304,12 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text(
-                'CREATE & ASSIGN TASK',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              child: _isSaving
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text(
+                      'CREATE & ASSIGN TASK',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
             ),
           ],
         ),
@@ -241,7 +356,18 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
               subtitle: Text(
                 'Assigned: ${task['assignedTo']} | Status: ${task['status']}',
               ),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                   if (task['voiceDescriptionUrl'] != null && task['voiceDescriptionUrl'].toString().isNotEmpty)
+                    IconButton(
+                      icon: const Icon(LucideIcons.volume2, color: Colors.blue, size: 20),
+                      onPressed: () => _playRemoteAudio(task['voiceDescriptionUrl']),
+                      tooltip: 'Listen to description',
+                    ),
+                  const Icon(Icons.arrow_forward_ios, size: 16),
+                ],
+              ),
             ),
           ),
         );

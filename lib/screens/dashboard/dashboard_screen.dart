@@ -441,9 +441,7 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
                   context,
                 ).primaryColor.withOpacity(0.1),
                 backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                    ? NetworkImage(
-                        '${ApiConstants.serverUrl}${_avatarUrl!.startsWith('/') ? '' : '/'}$_avatarUrl',
-                      )
+                    ? NetworkImage(ApiConstants.getImageUrl(_avatarUrl))
                     : null,
                 child: _avatarUrl == null || _avatarUrl!.isEmpty
                     ? Text(

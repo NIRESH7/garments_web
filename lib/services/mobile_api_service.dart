@@ -72,6 +72,10 @@ class MobileApiService {
     return uploadImage(File(path));
   }
 
+  Future<String?> uploadAudio(String path) async {
+    return uploadImage(File(path));
+  }
+
   Future<bool> saveInward(Map<String, dynamic> data) async {
     try {
       final formData = FormData();
@@ -1125,8 +1129,14 @@ class MobileApiService {
     }
   }
 
-  Future<dynamic> addTaskReply(String taskId, Map<String, dynamic> data) async {
+  Future<dynamic> addTaskReply(String taskId, Map<String, dynamic> data, {String? voicePath}) async {
     try {
+      if (voicePath != null) {
+        final voiceUrl = await uploadAudio(voicePath);
+        if (voiceUrl != null) {
+          data['voiceReplyUrl'] = voiceUrl;
+        }
+      }
       final response = await _client.post(
         '${ApiConstants.tasks}/$taskId/reply',
         data: data,

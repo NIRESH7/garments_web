@@ -25,13 +25,14 @@ class ShadeCardPrintService {
         pw.MemoryImage? netImage;
         if (photoPath != null) {
           try {
-            final String fullImageUrl =
-                '${ApiConstants.serverUrl}${photoPath.startsWith('/') ? photoPath : '/$photoPath'}';
+            final String fullImageUrl = ApiConstants.getImageUrl(photoPath);
             final response = await http.get(Uri.parse(fullImageUrl));
             if (response.statusCode == 200) {
               netImage = pw.MemoryImage(response.bodyBytes);
             }
-          } catch (e) {}
+          } catch (e) {
+            print('Error fetching print image: $e');
+          }
         }
 
         colorWidgets.add(
