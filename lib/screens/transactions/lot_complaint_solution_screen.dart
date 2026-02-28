@@ -17,6 +17,8 @@ class _LotComplaintSolutionScreenState
   final _api = MobileApiService();
   final _lotNoController = TextEditingController();
 
+  List<Map<String, dynamic>> _complaintLots = [];
+  String? _selectedLotNo;
   Map<String, dynamic>? _foundInward;
   bool _isLoading = false;
   bool _isSaving = false;
@@ -29,9 +31,33 @@ class _LotComplaintSolutionScreenState
   String? _resolution; // ACCEPT / RETURN
   bool _isCleared = false;
 
-  Future<void> _searchLot() async {
-    final lotNo = _lotNoController.text.trim();
-    if (lotNo.isEmpty) return;
+  @override
+  void initState() {
+    super.initState();
+    _fetchComplaintLots();
+  }
+
+  Future<void> _fetchComplaintLots() async {
+    setState(() => _isLoading = true);
+    try {
+      final inwards = await _api.getInwards();
+      setState(() {
+        _complaintLots = inwards
+            .where((i) =>
+                i['complaintText'] != null &&
+                i['complaintText'].toString().trim().isNotEmpty)
+            .cast<Map<String, dynamic>>()
+            .toList();
+      });
+    } catch (e) {
+      debugPrint('Error fetching complaint lots: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _searchLot(String? lotNo) async {
+    if (lotNo == null || lotNo.isEmpty) return;
 
     setState(() {
       _isLoading = true;
@@ -39,11 +65,8 @@ class _LotComplaintSolutionScreenState
     });
 
     try {
-      final inwards = await _api
-          .getInwards(); // We could add a specific search by lot endpoint
-      final match = inwards.firstWhere(
+      final match = _complaintLots.firstWhere(
         (i) => i['lotNo'].toString().toLowerCase() == lotNo.toLowerCase(),
-        orElse: () => null,
       );
 
       if (match != null) {
@@ -108,7 +131,7 @@ class _LotComplaintSolutionScreenState
         );
         setState(() {
           _foundInward = null;
-          _lotNoController.clear();
+          _selectedLotNo = null;
           _replyController.clear();
           _arrestLotController.clear();
           _resolution = null;
@@ -170,18 +193,23 @@ class _LotComplaintSolutionScreenState
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            TextField(
-              controller: _lotNoController,
-              decoration: InputDecoration(
-                labelText: 'Enter Lot Number',
-                prefixIcon: const Icon(LucideIcons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.arrow_forward),
-                  onPressed: _searchLot,
-                ),
-                border: const OutlineInputBorder(),
+            DropdownButtonFormField<String>(
+              value: _selectedLotNo,
+              decoration: const InputDecoration(
+                labelText: 'Select Lot Number',
+                prefixIcon: Icon(LucideIcons.search),
+                border: OutlineInputBorder(),
               ),
-              onSubmitted: (_) => _searchLot(),
+              items: _complaintLots.map((lot) {
+                return DropdownMenuItem<String>(
+                  value: lot['lotNo'].toString(),
+                  child: Text('LOT: ${lot['lotNo']} - ${lot['lotName']}'),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() => _selectedLotNo = val);
+                if (val != null) _searchLot(val);
+              },
             ),
           ],
         ),
