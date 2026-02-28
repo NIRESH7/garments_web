@@ -1361,26 +1361,26 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 9),
               _buildPdfRow(
                 'Name',
                 item['lotName']?.toString() ?? '',
-                fontSize: 6,
+                fontSize: 9,
               ),
-              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 6),
+              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 9),
               _buildPdfRow(
                 'Col',
                 item['colour']?.toString() ?? '',
-                fontSize: 6,
+                fontSize: 9,
               ),
-              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 6),
+              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 9),
               _buildPdfRow(
                 'Wt',
                 '${item['weight']} kg',
-                fontSize: 6,
+                fontSize: 9,
                 isBoldValue: true,
               ),
-              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 5),
+              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 8),
             ],
           ),
           pw.Spacer(),
@@ -1389,19 +1389,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Container(
-                  width: 50,
-                  height: 50,
+                  width: 40,
+                  height: 40,
                   child: pw.BarcodeWidget(
                     barcode: pw.Barcode.qrCode(),
                     data:
                         'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
                   ),
                 ),
-                pw.SizedBox(height: 1),
+                pw.SizedBox(height: 0.5),
                 pw.Text(
                   'SCAN',
                   style: pw.TextStyle(
-                    fontSize: 5,
+                    fontSize: 7,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
@@ -1511,16 +1511,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   pw.Widget _buildPdfRow(
     String label,
     String value, {
-    double fontSize = 10,
+    double fontSize = 9,
     bool isBoldValue = false,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      padding: const pw.EdgeInsets.symmetric(vertical: 0.5),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 30, // Reduced width for small label
+            width: 40, // Reduced width for small label
             child: pw.Text(
               '$label:',
               style: pw.TextStyle(
