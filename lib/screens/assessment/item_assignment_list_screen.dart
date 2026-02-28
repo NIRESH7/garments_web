@@ -179,6 +179,28 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // ── EDIT button ──────────────────────────────────────────
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(
+                      LucideIcons.pencil,
+                      color: Colors.blue,
+                      size: 18,
+                    ),
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ItemAssignmentScreen(
+                            existing: item,
+                          ),
+                        ),
+                      );
+                      _fetchAssignments();
+                    },
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),

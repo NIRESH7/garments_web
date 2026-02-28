@@ -6,7 +6,9 @@ import '../../services/mobile_api_service.dart';
 import '../../widgets/custom_dropdown_field.dart';
 
 class ItemAssignmentScreen extends StatefulWidget {
-  const ItemAssignmentScreen({super.key});
+  /// Pass existing assignment map to open in edit mode; null = create mode.
+  final Map<String, dynamic>? existing;
+  const ItemAssignmentScreen({super.key, this.existing});
 
   @override
   State<ItemAssignmentScreen> createState() => _ItemAssignmentScreenState();
@@ -15,18 +17,19 @@ class ItemAssignmentScreen extends StatefulWidget {
 class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
   final _api = MobileApiService();
 
-  String? _selectedItem, _selectedSize, _selectedDia;
+  String? _selectedItem, _selectedSize, _selectedDia, _selectedLotName;
   final _efficiencyController = TextEditingController();
   final _dozenWeightController = TextEditingController();
   final _layLengthController = TextEditingController();
   final _layPcsController = TextEditingController();
   final _wastePercentageController = TextEditingController();
   final _foldingWtController = TextEditingController();
-  final _lotNameController = TextEditingController();
   final _gsmController = TextEditingController();
 
-  List<String> _items = [], _sizes = [], _dias = [];
+  List<String> _items = [], _sizes = [], _dias = [], _lotNames = [];
   bool _isLoading = true;
+
+  bool get _isEditMode => widget.existing != null;
 
   @override
   void initState() {
@@ -37,6 +40,20 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
   Future<void> _loadDropdowns() async {
     final categories = await _api.getCategories();
 
+    // Fetch unique lot names from inwards
+    List<String> lotNames = [];
+    try {
+      final inwards = await _api.getInwards();
+      final seen = <String>{};
+      for (final inw in inwards) {
+        final name = inw['lotName']?.toString().trim() ?? '';
+        if (name.isNotEmpty && seen.add(name)) {
+          lotNames.add(name);
+        }
+      }
+      lotNames.sort();
+    } catch (_) {}
+
     setState(() {
       _items = _getValues(categories, 'Item Name');
       if (_items.isEmpty) {
@@ -44,8 +61,32 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       }
       _sizes = _getValues(categories, 'Size');
       _dias = _getValues(categories, 'Dia');
+      _lotNames = lotNames;
       _isLoading = false;
     });
+
+    // Pre-fill fields if editing
+    if (_isEditMode) {
+      final e = widget.existing!;
+      setState(() {
+        _selectedItem = e['fabricItem']?.toString();
+        _selectedSize = e['size']?.toString();
+        _selectedDia  = e['dia']?.toString();
+        final lotName = e['lotName']?.toString() ?? '';
+        // Add to list if not already present (edge case for old data)
+        if (lotName.isNotEmpty && !_lotNames.contains(lotName)) {
+          _lotNames = [..._lotNames, lotName]..sort();
+        }
+        _selectedLotName = lotName.isEmpty ? null : lotName;
+      });
+      _efficiencyController.text   = e['efficiency']?.toString()     ?? '';
+      _dozenWeightController.text  = e['dozenWeight']?.toString()    ?? '';
+      _layLengthController.text    = e['layLength']?.toString()      ?? '';
+      _layPcsController.text       = e['layPcs']?.toString()         ?? '';
+      _wastePercentageController.text = e['wastePercentage']?.toString() ?? '';
+      _foldingWtController.text    = e['foldingWt']?.toString()      ?? '';
+      _gsmController.text          = e['gsm']?.toString()            ?? '';
+    }
   }
 
   void _onEfficiencyChanged(String val) {
@@ -98,22 +139,27 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
       'wastePercentage':
           double.tryParse(_wastePercentageController.text) ?? 0.0,
       'foldingWt': double.tryParse(_foldingWtController.text) ?? 0.0,
-      'lotName': _lotNameController.text.trim(),
+      'lotName': _selectedLotName ?? '',
       'gsm': _gsmController.text.trim(),
     };
 
-    final success = await _api.createAssignment(data);
+    bool success;
+    if (_isEditMode) {
+      success = await _api.updateAssignment(widget.existing!['_id'], data);
+    } else {
+      success = await _api.createAssignment(data);
+    }
 
     if (!mounted) return;
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Assignment Saved Successfully')),
+        SnackBar(content: Text(_isEditMode ? 'Assignment Updated' : 'Assignment Saved Successfully')),
       );
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save assignment')),
+        SnackBar(content: Text(_isEditMode ? 'Failed to update assignment' : 'Failed to save assignment')),
       );
     }
   }
@@ -121,7 +167,9 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Item Assignment')),
+      appBar: AppBar(
+        title: Text(_isEditMode ? 'Edit Assignment' : 'Item Assignment'),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -211,12 +259,21 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildFieldLabel('Lot Name (Optional)'),
-                                  TextField(
-                                    controller: _lotNameController,
+                                  _buildFieldLabel('Lot Name'),
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedLotName,
+                                    isExpanded: true,
                                     decoration: const InputDecoration(
-                                      hintText: 'e.g. LOT-A',
+                                      hintText: 'Select Lot',
+                                      isDense: true,
                                     ),
+                                    items: _lotNames.map((name) =>
+                                      DropdownMenuItem(
+                                        value: name,
+                                        child: Text(name, overflow: TextOverflow.ellipsis),
+                                      )
+                                    ).toList(),
+                                    onChanged: (v) => setState(() => _selectedLotName = v),
                                   ),
                                 ],
                               ),
@@ -297,13 +354,13 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                         _buildFieldLabel('Waste % (100 - Eff)'),
                         TextField(
                           controller: _wastePercentageController,
-                          readOnly: true, // Auto-calculated
+                          readOnly: true,
                           canRequestFocus: false,
                           enableInteractiveSelection: false,
                           decoration: const InputDecoration(
                             hintText: '0.00',
                             filled: true,
-                            fillColor: Color(0xFFF1F5F9), // Light grey
+                            fillColor: Color(0xFFF1F5F9),
                           ),
                         ),
                       ],
@@ -312,7 +369,7 @@ class _ItemAssignmentScreenState extends State<ItemAssignmentScreen> {
                   const SizedBox(height: 40),
                   ElevatedButton(
                     onPressed: _save,
-                    child: const Text('Save Assignment'),
+                    child: Text(_isEditMode ? 'Update Assignment' : 'Save Assignment'),
                   ),
 
                   const SizedBox(height: 20),

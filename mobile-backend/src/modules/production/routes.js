@@ -3,6 +3,7 @@ import {
     createAssignment,
     getAssignments,
     deleteAssignment,
+    updateAssignment,
 } from './controller.js';
 import {
     createCuttingOrder,
@@ -24,7 +25,10 @@ router
     .post(protect, createAssignment)
     .get(protect, getAssignments);
 
-router.route('/assignments/:id').delete(protect, deleteAssignment);
+router
+    .route('/assignments/:id')
+    .delete(protect, deleteAssignment)
+    .put(protect, updateAssignment);
 
 router.get('/cutting-orders/fifo-allocation', protect, getFifoAllocation);
 

@@ -489,6 +489,17 @@ class MobileApiService {
     }
   }
 
+  Future<bool> updateAssignment(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.assignments}/$id',
+        data: data,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
   // --- Master ---
   Future<List<dynamic>> getParties() async {
     try {
