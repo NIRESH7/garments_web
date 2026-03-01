@@ -319,6 +319,37 @@ class _LotRequirementAllocationScreenState
       return;
     }
 
+    // Collect already allocated sets for this Item + Size to exclude them
+    final excludedSets = <int>{};
+
+    // 1. From saved allocations in DB for this plan
+    final plan = _allPlans.firstWhere(
+      (p) => p['_id'] == _selectedPlanId,
+      orElse: () => null,
+    );
+    if (plan != null) {
+      final savedAllocations = plan['lotAllocations'] as List? ?? [];
+      for (var alloc in savedAllocations) {
+        if (alloc['itemName'] == _selectedItem &&
+            alloc['size'] == _selectedSize) {
+          final sNo = (alloc['setNo'] as num?)?.toInt();
+          if (sNo != null) excludedSets.add(sNo);
+        }
+      }
+    }
+
+    // 2. From unsaved entries in current session
+    for (var day in _dayEntries.keys) {
+      for (var entry in _dayEntries[day]!) {
+        if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
+          for (var s in entry.sets) {
+            final sNo = (s['setNo'] as num?)?.toInt();
+            if (sNo != null) excludedSets.add(sNo);
+          }
+        }
+      }
+    }
+
     setState(() => _isAllocating = true);
     try {
       final result = await _api.getFifoAllocation(
@@ -327,6 +358,7 @@ class _LotRequirementAllocationScreenState
         dozen,
         _selectedDia!,
         _dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0),
+        excludedSets: excludedSets.isEmpty ? null : excludedSets.toList(),
       );
       setState(() {
         if (result != null) {
@@ -1147,42 +1179,39 @@ class _LotRequirementAllocationScreenState
       );
     }
 
-    // ── Group raw allocations by lot (lotName + lotNo) ──────────────────────
-    final Map<String, Map<String, dynamic>> byLot = {};
+    // ── Group raw allocations by setNo ──────────────────────────────────────
+    final Map<int, Map<String, dynamic>> bySet = {};
     final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
 
     for (var s in _currentSets) {
-      final lotName = s['lotName']?.toString() ?? '';
-      final lotNo   = s['lotNo']?.toString() ?? '';
-      final key     = '${lotName}__$lotNo';
+      final setNo = (s['setNo'] as num?)?.toInt() ?? 0;
+      if (setNo == 0) continue;
 
-      if (!byLot.containsKey(key)) {
-        byLot[key] = {
-          'lotName'   : lotName,
-          'lotNo'     : lotNo,
-          'dia'       : s['dia']?.toString() ?? '-',
-          'racks'     : <String>{},
-          'pallets'   : <String>{},
-          'setNos'    : <int>[],
+      if (!bySet.containsKey(setNo)) {
+        bySet[setNo] = {
+          'setNo': setNo,
+          'lotName': s['lotName']?.toString() ?? '',
+          'lotNo': s['lotNo']?.toString() ?? '',
+          'dia': s['dia']?.toString() ?? '-',
+          'racks': <String>{},
+          'pallets': <String>{},
           'totalWeight': 0.0,
         };
       }
 
-      final entry   = byLot[key]!;
-      final setNo   = (s['setNo'] as num?)?.toInt() ?? 0;
-      final weight  = (s['setWeight'] as num?)?.toDouble() ?? 0.0;
-      final rack    = s['rackName']?.toString() ?? '';
-      final pallet  = s['palletNumber']?.toString() ?? '';
+      final entry = bySet[setNo]!;
+      final weight = (s['setWeight'] as num?)?.toDouble() ?? 0.0;
+      final rack = s['rackName']?.toString() ?? '';
+      final pallet = s['palletNumber']?.toString() ?? '';
 
-      if (setNo > 0 && !(entry['setNos'] as List<int>).contains(setNo)) {
-        (entry['setNos'] as List<int>).add(setNo);
+      if (rack.isNotEmpty) (entry['racks'] as Set<String>).add(rack.trim());
+      if (pallet.isNotEmpty) {
+        (entry['pallets'] as Set<String>).add(pallet.trim());
       }
-      if (rack.isNotEmpty)   (entry['racks'] as Set<String>).add(rack);
-      if (pallet.isNotEmpty) (entry['pallets'] as Set<String>).add(pallet);
       entry['totalWeight'] = (entry['totalWeight'] as double) + weight;
     }
 
-    final rows = byLot.values.toList();
+    final rows = bySet.values.toList()..sort((a, b) => a['setNo'].compareTo(b['setNo']));
 
     // ── Helper: format set range, e.g. [1,2,3] → "1 TO 3" / [5] → "5" ──────
     String setRange(List<int> nos) {
@@ -1217,13 +1246,13 @@ class _LotRequirementAllocationScreenState
             DataColumn(label: Text('DOZEN',    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
           ],
           rows: rows.asMap().entries.map((e) {
-            final i   = e.key;
+            final i = e.key;
             final row = e.value;
-            final isEven   = i % 2 == 0;
-            final setNos   = row['setNos'] as List<int>;
-            final racks    = (row['racks']   as Set<String>).toList()..sort();
-            final pallets  = (row['pallets'] as Set<String>).toList()..sort();
-            final weight   = row['totalWeight'] as double;
+            final isEven = i % 2 == 0;
+            final setNo = row['setNo'] as int;
+            final racks = (row['racks'] as Set<String>).toList()..sort();
+            final pallets = (row['pallets'] as Set<String>).toList()..sort();
+            final weight = row['totalWeight'] as double;
             final isLastRow = i == rows.length - 1;
 
             // Dozen shown only on the last row (total for the allocation)
@@ -1239,20 +1268,35 @@ class _LotRequirementAllocationScreenState
                 DataCell(Text(row['dia']?.toString() ?? '-',     style: const TextStyle(fontSize: 12, color: Colors.blue))),
                 DataCell(
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.teal.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.teal.withOpacity(0.4)),
                     ),
-                    child: Text(
-                      '${setNos.length} Set${setNos.length == 1 ? '' : 's'}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                    child: const Text(
+                      '1 Set',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
                     ),
                   ),
                 ),
-                DataCell(Text(setRange(setNos), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-                DataCell(Text(racks.join(', '),   style: const TextStyle(fontSize: 12))),
+                DataCell(
+                  Text(
+                    'Set $setNo',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                DataCell(Text(racks.join(', '), style: const TextStyle(fontSize: 12))),
                 DataCell(Text(pallets.join(', '), style: const TextStyle(fontSize: 12))),
                 DataCell(Text(
                   '${weight.toStringAsFixed(2)} kg',

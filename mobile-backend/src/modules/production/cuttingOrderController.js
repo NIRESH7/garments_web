@@ -27,13 +27,16 @@ async function getLotBalance(inw, dia) {
 }
 
 // ─── FIFO Allocator (core logic, returns set rows) ───────────────────────────
-async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight }) {
+async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, excludedSets = [] }) {
     const inwards = await Inward.find({ 'diaEntries.dia': dia })
         .sort({ inwardDate: 1, createdAt: 1 });
 
     const setRows = [];
     let remainingWeight = requiredWeight;
     let globalRollsCounted = 0;
+
+    // Normalize excludedSets to a Set of numbers
+    const excludedSetNos = new Set((excludedSets || []).map(num => parseInt(num)));
 
     for (const inw of inwards) {
         if (remainingWeight <= 0.001) break;
@@ -46,10 +49,15 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight }) {
         // Calculate used weight from Outwards
         const outwards = await Outward.find({ lotNo: inw.lotNo, dia });
         let usedWt = 0;
-        outwards.forEach(out => out.items.forEach(item => { usedWt += (item.total_weight || 0); }));
+
+        // Track which set numbers have already been outward-posted for this lot+dia
+        const usedSetNos = new Set(excludedSetNos); // Start with externally excluded sets
+        outwards.forEach(out => out.items.forEach(item => {
+            usedWt += (item.total_weight || 0);
+            if (item.set_no) usedSetNos.add(parseInt(item.set_no));
+        }));
 
         // Also deduct allocations in CuttingOrders that are NOT yet posted to outward
-        // (If posted, they are already in the Outward query above)
         const existingAllocations = await CuttingOrder.find({
             'lotAllocations.lotNo': inw.lotNo,
             'lotAllocations.dia': dia
@@ -57,8 +65,12 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight }) {
 
         existingAllocations.forEach(plan => {
             plan.lotAllocations.forEach(alloc => {
-                if (alloc.lotNo === inw.lotNo && alloc.dia === dia && !alloc.outwardPosted) {
-                    usedWt += (alloc.setWeight || 0);
+                if (alloc.lotNo === inw.lotNo && alloc.dia === dia) {
+                    if (!alloc.outwardPosted) {
+                        usedWt += (alloc.setWeight || 0);
+                    }
+                    // Track used set numbers regardless of outwardPosted status
+                    if (alloc.setNo) usedSetNos.add(parseInt(alloc.setNo));
                 }
             });
         });
@@ -70,34 +82,66 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight }) {
         const wpr = calcWeightPerRoll(entry, effDozenWeight);
         const rollsAlloc = wpr > 0 ? allocatedWt / wpr : 0;
 
-        // Storage
+        // Storage Data
         const sd = inw.storageDetails && Array.isArray(inw.storageDetails)
             ? inw.storageDetails.find(s => s.dia === dia)
             : null;
-        const rackName = sd?.racks?.length > 0 ? sd.racks.join(', ') : 'N/A';
-        const palletNumber = sd?.pallets?.length > 0 ? sd.pallets.join(', ') : 'N/A';
 
-        // Expand into individual set rows
+        // Flatten all weights across all colors for this DIA to get a sequence of set weights
+        const allInwardWeights = [];
+        if (sd && sd.rows) {
+            sd.rows.forEach(row => {
+                if (row.setWeights && Array.isArray(row.setWeights)) {
+                    row.setWeights.forEach(w => {
+                        const val = parseFloat(w.toString().replace(/[^0-9.]/g, '')) || 0;
+                        if (val > 0) allInwardWeights.push(val);
+                    });
+                }
+            });
+        }
+
+        // Expand into individual set rows, skipping already-used set numbers
         let rollsRemaining = rollsAlloc;
+        let setIndexInLot = 0; // index into storageDetail arrays
+
         while (rollsRemaining > 0.001) {
             const rollsInSet = Math.min(rollsRemaining, ROLLS_PER_SET);
-            const setWeight = parseFloat((rollsInSet * wpr).toFixed(2));
             const setNo = Math.floor(globalRollsCounted / ROLLS_PER_SET) + 1;
 
-            setRows.push({
-                lotName: inw.lotName,
-                lotNo: inw.lotNo,
-                dia,
-                setNo,
-                rolls: parseFloat(rollsInSet.toFixed(2)),
-                setWeight,
-                rackName,
-                palletNumber,
-                lotBalance: parseFloat((lotBalance - allocatedWt).toFixed(2)), // Remaining weight in this specific lot
-            });
+            // 1. Get Actual Weight from inward if available, else use calculated
+            let actualSetWeight = 0;
+            if (allInwardWeights[setIndexInLot]) {
+                actualSetWeight = allInwardWeights[setIndexInLot];
+            } else {
+                actualSetWeight = parseFloat((rollsInSet * wpr).toFixed(2));
+            }
+
+            // 2. Get Specific Rack/Pallet for this specific set
+            let rackName = 'N/A';
+            let palletNumber = 'N/A';
+            if (sd) {
+                if (sd.racks && sd.racks[setIndexInLot]) rackName = sd.racks[setIndexInLot];
+                if (sd.pallets && sd.pallets[setIndexInLot]) palletNumber = sd.pallets[setIndexInLot];
+            }
+
+            // Skip sets that have already been used
+            if (!usedSetNos.has(setNo)) {
+                setRows.push({
+                    lotName: inw.lotName,
+                    lotNo: inw.lotNo,
+                    dia,
+                    setNo,
+                    rolls: parseFloat(rollsInSet.toFixed(2)),
+                    setWeight: actualSetWeight,
+                    rackName,
+                    palletNumber,
+                    lotBalance: parseFloat((lotBalance - allocatedWt).toFixed(2)),
+                });
+            }
 
             globalRollsCounted += rollsInSet;
             rollsRemaining -= rollsInSet;
+            setIndexInLot++;
         }
 
         remainingWeight -= allocatedWt;
@@ -117,6 +161,7 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight }) {
         shortfall: remainingWeight,
     };
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @desc    Create new cutting plan (Planning Sheet)
@@ -157,7 +202,7 @@ const createCuttingOrder = asyncHandler(async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const getFifoAllocation = asyncHandler(async (req, res) => {
-    const { itemName, size, dozen, dia: queryDia, dozenWeight: queryDozWt } = req.query;
+    const { itemName, size, dozen, dia: queryDia, dozenWeight: queryDozWt, excludedSets } = req.query;
 
     if (!itemName || !size || !dozen) {
         res.status(400);
@@ -165,6 +210,16 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     }
 
     const targetDozen = parseFloat(dozen);
+
+    // Parse excludedSets if provided
+    let excludedSetList = [];
+    if (excludedSets) {
+        if (Array.isArray(excludedSets)) {
+            excludedSetList = excludedSets;
+        } else {
+            excludedSetList = excludedSets.split(',').filter(x => x).map(x => parseInt(x));
+        }
+    }
 
     // Resolve dia + dozenWeight ─ prefer explicit params from app
     let dia, effDozenWeight;
@@ -187,7 +242,7 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     const requiredWeight = targetDozen * effDozenWeight;
 
     const { setRows, totalRolls, totalSets, remainingRolls, shortfall } =
-        await runFifo({ dia, effDozenWeight, targetDozen, requiredWeight });
+        await runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, excludedSets: excludedSetList });
 
     if (shortfall > 0.1) {
         return res.json({

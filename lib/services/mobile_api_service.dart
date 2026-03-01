@@ -1000,8 +1000,9 @@ class MobileApiService {
     String size,
     double dozen,
     String dia,
-    double dozenWeight,
-  ) async {
+    double dozenWeight, {
+    List<int>? excludedSets,
+  }) async {
     try {
       final response = await _client.get(
         ApiConstants.fifoAllocation,
@@ -1011,6 +1012,8 @@ class MobileApiService {
           'dozen': dozen,
           'dia': dia,
           'dozenWeight': dozenWeight,
+          if (excludedSets != null && excludedSets.isNotEmpty)
+            'excludedSets': excludedSets.join(','),
         },
       );
       return response.data;
