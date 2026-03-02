@@ -15,6 +15,28 @@ class _ShadeCardReportScreenState extends State<ShadeCardReportScreen> {
   final _api = MobileApiService();
   List<dynamic> _reportData = [];
   bool _isLoading = true;
+  bool _isGeneratingPdf = false;
+  String? _selectedLotName;
+
+  List<String> get _availableLotNames {
+    final Set<String> names = {};
+    for (var g in _reportData) {
+      if (g['groupName'] != null && g['groupName'].toString().isNotEmpty) {
+        names.add(g['groupName'].toString());
+      }
+    }
+    final sortedNames = names.toList()..sort();
+    return ['All Lots', ...sortedNames];
+  }
+
+  List<dynamic> get _filteredData {
+    if (_selectedLotName == null || _selectedLotName == 'All Lots') {
+      return _reportData;
+    }
+    return _reportData
+        .where((g) => g['groupName'] == _selectedLotName)
+        .toList();
+  }
 
   @override
   void initState() {
@@ -42,28 +64,89 @@ class _ShadeCardReportScreenState extends State<ShadeCardReportScreen> {
         backgroundColor: Colors.indigo,
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.printer),
-            onPressed: () {
-              if (_reportData.isNotEmpty) {
-                ShadeCardPrintService().printShadeCard(_reportData);
-              }
-            },
+            icon: _isGeneratingPdf
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(LucideIcons.printer),
+            onPressed: _isGeneratingPdf
+                ? null
+                : () async {
+                    if (_filteredData.isNotEmpty) {
+                      setState(() => _isGeneratingPdf = true);
+                      try {
+                        await ShadeCardPrintService().printShadeCard(
+                          _filteredData,
+                        );
+                      } catch (e) {
+                        debugPrint('Error generating PDF: $e');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to generate PDF: $e'),
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => _isGeneratingPdf = false);
+                      }
+                    }
+                  },
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _reportData.isEmpty
-          ? const Center(
-              child: Text('No shade cards found in Item Group Master'),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _reportData.length,
-              itemBuilder: (context, index) {
-                final group = _reportData[index];
-                return _buildGroupCard(group);
-              },
+          : Column(
+              children: [
+                if (_reportData.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedLotName ?? 'All Lots',
+                      decoration: InputDecoration(
+                        labelText: 'Filter by Lot Name',
+                        prefixIcon: const Icon(LucideIcons.filter),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: _availableLotNames.map((name) {
+                        return DropdownMenuItem(value: name, child: Text(name));
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedLotName = value;
+                        });
+                      },
+                    ),
+                  ),
+                Expanded(
+                  child: _filteredData.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No shade cards found matching the filter.',
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: _filteredData.length,
+                          itemBuilder: (context, index) {
+                            final group = _filteredData[index];
+                            return _buildGroupCard(group);
+                          },
+                        ),
+                ),
+              ],
             ),
     );
   }

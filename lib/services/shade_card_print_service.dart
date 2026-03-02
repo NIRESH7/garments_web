@@ -18,27 +18,32 @@ class ShadeCardPrintService {
 
       if (colours.isEmpty) continue;
 
-      // Group images logic
-      List<pw.Widget> colorWidgets = [];
-      for (var color in colours) {
-        final String? photoPath = color['photo'];
-        pw.MemoryImage? netImage;
-        if (photoPath != null) {
-          try {
-            final String fullImageUrl = ApiConstants.getImageUrl(photoPath);
-            final response = await http.get(Uri.parse(fullImageUrl));
-            if (response.statusCode == 200) {
-              netImage = pw.MemoryImage(response.bodyBytes);
+      // Fetch all images for this group concurrently while keeping order
+      List<pw.Widget> colorWidgets = await Future.wait(
+        colours.map((dynamic color) async {
+          final String? photoPath = color['photo'];
+          pw.MemoryImage? netImage;
+          if (photoPath != null) {
+            try {
+              final String fullImageUrl = ApiConstants.getImageUrl(photoPath);
+              final response = await http
+                  .get(Uri.parse(fullImageUrl))
+                  .timeout(const Duration(seconds: 15));
+              if (response.statusCode == 200) {
+                netImage = pw.MemoryImage(response.bodyBytes);
+              } else {
+                print(
+                  'Image fetch failed. Status: ${response.statusCode}, URL: $fullImageUrl',
+                );
+              }
+            } catch (e) {
+              print('Error fetching print image: $e');
             }
-          } catch (e) {
-            print('Error fetching print image: $e');
           }
-        }
 
-        colorWidgets.add(
-          pw.Container(
+          return pw.Container(
             width: 140, // Slightly wider for better text fit
-            margin: const pw.EdgeInsets.all(5),
+            margin: const pw.EdgeInsets.only(bottom: 20, right: 15),
             decoration: pw.BoxDecoration(
               color: PdfColors.white,
               border: pw.Border.all(color: PdfColors.grey200, width: 1),
@@ -114,6 +119,23 @@ class ShadeCardPrintService {
                 ),
               ],
             ),
+          );
+        }),
+      );
+
+      // Break colorWidgets into chunks of 3 for each row to allow pagination across pages
+      // (pw.Wrap cannot span multiple pages automatically)
+      List<pw.Widget> colorRows = [];
+      for (int i = 0; i < colorWidgets.length; i += 3) {
+        final rowChildren = colorWidgets.sublist(
+          i,
+          i + 3 > colorWidgets.length ? colorWidgets.length : i + 3,
+        );
+        colorRows.add(
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: rowChildren,
           ),
         );
       }
@@ -214,17 +236,14 @@ class ShadeCardPrintService {
             padding: const pw.EdgeInsets.only(top: 10),
             child: pw.Text(
               'Page ${context.pageNumber} of ${context.pagesCount}',
-              style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey),
+              style: pw.TextStyle(
+                font: font,
+                fontSize: 10,
+                color: PdfColors.grey,
+              ),
             ),
           ),
-          build: (context) => [
-            pw.Wrap(
-              spacing: 15,
-              runSpacing: 15,
-              alignment: pw.WrapAlignment.start,
-              children: colorWidgets,
-            ),
-          ],
+          build: (context) => colorRows,
         ),
       );
     }
