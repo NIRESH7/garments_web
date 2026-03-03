@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import User from './src/modules/user/model.js';
 import CuttingOrder from './src/modules/production/cuttingOrderModel.js';
 import Assignment from './src/modules/production/assignmentModel.js';
+import Category from './src/modules/master/categoryModel.js';
 
 dotenv.config();
 
@@ -15,6 +16,38 @@ async function seedTestPlan() {
     try {
         const user = await User.findOne({ email: 'admin@example.com' });
         const userId = user ? user._id : new mongoose.Types.ObjectId();
+
+        console.log('🧹 Adding "Test Item" to Categories to prevent Flutter crash...');
+
+        // 1. Ensure "Test Item" is in "Item Name"
+        let itemNameCat = await Category.findOne({ name: 'Item Name' });
+        if (itemNameCat) {
+            if (!itemNameCat.values.some(v => v.name === 'Test Item')) {
+                itemNameCat.values.push({ name: 'Test Item' });
+                await itemNameCat.save();
+                console.log('✅ Added "Test Item" to "Item Name" category');
+            }
+        }
+
+        // 2. Ensure "100" is in "Size"
+        let sizeCat = await Category.findOne({ name: 'Size' });
+        if (sizeCat) {
+            if (!sizeCat.values.some(v => v.name === '100')) {
+                sizeCat.values.push({ name: '100' });
+                await sizeCat.save();
+                console.log('✅ Added "100" to "Size" category');
+            }
+        }
+
+        // 3. Ensure "30" is in "Dia"
+        let diaCat = await Category.findOne({ name: 'Dia' });
+        if (diaCat) {
+            if (!diaCat.values.some(v => v.name === '30')) {
+                diaCat.values.push({ name: '30' });
+                await diaCat.save();
+                console.log('✅ Added "30" to "Dia" category');
+            }
+        }
 
         console.log('🧹 Clearing old test plans and assignments...');
         await CuttingOrder.deleteMany({ planName: 'Test Calculation Plan' });
@@ -61,16 +94,6 @@ async function seedTestPlan() {
         });
 
         console.log('✅ Test Plan Seeded Successfully!');
-        console.log('--------------------------------------------------');
-        console.log('Go to "Lot Requirement Allocation" screen');
-        console.log('Select Plan: Test Calculation Plan');
-        console.log('Item: Test Item | Size: 100');
-        console.log('Dozen: 130');
-        console.log('Calculation should show:');
-        console.log('- Required Wt: 130 * 15 = 1950.00 KG');
-        console.log('- Rolls Needed (Wt / 20): 1950 / 20 = 97.5 (~98 Rolls)');
-        console.log('- Sets Required (Rolls / 11): 98 / 11 = 8.9 (~9 Sets)');
-        console.log('--------------------------------------------------');
 
     } catch (err) {
         console.error('❌ SEED ERROR:', err);

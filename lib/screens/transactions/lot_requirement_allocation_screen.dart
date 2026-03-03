@@ -118,8 +118,8 @@ class _LotRequirementAllocationScreenState
   int get _setsRequired {
     if (_rollsRequired <= 0) return 0;
     
-    final sets = _rollsRequired / 11;
-    return sets.round();
+    final sets = (_rollsRequired / 11).round();
+    return sets < 1 ? 1 : sets;
   }
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
@@ -239,13 +239,12 @@ class _LotRequirementAllocationScreenState
     double plannedDozen = (entry['sizeQuantities'][_selectedSize] ?? 0)
         .toDouble();
 
-    // 1. Subtract already saved allocations for this specific Item + Size
+    // 1. Subtract already saved allocations for this specific Item + Size in the DB
     final savedAllocations = plan['lotAllocations'] as List? ?? [];
     double allocatedInDb = 0;
     for (var alloc in savedAllocations) {
       if (alloc['itemName'] == _selectedItem &&
           alloc['size'] == _selectedSize) {
-        // Fix: Removed 'seen' check as it skipped duplicate allocations on the same day.
         allocatedInDb += (alloc['dozen'] as num?)?.toDouble() ?? 0;
       }
     }
@@ -264,16 +263,8 @@ class _LotRequirementAllocationScreenState
     if (remaining < 0) remaining = 0;
 
     setState(() {
-      _pendingDozenForSelection = remaining;
-      // Client said Day 1/2 requirement should come "automatic-ah" but
-      // complained about "bringing balance" as a "logic mistake".
-      // Fix: Suggest the FULL planned dozen by default if nothing is entered,
-      // while showing the "Pending" in the helper text for reference.
-      if (_dozenCtrl.text.isEmpty || _dozenCtrl.text == "0" || _dozenCtrl.text == "0.0") {
-        if (plannedDozen > 0) {
-          _dozenCtrl.text = (plannedDozen % 1 == 0 ? plannedDozen.toInt().toString() : plannedDozen.toString());
-        }
-      }
+      _pendingDozenForSelection = remaining > 0 ? remaining : 0;
+      // Removed auto-filling of _dozenCtrl. User must explicitly type their daily target.
     });
   }
 
@@ -1033,7 +1024,7 @@ class _LotRequirementAllocationScreenState
                     decoration: InputDecoration(
                       labelText: 'Dozen',
                       helperText: _pendingDozenForSelection > 0
-                          ? 'Pending: ${_pendingDozenForSelection % 1 == 0 ? _pendingDozenForSelection.toInt() : _pendingDozenForSelection.toStringAsFixed(1)}'
+                          ? 'Pending: ${_pendingDozenForSelection > 1000000 ? _pendingDozenForSelection.toStringAsExponential(2) : (_pendingDozenForSelection % 1 == 0 ? _pendingDozenForSelection.toInt() : _pendingDozenForSelection.toStringAsFixed(1))}'
                           : null,
                       helperStyle: TextStyle(
                         color: Colors.orange.shade700,
