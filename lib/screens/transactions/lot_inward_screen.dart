@@ -1186,12 +1186,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                 }
                                 return true;
                               }).toList();
-                              _showError(
-                                "Printing not implemented yet for ${filteredToPrint.length} stickers",
-                              );
-                              Navigator.pop(
-                                ctx,
-                              ); // Close the modal after "printing"
+                              
+                              if (filteredToPrint.isEmpty) {
+                                _showError("No stickers to print");
+                                return;
+                              }
+                              
+                              Navigator.pop(ctx); // Close the modal
+                              _printStickersCustom(filteredToPrint);
                               if (inwardData != null) _askToShare(inwardData);
                             },
                             icon: const Icon(Icons.print),
@@ -1506,6 +1508,44 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         });
       }
     }
+  }
+
+  Future<void> _printStickersCustom(List<Map<String, dynamic>> stickerList) async {
+    final pdf = pw.Document();
+
+    for (int i = 0; i < stickerList.length; i += 2) {
+      final item1 = stickerList[i];
+      final item2 = (i + 1 < stickerList.length) ? stickerList[i + 1] : null;
+
+      final isSingle = item2 == null;
+      final pageFormat = isSingle
+          ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
+          : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          margin: const pw.EdgeInsets.all(2),
+          build: (pw.Context context) {
+            if (isSingle) {
+              return _buildSingleSticker(item1);
+            } else {
+              return pw.Row(
+                children: [
+                  pw.Expanded(child: _buildSingleSticker(item1)),
+                  pw.SizedBox(width: 2),
+                  pw.Expanded(child: _buildSingleSticker(item2)),
+                ],
+              );
+            }
+          },
+        ),
+      );
+    }
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
   }
 
   pw.Widget _buildPdfRow(
