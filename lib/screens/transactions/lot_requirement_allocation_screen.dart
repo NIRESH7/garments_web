@@ -105,37 +105,21 @@ class _LotRequirementAllocationScreenState
       (double.tryParse(_dozenCtrl.text) ?? 0) *
       (_dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0));
 
-  // Use the actual dozen weight per set (11 rolls)
+  // Formula: Required Weight / 20
   int get _rollsRequired {
-    if (_fabricRequiredKg <= 0 || _dozenWeight <= 0) return 0;
-    // Calculate total rolls based on the dozen weight and 11 rolls/set rule
-    // wpr (weight per roll) = dozenWeight / 11
-    final wpr = _dozenWeight / 11;
-    if (wpr <= 0) return 0;
+    if (_fabricRequiredKg <= 0) return 0;
     
-    // Total rolls estimate
-    return (_fabricRequiredKg / wpr).round();
+    // Total rolls estimate (weight / 20)
+    final rolls = _fabricRequiredKg / 20;
+    return rolls.round();
   }
 
-  // Client Rule: Each set is strictly 11 rolls. 
-  // If weight shortfall > 5kg -> add 1 set. If > 10kg -> add 2 sets.
+  // Formula: Rolls Needed / 11 (rounded to nearest whole number)
   int get _setsRequired {
     if (_rollsRequired <= 0) return 0;
-    final wpr = _dozenWeight / 11;
-    final rawSets = _rollsRequired / 11;
-    int sets = rawSets.ceil();
     
-    // Check if the current sets cover the weight well
-    final allocatedWeight = sets * 11 * wpr;
-    final diff = _fabricRequiredKg - allocatedWeight;
-    
-    if (diff > 10) {
-      sets += 2;
-    } else if (diff > 5) {
-      sets += 1;
-    }
-    
-    return sets;
+    final sets = _rollsRequired / 11;
+    return sets.round();
   }
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
