@@ -831,6 +831,10 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   }
 
   Widget _buildStickerItem(BuildContext context, Map<String, dynamic> item) {
+    final rawWt = item['weight']?.toString() ?? '0';
+    final weightDouble = double.tryParse(rawWt) ?? 0.0;
+    final displayWeight = weightDouble.toStringAsFixed(2);
+    
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(16),
@@ -849,7 +853,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
               _buildStickerRow('Dia', item['dia']),
               _buildStickerRow('Colour', item['colour']),
               _buildStickerRow('Set No', '#${item['setNo']}'),
-              _buildStickerRow('Roll Wt', '${item['weight']} kg'),
+              _buildStickerRow('Roll Wt', '$displayWeight kg'),
               _buildStickerRow('Date', item['date']),
               const SizedBox(height: 12),
               if (_showAllQRs)
@@ -864,7 +868,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
                         ),
                         child: QrImageView(
                           data:
-                              'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
+                              'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${displayWeight}kg\nDT: ${item['date']}',
                           version: QrVersions.auto,
                           size: 100.0,
                         ),
@@ -993,30 +997,35 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   }
 
   pw.Widget _buildSingleSticker(Map<String, dynamic> item) {
+    final rawWt = item['weight']?.toString() ?? '0';
+    final weightDouble = double.tryParse(rawWt) ?? 0.0;
+    final displayWeight = weightDouble.toStringAsFixed(2);
+    
     final qrData =
-        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}';
+        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${displayWeight}kg\nDT: ${item['date']}';
+        
     return pw.Container(
       width: double.infinity,
       height: double.infinity,
-      padding: const pw.EdgeInsets.all(2),
+      padding: const pw.EdgeInsets.all(1),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(width: 1),
+        border: pw.Border.all(width: 0.5),
         color: PdfColors.white,
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        mainAxisSize: pw.MainAxisSize.max,
         children: [
-          // Text fields at top
-          _buildPdfRow('LOT', item['lotNo']?.toString() ?? ''),
-          _buildPdfRow('Name', item['lotName']?.toString() ?? ''),
-          _buildPdfRow('Dia', item['dia']?.toString() ?? ''),
-          _buildPdfRow('Col', item['colour']?.toString() ?? ''),
-          _buildPdfRow('Set', '#${item['setNo']}'),
-          _buildPdfRow('Wt', '${item['weight']} kg'),
-          _buildPdfRow('Dt', item['date']?.toString() ?? ''),
-          // Spacer pushes QR to the bottom
-          pw.Spacer(),
+          // Text fields at top with smaller font size 9
+          _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 9),
+          _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 9),
+          _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 9),
+          _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 9),
+          _buildPdfRow('Set', '#${item['setNo']}', fontSize: 9),
+          _buildPdfRow('Wt', '$displayWeight kg', fontSize: 9),
+          _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 9),
+          
+          pw.SizedBox(height: 2),
+          
           // QR code at bottom centre
           pw.Center(
             child: pw.Column(
@@ -1025,12 +1034,12 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
                 pw.BarcodeWidget(
                   barcode: pw.Barcode.qrCode(),
                   data: qrData,
-                  width: 32,
-                  height: 32,
+                  width: 35,
+                  height: 35,
                 ),
                 pw.SizedBox(height: 1),
                 pw.Text(
-                  'SCAN',
+                  'SCAN FOR AUTH',
                   style: pw.TextStyle(
                     fontSize: 6,
                     fontWeight: pw.FontWeight.bold,

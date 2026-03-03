@@ -105,15 +105,37 @@ class _LotRequirementAllocationScreenState
       (double.tryParse(_dozenCtrl.text) ?? 0) *
       (_dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0));
 
-  int get _rollsRequired =>
-      _fabricRequiredKg > 0 ? (_fabricRequiredKg / 20).ceil() : 0;
+  // Use the actual dozen weight per set (11 rolls)
+  int get _rollsRequired {
+    if (_fabricRequiredKg <= 0 || _dozenWeight <= 0) return 0;
+    // Calculate total rolls based on the dozen weight and 11 rolls/set rule
+    // wpr (weight per roll) = dozenWeight / 11
+    final wpr = _dozenWeight / 11;
+    if (wpr <= 0) return 0;
+    
+    // Total rolls estimate
+    return (_fabricRequiredKg / wpr).round();
+  }
 
-  // Custom rounding: decimal > 0.5 → ceil (add 1 set), decimal ≤ 0.5 → floor
-  // e.g. 25/11 = 2.27 → 2 sets | 29/11 = 2.63 → 3 sets
+  // Client Rule: Each set is strictly 11 rolls. 
+  // If weight shortfall > 5kg -> add 1 set. If > 10kg -> add 2 sets.
   int get _setsRequired {
-    final raw = _rollsRequired / 11;
-    final decimal = raw - raw.floor();
-    return decimal > 0.5 ? raw.ceil() : raw.floor();
+    if (_rollsRequired <= 0) return 0;
+    final wpr = _dozenWeight / 11;
+    final rawSets = _rollsRequired / 11;
+    int sets = rawSets.ceil();
+    
+    // Check if the current sets cover the weight well
+    final allocatedWeight = sets * 11 * wpr;
+    final diff = _fabricRequiredKg - allocatedWeight;
+    
+    if (diff > 10) {
+      sets += 2;
+    } else if (diff > 5) {
+      sets += 1;
+    }
+    
+    return sets;
   }
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
@@ -236,31 +258,38 @@ class _LotRequirementAllocationScreenState
     // 1. Subtract already saved allocations for this specific Item + Size
     final savedAllocations = plan['lotAllocations'] as List? ?? [];
     double allocatedInDb = 0;
-    final seen = <String>{};
     for (var alloc in savedAllocations) {
       if (alloc['itemName'] == _selectedItem &&
           alloc['size'] == _selectedSize) {
-        String key = "${alloc['date']}_${alloc['day']}_${alloc['dozen']}";
-        if (!seen.contains(key)) {
-          allocatedInDb += (alloc['dozen'] as num?)?.toDouble() ?? 0;
-          seen.add(key);
-        }
+        // Fix: Removed 'seen' check as it skipped duplicate allocations on the same day.
+        allocatedInDb += (alloc['dozen'] as num?)?.toDouble() ?? 0;
       }
     }
 
-    // 2. Subtract unsaved allocations in the current session
+    // 2. Subtract unsaved allocations in the CURRENT SESSION across ALL days
     double allocatedInSession = 0;
-    for (var entry in _currentDayEntries) {
-      if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
-        allocatedInSession += entry.dozen;
+    _dayEntries.forEach((day, entries) {
+      for (var entry in entries) {
+        if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
+          allocatedInSession += entry.dozen;
+        }
       }
-    }
+    });
 
     double remaining = plannedDozen - allocatedInDb - allocatedInSession;
     if (remaining < 0) remaining = 0;
+
     setState(() {
       _pendingDozenForSelection = remaining;
-      // Removed: _dozenCtrl.text = remaining.toString(); // Don't overwrite user input
+      // Client said Day 1/2 requirement should come "automatic-ah" but
+      // complained about "bringing balance" as a "logic mistake".
+      // Fix: Suggest the FULL planned dozen by default if nothing is entered,
+      // while showing the "Pending" in the helper text for reference.
+      if (_dozenCtrl.text.isEmpty || _dozenCtrl.text == "0" || _dozenCtrl.text == "0.0") {
+        if (plannedDozen > 0) {
+          _dozenCtrl.text = (plannedDozen % 1 == 0 ? plannedDozen.toInt().toString() : plannedDozen.toString());
+        }
+      }
     });
   }
 

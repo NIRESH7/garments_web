@@ -431,14 +431,13 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         final List<Map<String, dynamic>> colours = [];
         double setTotalWeight = 0;
 
-        // Requirement: "if 10 colour available automatically fill 10 colours"
-        // Use Master List (_allColours) + Lot Specific (_currentLotColours)
-        final combinedColours = {
-          ..._allColours,
-          ..._currentLotColours,
-        }.toList();
+        // Use ONLY Lot Specific Colours (_currentLotColours)
+        // Fallback: If _currentLotColours is empty, extract from setStock
+        final lotColours = _currentLotColours.isNotEmpty
+            ? _currentLotColours
+            : setStock.map((s) => s['colour']?.toString() ?? 'N/A').toSet().toList();
 
-        for (var lotCol in combinedColours) {
+        for (var lotCol in lotColours) {
           // Check if we have stock for this color in this set
           final stockItem = setStock.firstWhere(
             (s) =>
@@ -455,7 +454,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             'weight': w,
             'roll_weight': w,
             'no_of_rolls': w > 0 ? 1 : 0,
-            'isChecked': false,
+            'isChecked': w > 0, // Automatically check if weight is present
           });
         }
 
@@ -1462,50 +1461,145 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   }
 
   void _handleScannedCode(String code) {
-    // Vibrate or sound could be added here
     debugPrint('Scanned Code: $code');
 
-    // Logic: Treat code as Lot Number
-    // 1. Check if this Lot Number exists in _lotNos (or ANY Lot No if we want to be smarter)
-    // For now, we only have _lotNos loaded if Dia is selected.
-    // This might be a limitation. Ideally, scanning should select Lot Name and Dia too.
+    // Parse data robustly (handles multi-line or flattened single-line strings)
+    String? getValue(String key) {
+      final keyPattern = '$key:';
+      if (!code.contains(keyPattern)) return null;
 
-    // If we assume the code IS the Lot Number:
-    bool found = false;
+      final start = code.indexOf(keyPattern) + keyPattern.length;
+      // Find the next key to know where to stop
+      final keys = ['LOT:', 'NAME:', 'DIA:', 'COL:', 'SET:', 'WT:', 'DT:'];
+      int end = code.length;
 
-    // Case 1: Dia is already selected, check if code is in the filtered list
-    if (_selectedDia != null && _lotNos.contains(code)) {
-      found = true;
+      for (var k in keys) {
+        if (k == keyPattern) continue;
+        final nextKeyPos = code.indexOf(k, start);
+        if (nextKeyPos != -1 && nextKeyPos < end) {
+          end = nextKeyPos;
+        }
+      }
+      return code.substring(start, end).trim();
     }
 
-    // Case 2: Global search (if we had all lots).
-    // Since we don't have all lots loaded, we might need an API call to "find lot details".
-    // For this iteration, let's assume the user selects Dia first OR we just try to set it.
+    String? scannedLotNo = getValue('LOT');
+    String? scannedLotName = getValue('NAME');
+    String? scannedDia = getValue('DIA');
+    String? scannedSetNo = getValue('SET');
+    // If 'SET' fails, try 'Set No' just in case of old formats
+    scannedSetNo ??= getValue('Set No');
+    // Clean set number from prefix like #
+    if (scannedSetNo != null && scannedSetNo.startsWith('#')) {
+      scannedSetNo = scannedSetNo.substring(1);
+    }
+    
+    String? scannedColour = getValue('COL');
 
-    if (found) {
-      setState(() {
-        _selectedLotNo = code;
-        _isManual = true; // Switch back to manual to show details
+    // If no keys found, treat whole code as Lot No (Fallback)
+    if (scannedLotNo == null && !code.contains(':')) {
+      scannedLotNo = code.trim();
+    }
+
+    if (scannedLotNo == null || scannedLotNo.isEmpty) {
+      _showError('Invalid QR Code: Could not find Lot Number');
+      return;
+    }
+
+    // Auto-selection logic
+    bool needsDiaChange = scannedDia != null && scannedDia != _selectedDia;
+
+    setState(() {
+      _isManual = true; // Switch to manual to show details
+      if (scannedDia != null && _dias.contains(scannedDia)) {
+        _selectedDia = scannedDia;
+      }
+      if (scannedLotName != null && _lotNames.contains(scannedLotName)) {
+        _selectedLotName = scannedLotName;
+      }
+    });
+
+    // If DIA changed, we need to refresh lot numbers first
+    if (needsDiaChange && scannedDia != null) {
+      _onDiaChanged(scannedDia).then((_) {
+        _processScannedLot(
+          scannedLotNo!,
+          scannedSetNo,
+          scannedColour,
+          scannedLotName,
+        );
       });
-      _onLotNoChanged(code); // Load details
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lot Found: $code'),
-          backgroundColor: Colors.green,
-        ),
-      );
     } else {
-      // Optional: Trigger an API search if not found in local filtered list?
-      // For now, just show error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Lot No "$code" not found in current list. Select Correct DIA first?',
-          ),
-          backgroundColor: Colors.orange,
-        ),
+      _processScannedLot(
+        scannedLotNo,
+        scannedSetNo,
+        scannedColour,
+        scannedLotName,
       );
     }
+  }
+
+  void _processScannedLot(
+    String lotNo,
+    String? setNo,
+    String? scannedColour,
+    String? lotName,
+  ) {
+    // Check if lot exists in current DIA's list
+    if (!_lotNos.contains(lotNo)) {
+      // If lot name was provided, maybe it's recommended? 
+      // But we strictly check the loaded _lotNos for safety.
+      _showError('Lot No "$lotNo" not found for DIA $_selectedDia');
+      return;
+    }
+
+    setState(() {
+      _selectedLotNo = lotNo;
+    });
+
+    _onLotNoChanged(lotNo).then((_) {
+      // Auto-toggle set if provided
+      if (setNo != null) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _toggleSetSelection(setNo, true);
+
+            // After toggling, we can try to find the specific color from scan 
+            // and ensure it's checked (though our logic already checks all stock colors)
+            if (scannedColour != null) {
+              setState(() {
+                final activeSet = _selectedSets.firstWhere(
+                  (s) => s['set_no'].toString() == setNo,
+                  orElse: () => {},
+                );
+                if (activeSet.isNotEmpty) {
+                  final colours = activeSet['colours'] as List;
+                  for (var col in colours) {
+                    if (col['colour'] == scannedColour) {
+                      col['isChecked'] = true;
+                    }
+                  }
+                }
+              });
+            }
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Lot & Set Found: $lotNo, Set $setNo'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lot Found: $lotNo'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    });
   }
 }
 

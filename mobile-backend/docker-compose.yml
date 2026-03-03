@@ -19,6 +19,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BASE_URL=http://13.220.94.83:5001
 
 volumes:
   mongodb_data:

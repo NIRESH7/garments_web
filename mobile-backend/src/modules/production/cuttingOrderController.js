@@ -80,7 +80,9 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
 
         const allocatedWt = Math.min(lotBalance, remainingWeight);
         const wpr = calcWeightPerRoll(entry, effDozenWeight);
-        const rollsAlloc = wpr > 0 ? allocatedWt / wpr : 0;
+
+        // Calculate rolls but round to nearest integer to avoid "half rolls"
+        const rollsAlloc = wpr > 0 ? Math.round(allocatedWt / wpr) : 0;
 
         // Storage Data
         const sd = inw.storageDetails && Array.isArray(inw.storageDetails)
@@ -101,13 +103,13 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
         }
 
         // Expand into individual set rows, skipping already-used set numbers
-        let rollsNeeded = rollsAlloc;
-        let setIndexInLot = 0; // index into storageDetail arrays
-        let lotLevelRollsCounted = 0; // local counter to determine set number within this lot
+        let rollsToAssign = rollsAlloc;
+        let setIndexInLot = 0;
+        let lotLevelRollsCounted = 0;
 
-        while (rollsNeeded > 0.001) {
-            const rollsInSet = Math.min(rollsNeeded, ROLLS_PER_SET);
-            // Use lot-level counter for set number to stay consistent with stickers
+        while (rollsToAssign > 0) {
+            // STRICT RULE: Each set must be 11 rolls (or remaining rolls in lot)
+            const rollsInSet = Math.min(rollsToAssign, ROLLS_PER_SET);
             const setNo = Math.floor(lotLevelRollsCounted / ROLLS_PER_SET) + 1;
 
             // 1. Get Actual Weight from inward if available, else use calculated
@@ -133,7 +135,6 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
             let rackName = 'N/A';
             let palletNumber = 'N/A';
             if (sd) {
-                // We use the rack/pallet of the FIRST roll in this set
                 if (sd.racks && sd.racks[setIndexInLot]) rackName = sd.racks[setIndexInLot];
                 if (sd.pallets && sd.pallets[setIndexInLot]) palletNumber = sd.pallets[setIndexInLot];
             }
@@ -145,20 +146,19 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
                     lotNo: inw.lotNo,
                     dia,
                     setNo,
-                    rolls: parseFloat(rollsInSet.toFixed(2)),
+                    rolls: rollsInt, // Integer rolls
                     setWeight: actualSetWeight,
                     rackName,
                     palletNumber,
                     lotBalance: parseFloat((lotBalance - actualSetWeight).toFixed(2)),
                 });
-                rollsNeeded -= rollsInSet;
+                rollsToAssign -= rollsInSet;
                 globalRollsCounted += rollsInSet;
             }
 
             lotLevelRollsCounted += rollsInSet;
             setIndexInLot += rollsInt;
 
-            // Safety break: if we've exhausted the sticker weights or rolls in lot, stop
             if (setIndexInLot >= (allInwardWeights.length > 0 ? allInwardWeights.length : totalInwardWt / wpr)) {
                 break;
             }
@@ -261,8 +261,31 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
 
     const requiredWeight = targetDozen * effDozenWeight;
 
-    const { setRows, totalRolls, totalSets, remainingRolls, shortfall } =
+    let { setRows, totalRolls, totalSets, remainingRolls, shortfall } =
         await runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, excludedSets: excludedSetList });
+
+    // Client Business Rule: If weight exceeds threshold, add extra sets
+    // "If > 5kg over required weight needed -> add 1-2 sets. If > 10kg -> add 2 sets."
+    if (shortfall > 5) {
+        let setsToAdd = (shortfall > 10) ? 2 : 1;
+        console.log(`Weight threshold met: Shortfall ${shortfall.toFixed(2)}kg > 5kg. Adding ${setsToAdd} extra set(s).`);
+
+        // Recalculate with more targetDozen or just more requiredWeight
+        const adjustedWeight = requiredWeight + (setsToAdd * ROLLS_PER_SET * (requiredWeight / Math.max(1, totalRolls || 1)));
+
+        const retry = await runFifo({
+            dia,
+            effDozenWeight,
+            targetDozen,
+            requiredWeight: adjustedWeight,
+            excludedSets: excludedSetList
+        });
+
+        setRows = retry.setRows;
+        totalRolls = retry.totalRolls;
+        totalSets = retry.totalSets;
+        shortfall = retry.shortfall;
+    }
 
     if (shortfall > 0.1) {
         return res.json({
@@ -278,7 +301,7 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         allocations: setRows,
-        totalFabric: parseFloat(requiredWeight.toFixed(2)),
+        totalFabric: parseFloat((requiredWeight + (shortfall <= 0 ? 0 : shortfall)).toFixed(2)),
         totalRolls,
         totalSets,
         remainingRolls,
@@ -368,6 +391,22 @@ const saveLotAllocation = asyncHandler(async (req, res) => {
     }
 
     plan.lotAllocations = [...plan.lotAllocations, ...enriched];
+
+    // Client Rule: "First main cutting entry less aganum"
+    // Decrement the planned quantities in the master cuttingEntries
+    if (itemName && size && dozen > 0) {
+        for (const entry of plan.cuttingEntries) {
+            if (entry.itemName === itemName) {
+                if (entry.sizeQuantities) {
+                    const currentQty = entry.sizeQuantities[size] || 0;
+                    entry.sizeQuantities[size] = Math.max(0, currentQty - dozen);
+                }
+                entry.totalDozens = Math.max(0, (entry.totalDozens || 0) - dozen);
+            }
+        }
+        plan.markModified('cuttingEntries');
+    }
+
     await plan.save();
 
     res.json({ success: true, plan });
@@ -568,4 +607,5 @@ export {
     getPreviousPlanning,
     getCuttingPlanReport,
     updateCuttingOrder,
+    runFifo
 };
