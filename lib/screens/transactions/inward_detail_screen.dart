@@ -962,14 +962,14 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
     String label,
     String value, {
     double fontSize = 10,
-    bool isBoldValue = false,
+    bool isBoldValue = true,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 0.2),
+      padding: const pw.EdgeInsets.symmetric(vertical: 0.3),
       child: pw.Row(
         children: [
           pw.SizedBox(
-            width: 40,
+            width: 38,
             child: pw.Text(
               '$label:',
               style: pw.TextStyle(
@@ -983,9 +983,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
               value,
               style: pw.TextStyle(
                 fontSize: fontSize,
-                fontWeight: isBoldValue
-                    ? pw.FontWeight.bold
-                    : pw.FontWeight.normal,
+                fontWeight: pw.FontWeight.bold,
               ),
             ),
           ),
@@ -995,6 +993,8 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   }
 
   pw.Widget _buildSingleSticker(Map<String, dynamic> item) {
+    final qrData =
+        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}';
     return pw.Container(
       width: double.infinity,
       height: double.infinity,
@@ -1005,62 +1005,45 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisSize: pw.MainAxisSize.max,
         children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 9),
-              _buildPdfRow(
-                'Name',
-                item['lotName']?.toString() ?? '',
-                fontSize: 9,
-              ),
-              _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 9),
-              _buildPdfRow(
-                'Col',
-                item['colour']?.toString() ?? '',
-                fontSize: 9,
-              ),
-              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 9),
-              _buildPdfRow(
-                'Wt',
-                '${item['weight']} kg',
-                fontSize: 9,
-                isBoldValue: true,
-              ),
-              _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 9),
-            ],
-          ),
-          pw.SizedBox(height: 4),
+          // Text fields at top
+          _buildPdfRow('LOT', item['lotNo']?.toString() ?? ''),
+          _buildPdfRow('Name', item['lotName']?.toString() ?? ''),
+          _buildPdfRow('Dia', item['dia']?.toString() ?? ''),
+          _buildPdfRow('Col', item['colour']?.toString() ?? ''),
+          _buildPdfRow('Set', '#${item['setNo']}'),
+          _buildPdfRow('Wt', '${item['weight']} kg'),
+          _buildPdfRow('Dt', item['date']?.toString() ?? ''),
+          // Spacer pushes QR to the bottom
+          pw.Spacer(),
+          // QR code at bottom centre
           pw.Center(
             child: pw.Column(
-              mainAxisAlignment: pw.MainAxisAlignment.center,
+              mainAxisSize: pw.MainAxisSize.min,
               children: [
-                pw.Container(
-                  width: 40,
-                  height: 40,
-                  child: pw.BarcodeWidget(
-                    barcode: pw.Barcode.qrCode(),
-                    data:
-                        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${item['weight']}kg\nDT: ${item['date']}',
-                  ),
+                pw.BarcodeWidget(
+                  barcode: pw.Barcode.qrCode(),
+                  data: qrData,
+                  width: 32,
+                  height: 32,
                 ),
-                pw.SizedBox(height: 0.5),
+                pw.SizedBox(height: 1),
                 pw.Text(
                   'SCAN',
                   style: pw.TextStyle(
-                    fontSize: 7,
+                    fontSize: 6,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 1),
         ],
       ),
     );
   }
+
 
   pw.Document _generateStickersPdf(List<Map<String, dynamic>> stickerList) {
     final pdf = pw.Document();

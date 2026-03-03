@@ -260,7 +260,7 @@ class _LotRequirementAllocationScreenState
     if (remaining < 0) remaining = 0;
     setState(() {
       _pendingDozenForSelection = remaining;
-      _dozenCtrl.text = remaining.toString();
+      // Removed: _dozenCtrl.text = remaining.toString(); // Don't overwrite user input
     });
   }
 

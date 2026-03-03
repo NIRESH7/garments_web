@@ -101,25 +101,39 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
         }
 
         // Expand into individual set rows, skipping already-used set numbers
-        let rollsRemaining = rollsAlloc;
+        let rollsNeeded = rollsAlloc;
         let setIndexInLot = 0; // index into storageDetail arrays
+        let lotLevelRollsCounted = 0; // local counter to determine set number within this lot
 
-        while (rollsRemaining > 0.001) {
-            const rollsInSet = Math.min(rollsRemaining, ROLLS_PER_SET);
-            const setNo = Math.floor(globalRollsCounted / ROLLS_PER_SET) + 1;
+        while (rollsNeeded > 0.001) {
+            const rollsInSet = Math.min(rollsNeeded, ROLLS_PER_SET);
+            // Use lot-level counter for set number to stay consistent with stickers
+            const setNo = Math.floor(lotLevelRollsCounted / ROLLS_PER_SET) + 1;
 
             // 1. Get Actual Weight from inward if available, else use calculated
             let actualSetWeight = 0;
-            if (allInwardWeights[setIndexInLot]) {
-                actualSetWeight = allInwardWeights[setIndexInLot];
-            } else {
+            const rollsInt = Math.round(rollsInSet);
+            let hasStickerWeights = false;
+
+            for (let i = 0; i < rollsInt; i++) {
+                const w = allInwardWeights[setIndexInLot + i];
+                if (w !== undefined) {
+                    actualSetWeight += w;
+                    hasStickerWeights = true;
+                }
+            }
+
+            if (!hasStickerWeights) {
                 actualSetWeight = parseFloat((rollsInSet * wpr).toFixed(2));
+            } else {
+                actualSetWeight = parseFloat(actualSetWeight.toFixed(2));
             }
 
             // 2. Get Specific Rack/Pallet for this specific set
             let rackName = 'N/A';
             let palletNumber = 'N/A';
             if (sd) {
+                // We use the rack/pallet of the FIRST roll in this set
                 if (sd.racks && sd.racks[setIndexInLot]) rackName = sd.racks[setIndexInLot];
                 if (sd.pallets && sd.pallets[setIndexInLot]) palletNumber = sd.pallets[setIndexInLot];
             }
@@ -135,13 +149,19 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
                     setWeight: actualSetWeight,
                     rackName,
                     palletNumber,
-                    lotBalance: parseFloat((lotBalance - allocatedWt).toFixed(2)),
+                    lotBalance: parseFloat((lotBalance - actualSetWeight).toFixed(2)),
                 });
+                rollsNeeded -= rollsInSet;
+                globalRollsCounted += rollsInSet;
             }
 
-            globalRollsCounted += rollsInSet;
-            rollsRemaining -= rollsInSet;
-            setIndexInLot++;
+            lotLevelRollsCounted += rollsInSet;
+            setIndexInLot += rollsInt;
+
+            // Safety break: if we've exhausted the sticker weights or rolls in lot, stop
+            if (setIndexInLot >= (allInwardWeights.length > 0 ? allInwardWeights.length : totalInwardWt / wpr)) {
+                break;
+            }
         }
 
         remainingWeight -= allocatedWt;
