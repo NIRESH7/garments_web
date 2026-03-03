@@ -80,9 +80,9 @@ class ApiConstants {
     // Handle relative paths: remove leading slash
     imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
 
-    // If the path starts with 'uploads/', use S3 base URL as requested
+    // If the path starts with 'uploads/', return as relative to serverUrl
     if (imageUrl.startsWith('uploads/')) {
-      return '${ApiConstants.s3BaseUrl}/$imageUrl';
+      return '${ApiConstants.serverUrl}/$imageUrl';
     }
 
     // Fallback to serverUrl for other relative paths

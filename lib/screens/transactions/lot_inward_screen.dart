@@ -93,6 +93,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _userRole;
+  String? _lastStickerGsm;
 
   // Voice input
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -402,7 +403,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             diaData.rows = (storage['rows'] as List).map((r) {
               final sRow = StickerRow();
               sRow.colour = r['colour'];
+              sRow.gsm = r['gsm']?.toString();
               sRow.setWeights = List<String>.from(r['setWeights'] ?? []);
+              // Initialize controller right away if gsm exists
+              if (sRow.gsm != null) {
+                sRow.gsmController = TextEditingController(text: sRow.gsm);
+              }
               return sRow;
             }).toList();
           }
@@ -519,11 +525,26 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             _rows.clear();
             for (var d in details) {
               final row = InwardRow();
-              row.dia = d['dia'];
+              final dia = d['dia'] as String;
+              row.dia = dia;
               // Don't set current rec/rolls, only previous
               row.prevRecRolls = (d['existingRecRolls'] as num).toInt();
               row.prevRecWt = (d['existingRecWt'] as num).toDouble();
               _rows.add(row);
+
+              // Pre-fill GSM for this DIA if we found it
+              if (d['gsm'] != null && d['gsm'].toString().isNotEmpty) {
+                final gsmVal = d['gsm'].toString();
+                _lastStickerGsm = gsmVal; // Track as latest known
+                final diaData = _stickerData.putIfAbsent(dia, () => StickerDiaData());
+                if (diaData.rows.isNotEmpty) {
+                  for (var sRow in diaData.rows) {
+                    sRow.gsm = gsmVal;
+                    sRow.gsmController ??= TextEditingController();
+                    sRow.gsmController?.text = gsmVal;
+                  }
+                }
+              }
             }
             if (_rows.isEmpty) {
               _rows.add(InwardRow());
@@ -826,6 +847,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   .map(
                     (r) => {
                       "colour": r.colour,
+                      "gsm": r.gsm,
                       "setWeights": r.setWeights,
                       "totalWeight": r.totalWeight,
                     },
@@ -1605,16 +1627,28 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     setState(() {
       _selectedStickerDia = nextDia;
-      _stickerData.putIfAbsent(nextDia, () {
-        final diaData = StickerDiaData();
-        // Auto-populate colour rows from Item Group Master mapping
-        if (_lotMappedColours.isNotEmpty) {
-          diaData.rows = _lotMappedColours
-              .map((c) => StickerRow()..colour = c)
-              .toList();
+      final diaData = _stickerData.putIfAbsent(nextDia, () => StickerDiaData());
+
+      // Initialize session GSM from Lot GSM if we don't have one yet
+      if (_lastStickerGsm == null && _gsmController.text.isNotEmpty) {
+        _lastStickerGsm = _gsmController.text;
+      }
+
+      // If we have mapped colours but no rows, create them
+      if (diaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
+        diaData.rows = _lotMappedColours.map((c) => StickerRow()..colour = c).toList();
+      }
+
+      // Pre-fill rows with last known GSM if they are empty
+      if (_lastStickerGsm != null) {
+        for (var row in diaData.rows) {
+          if (row.gsm == null || row.gsm!.isEmpty) {
+            row.gsm = _lastStickerGsm;
+            row.gsmController?.text = _lastStickerGsm!;
+          }
         }
-        return diaData;
-      });
+      }
+
       _currentPage = 1;
     });
   }
@@ -2425,6 +2459,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 children: [
                   _buildGridCell("S.NO", 50),
                   _buildGridCell("Colour", 120),
+                  _buildGridCell("GSM", 80),
                   ...List.generate(
                     sets,
                     (i) => _buildGridCell("Set-${i + 1}", 100),
@@ -2437,6 +2472,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             ...rows.asMap().entries.map((e) {
               final idx = e.key;
               final r = e.value;
+              
+              // Initialize gsmController if null
+              r.gsmController ??= TextEditingController(text: r.gsm);
+
               return Container(
                 decoration: BoxDecoration(
                   border: Border(
@@ -2455,6 +2494,25 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         (v) => setState(() => r.colour = v),
                         hint: "Colour",
                         itemImages: _colourImages,
+                      ),
+                    ),
+                    _buildGridCell(
+                      "",
+                      80,
+                      child: _buildTableInputText(
+                        r.gsmController!,
+                        (v) {
+                          r.gsm = v;
+                          _lastStickerGsm = v; // Update session GSM
+                          // Auto-fill logic: if first row is edited, fill all others for same DIA
+                          if (idx == 0) {
+                            for (int i = 1; i < rows.length; i++) {
+                              rows[i].gsm = v;
+                              rows[i].gsmController?.text = v;
+                            }
+                          }
+                          setState(() {});
+                        },
                       ),
                     ),
                     ...List.generate(sets, (i) {
@@ -2968,17 +3026,24 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           .toList();
 
       if (remaining.isNotEmpty) {
-        // Move to next DIA — auto-populate its colours if not yet done
+        // Move to next DIA
         _selectedStickerDia = remaining.first;
-        _stickerData.putIfAbsent(_selectedStickerDia!, () {
-          final diaData = StickerDiaData();
-          if (_lotMappedColours.isNotEmpty) {
-            diaData.rows = _lotMappedColours
-                .map((c) => StickerRow()..colour = c)
-                .toList();
+        final nextDiaData = _stickerData.putIfAbsent(_selectedStickerDia!, () => StickerDiaData());
+
+        // Ensure rows exist
+        if (nextDiaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
+          nextDiaData.rows = _lotMappedColours.map((c) => StickerRow()..colour = c).toList();
+        }
+
+        // Apply session GSM to empty rows
+        if (_lastStickerGsm != null) {
+          for (var row in nextDiaData.rows) {
+            if (row.gsm == null || row.gsm!.isEmpty) {
+              row.gsm = _lastStickerGsm;
+              row.gsmController?.text = _lastStickerGsm!;
+            }
           }
-          return diaData;
-        });
+        }
       } else {
         _selectedStickerDia = null;
         _currentPage = 0; // Back to main page only if all done
@@ -3183,8 +3248,10 @@ class InwardRow {
 
 class StickerRow {
   String? colour;
+  String? gsm;
   List<String> setWeights = [];
   List<TextEditingController> controllers = [];
+  TextEditingController? gsmController;
 
   double get totalWeight {
     final sum = setWeights.fold(0.0, (sum, w) {
@@ -3198,6 +3265,7 @@ class StickerRow {
     for (var c in controllers) {
       c.dispose();
     }
+    gsmController?.dispose();
   }
 }
 

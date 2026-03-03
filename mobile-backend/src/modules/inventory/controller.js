@@ -879,11 +879,24 @@ const getLotDetails = asyncHandler(async (req, res) => {
 
     if (inward) {
         // Calculate existing totals per DIA
-        const diaDetails = inward.diaEntries.map(entry => ({
-            dia: entry.dia,
-            existingRecRolls: entry.recRoll || entry.roll || 0,
-            existingRecWt: entry.recWt || 0
-        }));
+        const diaDetails = inward.diaEntries.map(entry => {
+            // Find latest GSM for this DIA from storageDetails if available
+            let latestGsm = inward.gsm || ''; // Default to main inward GSM
+            if (inward.storageDetails && Array.isArray(inward.storageDetails)) {
+                const sd = inward.storageDetails.find(s => s.dia === entry.dia);
+                if (sd && sd.rows && sd.rows.length > 0) {
+                    // Look for GSM in the first row of this DIA's storage details
+                    latestGsm = sd.rows[0].gsm || latestGsm;
+                }
+            }
+
+            return {
+                dia: entry.dia,
+                existingRecRolls: entry.recRoll || entry.roll || 0,
+                existingRecWt: entry.recWt || 0,
+                gsm: latestGsm
+            };
+        });
 
         res.json(diaDetails);
     } else {

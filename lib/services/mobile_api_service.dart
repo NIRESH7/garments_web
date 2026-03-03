@@ -55,11 +55,22 @@ class MobileApiService {
   }
 
   // --- Inventory ---
-  Future<String?> uploadImage(File file) async {
+  Future<String?> uploadImage(dynamic file) async {
     try {
-      final fileName = file.path.split('/').last;
+      XFile xFile;
+      if (file is XFile) {
+        xFile = file;
+      } else if (file is File) {
+        xFile = XFile(file.path);
+      } else {
+        return null;
+      }
+
+      final fileName = xFile.path.split('/').last;
+      final bytes = await xFile.readAsBytes();
+      
       final formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(file.path, filename: fileName),
+        'image': MultipartFile.fromBytes(bytes, filename: fileName),
       });
       final response = await _client.post(ApiConstants.upload, data: formData);
       return response.data; // Returns /uploads/filename...
@@ -551,7 +562,12 @@ class MobileApiService {
   Future<List<dynamic>> getCategories() async {
     try {
       final response = await _client.get(ApiConstants.categories);
-      return response.data ?? [];
+      if (response.data is List) {
+        return response.data;
+      } else if (response.data is Map && response.data['data'] is List) {
+        return response.data['data'];
+      }
+      return [];
     } catch (e) {
       return [];
     }

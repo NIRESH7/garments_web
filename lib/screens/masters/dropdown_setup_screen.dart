@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/mobile_api_service.dart';
@@ -17,7 +18,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   final _api = MobileApiService();
   final _valueController = TextEditingController();
   final _gsmController = TextEditingController();
-  File? _selectedImage;
+  XFile? _selectedXFile;
   final ImagePicker _picker = ImagePicker();
 
   // Static list of categories requested by the user
@@ -35,6 +36,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     'Party Name',
     'Rack Name',
     'Pallet No',
+    'Accessories',
   ];
 
   String? _selectedCategoryId;
@@ -127,7 +129,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       (c) => c['_id'] == _selectedCategoryId,
       orElse: () => <String, dynamic>{},
     );
-    _values = category['values'] ?? [];
+    final vals = category['values'];
+    _values = (vals is List) ? vals : [];
   }
 
   void _loadValues() {
@@ -139,7 +142,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   Future<void> _pickImage(ImageSource source) async {
     final XFile? image = await _picker.pickImage(source: source);
     if (image != null) {
-      setState(() => _selectedImage = File(image.path));
+      setState(() => _selectedXFile = image);
     }
   }
 
@@ -206,8 +209,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       }
 
       String? photoUrl;
-      if (_selectedImage != null && _isColoursCategory) {
-        photoUrl = await _api.uploadImage(_selectedImage!);
+      if (_selectedXFile != null && (_isColoursCategory || _isAccessoriesCategory)) {
+        photoUrl = await _api.uploadImage(_selectedXFile!);
       }
 
       final success = await _api.addCategoryValue(
@@ -220,7 +223,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       if (success) {
         _valueController.clear();
         _gsmController.clear();
-        setState(() => _selectedImage = null);
+        setState(() => _selectedXFile = null);
         await _loadCategories();
         _loadValues();
         if (!mounted) return;
@@ -296,24 +299,46 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                       hintText: 'Enter value to add',
                     ),
                   ),
-                  if (_isColoursCategory) ...[
+                  if (_isColoursCategory || _isAccessoriesCategory) ...[
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: _gsmController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'GSM',
-                        hintText: 'Enter GSM for this color',
+                    if (_isColoursCategory) ...[
+                      TextField(
+                        controller: _gsmController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'GSM',
+                          hintText: 'Enter GSM for this color',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     Row(
                       children: [
+                        if (_selectedXFile != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: kIsWeb
+                                  ? Image.network(
+                                      _selectedXFile!.path,
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      File(_selectedXFile!.path),
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                          ),
                         Expanded(
                           child: Text(
-                            _selectedImage == null
+                            _selectedXFile == null
                                 ? 'No image selected'
-                                : 'Image selected: ${_selectedImage!.path.split('/').last}',
+                                : 'Image selected: ${_selectedXFile!.path.split('/').last}',
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 13,
@@ -377,7 +402,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                       final isColoursCategory = _isColoursCategory;
 
                       return ListTile(
-                        leading: isColoursCategory
+                        leading: (isColoursCategory || _isAccessoriesCategory)
                             ? (photoUrl != null && photoUrl.isNotEmpty)
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(4),
@@ -388,10 +413,14 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                                         fit: BoxFit.cover,
                                         errorBuilder:
                                             (context, error, stackTrace) =>
-                                                _colorCircle(valueName),
+                                                isColoursCategory 
+                                                ? _colorCircle(valueName)
+                                                : const Icon(Icons.image_not_supported),
                                       ),
                                     )
-                                  : _colorCircle(valueName)
+                                  : isColoursCategory 
+                                      ? _colorCircle(valueName)
+                                      : const Icon(Icons.inventory_2, color: Colors.blueGrey)
                             : null,
                         title: Text(valueName),
                         subtitle:
@@ -445,6 +474,11 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         name == 'colors' ||
         name == 'colour' ||
         name == 'color';
+  }
+
+  bool get _isAccessoriesCategory {
+    final name = _selectedCategoryName.toLowerCase().trim();
+    return name == 'accessories';
   }
 
   Color _resolveColor(String name) {
