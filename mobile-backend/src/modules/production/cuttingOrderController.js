@@ -556,6 +556,57 @@ const getCuttingPlanReport = asyncHandler(async (req, res) => {
 // @desc    Update cutting order
 // @route   PUT /api/production/cutting-orders/:id
 // @access  Private
+// @desc    Delete a specific lot allocation from a plan
+// @route   DELETE /api/production/cutting-orders/:id/allocation/:allocationId
+const deleteLotAllocation = asyncHandler(async (req, res) => {
+    const plan = await CuttingOrder.findById(req.params.id);
+    if (!plan) {
+        res.status(404);
+        throw new Error('Planning Sheet not found');
+    }
+
+    const initialLength = plan.lotAllocations.length;
+    plan.lotAllocations = plan.lotAllocations.filter(
+        (a) => a._id.toString() !== req.params.allocationId
+    );
+
+    if (plan.lotAllocations.length === initialLength) {
+        res.status(404);
+        throw new Error('Allocation not found');
+    }
+
+    await plan.save();
+    res.json({ success: true, message: 'Allocation removed' });
+});
+
+// @desc    Update a specific lot allocation
+// @route   PUT /api/production/cutting-orders/:id/allocation/:allocationId
+const updateLotAllocation = asyncHandler(async (req, res) => {
+    const plan = await CuttingOrder.findById(req.params.id);
+    if (!plan) {
+        res.status(404);
+        throw new Error('Planning Sheet not found');
+    }
+
+    const alloc = plan.lotAllocations.id(req.params.allocationId);
+    if (!alloc) {
+        res.status(404);
+        throw new Error('Allocation not found');
+    }
+
+    // Only allow updating non-identifying fields to keep logic simple
+    alloc.rackName = req.body.rackName ?? alloc.rackName;
+    alloc.palletNumber = req.body.palletNumber ?? alloc.palletNumber;
+    alloc.dozen = req.body.dozen ?? alloc.dozen;
+    alloc.setWeight = req.body.setWeight ?? alloc.setWeight;
+
+    await plan.save();
+    res.json({ success: true, allocation: alloc });
+});
+
+// @desc    Update cutting order
+// @route   PUT /api/production/cutting-orders/:id
+// @access  Private
 const updateCuttingOrder = asyncHandler(async (req, res) => {
     const cutOrder = await CuttingOrder.findById(req.params.id);
 
@@ -588,5 +639,7 @@ export {
     getPreviousPlanning,
     getCuttingPlanReport,
     updateCuttingOrder,
+    deleteLotAllocation,
+    updateLotAllocation,
     runFifo
 };

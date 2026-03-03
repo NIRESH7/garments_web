@@ -1072,6 +1072,33 @@ class MobileApiService {
     }
   }
 
+  Future<bool> deleteLotAllocation(String planId, String allocationId) async {
+    try {
+      final response = await _client.delete(
+        '${ApiConstants.allocateLots}/$planId/allocation/$allocationId',
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> updateLotAllocation(
+    String planId,
+    String allocationId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.allocateLots}/$planId/allocation/$allocationId',
+        data: data,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<dynamic>> getPreviousPlanningEntries(
     String planName, {
     String? startDate,

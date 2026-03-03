@@ -6,6 +6,7 @@ import 'package:garments/core/theme/color_palette.dart';
 import 'package:garments/services/lot_allocation_print_service.dart';
 import 'package:garments/widgets/app_drawer.dart';
 import 'package:garments/widgets/custom_dropdown_field.dart';
+import 'package:share_plus/share_plus.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const List<String> _kWeekDays = [
@@ -624,6 +625,7 @@ class _LotRequirementAllocationScreenState
   }
 
   // ─── Print ────────────────────────────────────────────────────────────────
+  // ─── Print ────────────────────────────────────────────────────────────────
   void _printReport() {
     if (_reportRows.isEmpty) {
       _showError('Load the report first.');
@@ -639,6 +641,135 @@ class _LotRequirementAllocationScreenState
       _reportDay,
       _reportRows,
     );
+  }
+
+  // ─── Share ────────────────────────────────────────────────────────────────
+  void _shareReport() {
+    if (_reportRows.isEmpty) {
+      _showError('No details to share.');
+      return;
+    }
+    final buffer = StringBuffer();
+    buffer.writeln('LOT ALLOCATION REPORT - ${_selectedPlanId ?? ""}');
+    buffer.writeln('------------------------------------------');
+    for (var r in _reportRows) {
+      buffer.writeln(
+        '${r['day']} | ${r['itemName']} | ${r['size']} | ${r['dozen']} dz | Lot: ${r['lotNo']} | Set: ${r['setNo']} | Rack: ${r['rackName']} | Pallet: ${r['palletNumber']}',
+      );
+    }
+    Share.share(buffer.toString());
+  }
+
+  // ─── Edit / Delete Individual Allocation ──────────────────────────────────
+  Future<void> _editAllocationRow(Map<String, dynamic> lot) async {
+    final TextEditingController rackCtrl =
+        TextEditingController(text: lot['racks'].join(', '));
+    final TextEditingController palletCtrl =
+        TextEditingController(text: lot['pallets'].join(', '));
+    final TextEditingController dozenCtrl =
+        TextEditingController(text: lot['dozen'].toString());
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Allocation: ${lot['itemName']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: rackCtrl,
+              decoration: const InputDecoration(labelText: 'Rack Name'),
+            ),
+            TextField(
+              controller: palletCtrl,
+              decoration: const InputDecoration(labelText: 'Pallet No'),
+            ),
+            TextField(
+              controller: dozenCtrl,
+              decoration: const InputDecoration(labelText: 'Dozen'),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('UPDATE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && _selectedPlanId != null) {
+      setState(() => _isSaving = true);
+      try {
+        final success = await _api.updateLotAllocation(
+          _selectedPlanId!,
+          lot['id'].toString(),
+          {
+            'rackName': rackCtrl.text,
+            'palletNumber': palletCtrl.text,
+            'dozen': double.tryParse(dozenCtrl.text) ?? lot['dozen'],
+          },
+        );
+        if (success) {
+          _showSuccess('Allocation updated!');
+          _loadReport(); // Refresh
+        } else {
+          _showError('Update failed.');
+        }
+      } catch (e) {
+        _showError('Error: $e');
+      } finally {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _deleteAllocationRow(dynamic allocationId) async {
+    if (allocationId == null || _selectedPlanId == null) return;
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: const Text('Are you sure you want to remove this allocation?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isSaving = true);
+      try {
+        final success = await _api.deleteLotAllocation(
+          _selectedPlanId!,
+          allocationId.toString(),
+        );
+        if (success) {
+          _showSuccess('Allocation deleted.');
+          _loadReport(); // Refresh
+        } else {
+          _showError('Deletion failed.');
+        }
+      } catch (e) {
+        _showError('Error: $e');
+      } finally {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   // ─── Snackbars ────────────────────────────────────────────────────────────
@@ -1589,22 +1720,38 @@ class _LotRequirementAllocationScreenState
                       color: Colors.deepPurple,
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: _printReport,
-                    icon: const Icon(Icons.print, size: 16),
-                    label: const Text('PRINT'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueGrey,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
+                    ElevatedButton.icon(
+                      onPressed: _printReport,
+                      icon: const Icon(Icons.print, size: 16),
+                      label: const Text('PRINT'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
                       ),
                     ),
-                  ),
+                    ElevatedButton.icon(
+                      onPressed: _shareReport,
+                      icon: const Icon(Icons.share, size: 16),
+                      label: const Text('SHARE'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1635,6 +1782,7 @@ class _LotRequirementAllocationScreenState
         final key = '${r['itemName']}_${r['size']}_${r['lotNo']}_${r['dia']}';
         if (!g.containsKey(key)) {
           g[key] = {
+            'id'         : r['_id'], // Subdocument _id
             'itemName'   : r['itemName'],
             'size'       : r['size'],
             'dozen'      : r['dozen'],
@@ -1687,6 +1835,7 @@ class _LotRequirementAllocationScreenState
       const DataColumn(label: Text('RACK',      style: hStyle)),
       const DataColumn(label: Text('PALLET',    style: hStyle)),
       const DataColumn(label: Text('SET WEIGHT',style: hStyle)),
+      const DataColumn(label: Text('ACTIONS', style: hStyle)),
     ];
 
     // ── 5. Build widgets ─────────────────────────────────────────────────────
@@ -1742,6 +1891,26 @@ class _LotRequirementAllocationScreenState
                 DataCell(Text(pallets.join(', '), style: dStyle)),
                 DataCell(Text('${wt.toStringAsFixed(2)}',
                   style: dStyle.copyWith(color: Colors.deepPurple, fontWeight: FontWeight.bold))),
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                        onPressed: () => _editAllocationRow(lot),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                        onPressed: () => _deleteAllocationRow(lot['id']),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             );
           }).toList();

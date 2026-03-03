@@ -16,6 +16,8 @@ import {
     getPreviousPlanning,
     getCuttingPlanReport,
     updateCuttingOrder,
+    deleteLotAllocation,
+    updateLotAllocation,
 } from './cuttingOrderController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -42,6 +44,8 @@ router
     .get(protect, getCuttingOrders);
 
 router.post('/cutting-orders/:id/allocate', protect, saveLotAllocation);
+router.delete('/cutting-orders/:id/allocation/:allocationId', protect, deleteLotAllocation);
+router.put('/cutting-orders/:id/allocation/:allocationId', protect, updateLotAllocation);
 router.get('/cutting-orders/:id/allocation-report', protect, getAllocationReport);
 router
     .route('/cutting-orders/:id')
