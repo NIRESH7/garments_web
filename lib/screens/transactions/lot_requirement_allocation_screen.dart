@@ -115,12 +115,18 @@ class _LotRequirementAllocationScreenState
     return rolls.round();
   }
 
-  // Formula: Rolls Needed / 11 (rounded to nearest whole number)
+  // Formula: Rolls Needed / 11 (rounded based on client rule)
   int get _setsRequired {
     if (_rollsRequired <= 0) return 0;
     
-    final sets = (_rollsRequired / 11).round();
-    return sets < 1 ? 1 : sets;
+    final double sets = _rollsRequired / 11;
+    final int wholeSets = sets.floor();
+    final double fraction = sets - wholeSets;
+    
+    // Client Rule: .5 ku mela iruntha next value, else whole number only
+    int roundedSets = (fraction > 0.5) ? (wholeSets + 1) : wholeSets;
+    
+    return roundedSets < 1 ? 1 : roundedSets;
   }
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];

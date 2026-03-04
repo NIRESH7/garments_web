@@ -142,8 +142,12 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
                 let rackName = 'N/A';
                 let palletNumber = 'N/A';
                 if (sd) {
-                    if (sd.racks && sd.racks[setPositionIndex]) rackName = sd.racks[setPositionIndex];
-                    if (sd.pallets && sd.pallets[setPositionIndex]) palletNumber = sd.pallets[setPositionIndex];
+                    if (sd.racks && sd.racks.length > 0) {
+                        rackName = sd.racks[setPositionIndex % sd.racks.length] || sd.racks[0] || 'N/A';
+                    }
+                    if (sd.pallets && sd.pallets.length > 0) {
+                        palletNumber = sd.pallets[setPositionIndex % sd.pallets.length] || sd.pallets[0] || 'N/A';
+                    }
                 }
 
                 setRows.push({
@@ -170,7 +174,12 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
     }
 
     const decimalSets = globalRollsCounted / ROLLS_PER_SET;
-    let roundedSets = Math.round(decimalSets);
+    const wholeSets = Math.floor(decimalSets);
+    const fraction = decimalSets - wholeSets;
+
+    // Custom rule: .5 ku mela iruntha next value, .5 ku Kela iruntha (or .5) whole number only
+    let roundedSets = (fraction > 0.5) ? (wholeSets + 1) : wholeSets;
+
     if (globalRollsCounted > 0 && roundedSets < 1) roundedSets = 1;
 
     return {
