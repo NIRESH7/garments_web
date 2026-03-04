@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 import '../core/network/dio_client.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';
@@ -55,6 +56,23 @@ class MobileApiService {
   }
 
   // --- Inventory ---
+  MediaType _inferMediaType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return MediaType('image', 'jpeg');
+    }
+    if (lower.endsWith('.png')) return MediaType('image', 'png');
+    if (lower.endsWith('.mp3')) return MediaType('audio', 'mpeg');
+    if (lower.endsWith('.wav')) return MediaType('audio', 'wav');
+    if (lower.endsWith('.aac')) return MediaType('audio', 'aac');
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp4')) {
+      return MediaType('audio', 'mp4');
+    }
+    if (lower.endsWith('.webm')) return MediaType('audio', 'webm');
+    if (lower.endsWith('.caf')) return MediaType('audio', 'caf');
+    return MediaType('application', 'octet-stream');
+  }
+
   Future<String?> uploadImage(dynamic file) async {
     try {
       XFile xFile;
@@ -68,9 +86,13 @@ class MobileApiService {
 
       final fileName = xFile.path.split('/').last;
       final bytes = await xFile.readAsBytes();
-      
+
       final formData = FormData.fromMap({
-        'image': MultipartFile.fromBytes(bytes, filename: fileName),
+        'image': MultipartFile.fromBytes(
+          bytes,
+          filename: fileName,
+          contentType: _inferMediaType(fileName),
+        ),
       });
       final response = await _client.post(ApiConstants.upload, data: formData);
       return response.data; // Returns /uploads/filename...
@@ -515,6 +537,7 @@ class MobileApiService {
       return false;
     }
   }
+
   // --- Master ---
   Future<List<dynamic>> getParties() async {
     try {
@@ -846,6 +869,41 @@ class MobileApiService {
     }
   }
 
+  Future<String?> transcribeAudioFile(String path) async {
+    try {
+      final fileName = path.split('/').last;
+      final formData = FormData.fromMap({
+        'audio': await MultipartFile.fromFile(
+          path,
+          filename: fileName,
+          contentType: _inferMediaType(fileName),
+        ),
+      });
+      final response = await _client.post(
+        ApiConstants.aiTranscribe,
+        data: formData,
+      );
+      final text = response.data is Map ? response.data['text'] : null;
+      if (text == null) {
+        print('Transcribe response missing text: ${response.data}');
+      }
+      if (text == null) return null;
+      final parsed = text.toString().trim();
+      if (parsed.isEmpty) {
+        print('Transcribe returned empty text');
+      }
+      return parsed.isEmpty ? null : parsed;
+    } on DioException catch (e) {
+      print(
+        'Transcribe failed: status=${e.response?.statusCode}, data=${e.response?.data}, message=${e.message}',
+      );
+      return null;
+    } catch (e) {
+      print('Transcribe exception: $e');
+      return null;
+    }
+  }
+
   // --- AI Color Prediction ---
   Future<Map<String, dynamic>?> predictColor({
     required String fabricType,
@@ -986,6 +1044,7 @@ class MobileApiService {
       return null;
     }
   }
+
   Future<bool> updateCuttingOrder(String id, Map<String, dynamic> data) async {
     try {
       final response = await _client.put(
@@ -1003,7 +1062,9 @@ class MobileApiService {
 
   Future<bool> deleteCuttingOrder(String id) async {
     try {
-      final response = await _client.delete('${ApiConstants.cuttingOrders}/$id');
+      final response = await _client.delete(
+        '${ApiConstants.cuttingOrders}/$id',
+      );
       return response.statusCode == 200;
     } catch (e) {
       print('Delete Cutting Order Error: $e');
@@ -1175,7 +1236,11 @@ class MobileApiService {
     }
   }
 
-  Future<dynamic> addTaskReply(String taskId, Map<String, dynamic> data, {String? voicePath}) async {
+  Future<dynamic> addTaskReply(
+    String taskId,
+    Map<String, dynamic> data, {
+    String? voicePath,
+  }) async {
     try {
       if (voicePath != null) {
         final voiceUrl = await uploadAudio(voicePath);

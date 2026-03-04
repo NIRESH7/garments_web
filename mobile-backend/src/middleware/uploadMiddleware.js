@@ -42,14 +42,16 @@ const storage = isS3Configured ?
     });
 
 function checkFileType(file, cb) {
-    const filetypes = /jpg|jpeg|png|m4a|mp3|wav|aac/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
+    const allowedExt = /\.(jpg|jpeg|png|m4a|mp3|wav|aac|mp4|webm|caf)$/i;
+    const allowedMime = /^(image\/(jpeg|jpg|png)|audio\/(mpeg|mp3|wav|x-wav|aac|x-aac|mp4|x-m4a|m4a|webm|caf)|application\/octet-stream)$/i;
 
-    if (extname || mimetype) {
+    const extOk = allowedExt.test(path.extname(file.originalname || '').toLowerCase());
+    const mimeOk = allowedMime.test((file.mimetype || '').toLowerCase());
+
+    if (extOk || mimeOk) {
         return cb(null, true);
     } else {
-        cb('Images or Audio files only!');
+        cb(new Error(`Invalid file type: ${file.mimetype || 'unknown'} (${file.originalname || 'no-name'})`));
     }
 }
 

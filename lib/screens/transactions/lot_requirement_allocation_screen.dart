@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -109,7 +111,7 @@ class _LotRequirementAllocationScreenState
   // Formula: Required Weight / 20
   int get _rollsRequired {
     if (_fabricRequiredKg <= 0) return 0;
-    
+
     // Total rolls estimate (weight / 20)
     final rolls = _fabricRequiredKg / 20;
     return rolls.round();
@@ -118,14 +120,14 @@ class _LotRequirementAllocationScreenState
   // Formula: Rolls Needed / 11 (rounded based on client rule)
   int get _setsRequired {
     if (_rollsRequired <= 0) return 0;
-    
+
     final double sets = _rollsRequired / 11;
     final int wholeSets = sets.floor();
     final double fraction = sets - wholeSets;
-    
+
     // Client Rule: .5 ku mela iruntha next value, else whole number only
     int roundedSets = (fraction > 0.5) ? (wholeSets + 1) : wholeSets;
-    
+
     return roundedSets < 1 ? 1 : roundedSets;
   }
 
@@ -202,6 +204,148 @@ class _LotRequirementAllocationScreenState
       }
     }
     return result;
+  }
+
+  bool _isMissingRackPalletValue(dynamic value) {
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    return text.isEmpty ||
+        text == 'n/a' ||
+        text == 'na' ||
+        text == 'null' ||
+        text == 'not assigned';
+  }
+
+  String? _pickStorageValue(List<dynamic>? values, int setIndex) {
+    if (values == null || values.isEmpty) return null;
+    if (setIndex >= 0 && setIndex < values.length) {
+      final candidate = values[setIndex]?.toString().trim();
+      if (!_isMissingRackPalletValue(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  String _normalizeDia(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return '';
+    final numericMatch = RegExp(
+      r'-?\d+(\.\d+)?',
+    ).firstMatch(raw.replaceAll(',', '.'));
+    final numVal = numericMatch == null
+        ? null
+        : double.tryParse(numericMatch.group(0)!);
+    if (numVal == null) return raw.toLowerCase().replaceAll(' ', '');
+    if (numVal == numVal.truncateToDouble()) {
+      return numVal.toInt().toString();
+    }
+    return numVal.toString();
+  }
+
+  int _toSetNo(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  Future<List<Map<String, dynamic>>> _fillRackPalletFromInward(
+    List<Map<String, dynamic>> allocations,
+  ) async {
+    final needsFix = allocations.any(
+      (a) =>
+          _isMissingRackPalletValue(a['rackName']) ||
+          _isMissingRackPalletValue(a['palletNumber']),
+    );
+    if (!needsFix) return allocations;
+
+    final lotNos = allocations
+        .map((a) => a['lotNo']?.toString().trim() ?? '')
+        .where((lotNo) => lotNo.isNotEmpty)
+        .toSet();
+
+    final Map<String, List<dynamic>> inwardByLotNo = {};
+    for (final lotNo in lotNos) {
+      final inwards = await _api.getInwards(lotNo: lotNo);
+      inwardByLotNo[lotNo] = inwards;
+    }
+
+    return allocations.map((a) {
+      final lotNo = a['lotNo']?.toString().trim() ?? '';
+      final dia = _normalizeDia(a['dia']);
+      final setNo = _toSetNo(a['setNo']);
+
+      var rackName = a['rackName']?.toString().trim();
+      var palletNumber = a['palletNumber']?.toString().trim();
+
+      if (lotNo.isEmpty || dia.isEmpty || setNo <= 0) {
+        return a;
+      }
+
+      if (!_isMissingRackPalletValue(rackName) &&
+          !_isMissingRackPalletValue(palletNumber)) {
+        return a;
+      }
+
+      final inwards = inwardByLotNo[lotNo] ?? const [];
+      final setIndex = setNo - 1;
+
+      for (final inward in inwards) {
+        final inwardLotNo = inward['lotNo']?.toString().trim() ?? '';
+        if (inwardLotNo != lotNo) continue;
+
+        dynamic storage = inward['storageDetails'];
+        if (storage is String) {
+          try {
+            storage = jsonDecode(storage);
+          } catch (_) {
+            storage = null;
+          }
+        }
+        final List<dynamic> storageList = storage is List
+            ? storage
+            : (storage is Map ? [storage] : const []);
+
+        for (final sd in storageList) {
+          final sdDia = _normalizeDia(sd['dia']);
+          if (sdDia != dia) continue;
+
+          final racks = sd['racks'] is List
+              ? sd['racks'] as List<dynamic>
+              : null;
+          final pallets = sd['pallets'] is List
+              ? sd['pallets'] as List<dynamic>
+              : null;
+
+          if (_isMissingRackPalletValue(rackName)) {
+            rackName = _pickStorageValue(racks, setIndex) ?? rackName;
+          }
+          if (_isMissingRackPalletValue(palletNumber)) {
+            palletNumber = _pickStorageValue(pallets, setIndex) ?? palletNumber;
+          }
+
+          if (!_isMissingRackPalletValue(rackName) &&
+              !_isMissingRackPalletValue(palletNumber)) {
+            break;
+          }
+        }
+
+        if (!_isMissingRackPalletValue(rackName) &&
+            !_isMissingRackPalletValue(palletNumber)) {
+          break;
+        }
+      }
+
+      return {
+        ...a,
+        'rackName':
+            _isMissingRackPalletValue(a['rackName']) &&
+                !_isMissingRackPalletValue(rackName)
+            ? rackName
+            : a['rackName'],
+        'palletNumber':
+            _isMissingRackPalletValue(a['palletNumber']) &&
+                !_isMissingRackPalletValue(palletNumber)
+            ? palletNumber
+            : a['palletNumber'],
+      };
+    }).toList();
   }
 
   // ─── Item-form auto-fill ──────────────────────────────────────────────────
@@ -371,11 +515,12 @@ class _LotRequirementAllocationScreenState
         _dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0),
         excludedSets: excludedSets.isEmpty ? null : excludedSets.toList(),
       );
+      final List<Map<String, dynamic>> allocations =
+          List<Map<String, dynamic>>.from(result?['allocations'] ?? []);
+      final resolvedAllocations = await _fillRackPalletFromInward(allocations);
       setState(() {
         if (result != null) {
-          _currentSets = List<Map<String, dynamic>>.from(
-            result['allocations'] ?? [],
-          );
+          _currentSets = resolvedAllocations;
           _totalSets = (result['totalSets'] as num?)?.toInt() ?? 0;
           if (result['success'] == false) {
             _showError(result['message'] ?? 'Insufficient stock');
@@ -668,12 +813,15 @@ class _LotRequirementAllocationScreenState
 
   // ─── Edit / Delete Individual Allocation ──────────────────────────────────
   Future<void> _editAllocationRow(Map<String, dynamic> lot) async {
-    final TextEditingController rackCtrl =
-        TextEditingController(text: lot['racks'].join(', '));
-    final TextEditingController palletCtrl =
-        TextEditingController(text: lot['pallets'].join(', '));
-    final TextEditingController dozenCtrl =
-        TextEditingController(text: lot['dozen'].toString());
+    final TextEditingController rackCtrl = TextEditingController(
+      text: lot['racks'].join(', '),
+    );
+    final TextEditingController palletCtrl = TextEditingController(
+      text: lot['pallets'].join(', '),
+    );
+    final TextEditingController dozenCtrl = TextEditingController(
+      text: lot['dozen'].toString(),
+    );
 
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -713,15 +861,12 @@ class _LotRequirementAllocationScreenState
     if (confirmed == true && _selectedPlanId != null) {
       setState(() => _isSaving = true);
       try {
-        final success = await _api.updateLotAllocation(
-          _selectedPlanId!,
-          lot['id'].toString(),
-          {
-            'rackName': rackCtrl.text,
-            'palletNumber': palletCtrl.text,
-            'dozen': double.tryParse(dozenCtrl.text) ?? lot['dozen'],
-          },
-        );
+        final success = await _api
+            .updateLotAllocation(_selectedPlanId!, lot['id'].toString(), {
+              'rackName': rackCtrl.text,
+              'palletNumber': palletCtrl.text,
+              'dozen': double.tryParse(dozenCtrl.text) ?? lot['dozen'],
+            });
         if (success) {
           _showSuccess('Allocation updated!');
           _loadReport(); // Refresh
@@ -1345,14 +1490,17 @@ class _LotRequirementAllocationScreenState
       final rack = s['rackName']?.toString() ?? '';
       final pallet = s['palletNumber']?.toString() ?? '';
 
-      if (rack.isNotEmpty) (entry['racks'] as Set<String>).add(rack.trim());
-      if (pallet.isNotEmpty) {
+      if (!_isMissingRackPalletValue(rack)) {
+        (entry['racks'] as Set<String>).add(rack.trim());
+      }
+      if (!_isMissingRackPalletValue(pallet)) {
         (entry['pallets'] as Set<String>).add(pallet.trim());
       }
       entry['totalWeight'] = (entry['totalWeight'] as double) + weight;
     }
 
-    final rows = bySet.values.toList()..sort((a, b) => a['setNo'].compareTo(b['setNo']));
+    final rows = bySet.values.toList()
+      ..sort((a, b) => a['setNo'].compareTo(b['setNo']));
 
     // ── Helper: format set range, e.g. [1,2,3] → "1 TO 3" / [5] → "5" ──────
     String setRange(List<int> nos) {
@@ -1376,15 +1524,60 @@ class _LotRequirementAllocationScreenState
           dataRowMinHeight: 44,
           dataRowMaxHeight: double.infinity,
           columns: const [
-            DataColumn(label: Text('LOT NAME', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('LOT NO',   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('DIA',      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('SET\nREQUIRED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('SET NO',   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('RACK NAME',style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('PALLET NO',style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('TOTAL\nWEIGHT (kg)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
-            DataColumn(label: Text('DOZEN',    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            DataColumn(
+              label: Text(
+                'LOT NAME',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'LOT NO',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'DIA',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'SET\nREQUIRED',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'SET NO',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'RACK NAME',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'PALLET NO',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'TOTAL\nWEIGHT (kg)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+            DataColumn(
+              label: Text(
+                'DOZEN',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
           ],
           rows: rows.asMap().entries.map((e) {
             final i = e.key;
@@ -1398,15 +1591,37 @@ class _LotRequirementAllocationScreenState
 
             // Dozen shown only on the last row (total for the allocation)
             final dozenDisplay = isLastRow
-                ? (dozen % 1 == 0 ? dozen.toInt().toString() : dozen.toStringAsFixed(1))
+                ? (dozen % 1 == 0
+                      ? dozen.toInt().toString()
+                      : dozen.toStringAsFixed(1))
                 : '';
 
             return DataRow(
-              color: WidgetStateProperty.all(isEven ? Colors.white : Colors.grey.shade50),
+              color: WidgetStateProperty.all(
+                isEven ? Colors.white : Colors.grey.shade50,
+              ),
               cells: [
-                DataCell(Text(row['lotName']?.toString() ?? '-', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-                DataCell(Text(row['lotNo']?.toString() ?? '-',   style: const TextStyle(fontSize: 12))),
-                DataCell(Text(row['dia']?.toString() ?? '-',     style: const TextStyle(fontSize: 12, color: Colors.blue))),
+                DataCell(
+                  Text(
+                    row['lotName']?.toString() ?? '-',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    row['lotNo']?.toString() ?? '-',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    row['dia']?.toString() ?? '-',
+                    style: const TextStyle(fontSize: 12, color: Colors.blue),
+                  ),
+                ),
                 DataCell(
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -1437,16 +1652,38 @@ class _LotRequirementAllocationScreenState
                     ),
                   ),
                 ),
-                DataCell(Text(racks.join(', '), style: const TextStyle(fontSize: 12))),
-                DataCell(Text(pallets.join(', '), style: const TextStyle(fontSize: 12))),
-                DataCell(Text(
-                  '${weight.toStringAsFixed(2)} kg',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                )),
-                DataCell(Text(
-                  dozenDisplay,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primary),
-                )),
+                DataCell(
+                  Text(
+                    racks.isEmpty ? '-' : racks.join(', '),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    pallets.isEmpty ? '-' : pallets.join(', '),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    '${weight.toStringAsFixed(2)} kg',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    dozenDisplay,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: primary,
+                    ),
+                  ),
+                ),
               ],
             );
           }).toList(),
@@ -1726,38 +1963,38 @@ class _LotRequirementAllocationScreenState
                       color: Colors.deepPurple,
                     ),
                   ),
-                    ElevatedButton.icon(
-                      onPressed: _printReport,
-                      icon: const Icon(Icons.print, size: 16),
-                      label: const Text('PRINT'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                  ElevatedButton.icon(
+                    onPressed: _printReport,
+                    icon: const Icon(Icons.print, size: 16),
+                    label: const Text('PRINT'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _shareReport,
-                      icon: const Icon(Icons.share, size: 16),
-                      label: const Text('SHARE'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _shareReport,
+                    icon: const Icon(Icons.share, size: 16),
+                    label: const Text('SHARE'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -1782,36 +2019,42 @@ class _LotRequirementAllocationScreenState
     }
 
     // ── 2. Within each day, group by (itemName + size + lotNo) ──────────────
-    Map<String, Map<String, dynamic>> groupByLot(List<Map<String, dynamic>> rows) {
+    Map<String, Map<String, dynamic>> groupByLot(
+      List<Map<String, dynamic>> rows,
+    ) {
       final Map<String, Map<String, dynamic>> g = {};
       for (final r in rows) {
         final key = '${r['itemName']}_${r['size']}_${r['lotNo']}_${r['dia']}';
         if (!g.containsKey(key)) {
           g[key] = {
-            'id'         : r['_id'], // Subdocument _id
-            'itemName'   : r['itemName'],
-            'size'       : r['size'],
-            'dozen'      : r['dozen'],
+            'id': r['_id'], // Subdocument _id
+            'itemName': r['itemName'],
+            'size': r['size'],
+            'dozen': r['dozen'],
             'neededWeight': r['neededWeight'],
-            'lotName'    : r['lotName'],
-            'lotNo'      : r['lotNo'],
-            'dia'        : r['dia'],
-            'racks'      : <String>{},
-            'pallets'    : <String>{},
-            'setNos'     : <int>[],
+            'lotName': r['lotName'],
+            'lotNo': r['lotNo'],
+            'dia': r['dia'],
+            'racks': <String>{},
+            'pallets': <String>{},
+            'setNos': <int>[],
             'totalWeight': 0.0,
           };
         }
         final entry = g[key]!;
-        final setNo  = (r['setNo'] as num?)?.toInt() ?? 0;
-        final wt     = (r['setWeight'] as num?)?.toDouble() ?? 0.0;
-        final rack   = r['rackName']?.toString() ?? '';
+        final setNo = (r['setNo'] as num?)?.toInt() ?? 0;
+        final wt = (r['setWeight'] as num?)?.toDouble() ?? 0.0;
+        final rack = r['rackName']?.toString() ?? '';
         final pallet = r['palletNumber']?.toString() ?? '';
         if (setNo > 0 && !(entry['setNos'] as List<int>).contains(setNo)) {
           (entry['setNos'] as List<int>).add(setNo);
         }
-        if (rack.isNotEmpty)   (entry['racks'] as Set<String>).add(rack);
-        if (pallet.isNotEmpty) (entry['pallets'] as Set<String>).add(pallet);
+        if (!_isMissingRackPalletValue(rack)) {
+          (entry['racks'] as Set<String>).add(rack.trim());
+        }
+        if (!_isMissingRackPalletValue(pallet)) {
+          (entry['pallets'] as Set<String>).add(pallet.trim());
+        }
         entry['totalWeight'] = (entry['totalWeight'] as double) + wt;
       }
       return g;
@@ -1830,17 +2073,17 @@ class _LotRequirementAllocationScreenState
 
     final cols = <DataColumn>[
       const DataColumn(label: Text('ITEM NAME', style: hStyle)),
-      const DataColumn(label: Text('SIZE',      style: hStyle)),
-      const DataColumn(label: Text('DOZEN',     style: hStyle)),
-      const DataColumn(label: Text('NEED WT',   style: hStyle)),
-      const DataColumn(label: Text('LOT NAME',  style: hStyle)),
-      const DataColumn(label: Text('LOT NO',    style: hStyle)),
-      const DataColumn(label: Text('DIA',       style: hStyle)),
+      const DataColumn(label: Text('SIZE', style: hStyle)),
+      const DataColumn(label: Text('DOZEN', style: hStyle)),
+      const DataColumn(label: Text('NEED WT', style: hStyle)),
+      const DataColumn(label: Text('LOT NAME', style: hStyle)),
+      const DataColumn(label: Text('LOT NO', style: hStyle)),
+      const DataColumn(label: Text('DIA', style: hStyle)),
       const DataColumn(label: Text('SET\nREQUIRED', style: hStyle)),
-      const DataColumn(label: Text("SET NO'S",  style: hStyle)),
-      const DataColumn(label: Text('RACK',      style: hStyle)),
-      const DataColumn(label: Text('PALLET',    style: hStyle)),
-      const DataColumn(label: Text('SET WEIGHT',style: hStyle)),
+      const DataColumn(label: Text("SET NO'S", style: hStyle)),
+      const DataColumn(label: Text('RACK', style: hStyle)),
+      const DataColumn(label: Text('PALLET', style: hStyle)),
+      const DataColumn(label: Text('SET WEIGHT', style: hStyle)),
       const DataColumn(label: Text('ACTIONS', style: hStyle)),
     ];
 
@@ -1852,64 +2095,110 @@ class _LotRequirementAllocationScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: orderedDays.map((day) {
           final dayRows = byDay[day]!;
-          final lotMap  = groupByLot(dayRows);
-          final lots    = lotMap.values.toList();
+          final lotMap = groupByLot(dayRows);
+          final lots = lotMap.values.toList();
 
           final dataRows = lots.asMap().entries.map((e) {
-            final i   = e.key;
+            final i = e.key;
             final lot = e.value;
-            final setNos  = lot['setNos']  as List<int>;
-            final racks   = (lot['racks']   as Set<String>).toList()..sort();
+            final setNos = lot['setNos'] as List<int>;
+            final racks = (lot['racks'] as Set<String>).toList()..sort();
             final pallets = (lot['pallets'] as Set<String>).toList()..sort();
-            final wt      = lot['totalWeight'] as double;
-            final isEven  = i % 2 == 0;
+            final wt = lot['totalWeight'] as double;
+            final isEven = i % 2 == 0;
 
             return DataRow(
               color: WidgetStateProperty.all(
                 isEven ? Colors.white : Colors.grey.shade50,
               ),
               cells: [
-                DataCell(Text(lot['itemName']?.toString() ?? '-', style: dStyle)),
-                DataCell(Text(lot['size']?.toString()     ?? '-', style: dStyle)),
-                DataCell(Text(lot['dozen']?.toString()    ?? '-', style: dStyle)),
-                DataCell(Text(
-                  '${(lot['neededWeight'] as num?)?.toStringAsFixed(0) ?? '-'}',
-                  style: dStyle,
-                )),
-                DataCell(Text(lot['lotName']?.toString()  ?? '-', style: dStyle)),
-                DataCell(Text(lot['lotNo']?.toString()    ?? '-', style: dStyle)),
-                DataCell(Text(lot['dia']?.toString()      ?? '-',
-                  style: dStyle.copyWith(color: Colors.blue))),
                 DataCell(
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color  : Colors.teal.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border : Border.all(color: Colors.teal.withOpacity(0.4)),
-                    ),
-                    child: Text('${setNos.length}',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal)),
+                  Text(lot['itemName']?.toString() ?? '-', style: dStyle),
+                ),
+                DataCell(Text(lot['size']?.toString() ?? '-', style: dStyle)),
+                DataCell(Text(lot['dozen']?.toString() ?? '-', style: dStyle)),
+                DataCell(
+                  Text(
+                    '${(lot['neededWeight'] as num?)?.toStringAsFixed(0) ?? '-'}',
+                    style: dStyle,
                   ),
                 ),
-                DataCell(Text(setRange(setNos), style: dStyle.copyWith(fontWeight: FontWeight.w500))),
-                DataCell(Text(racks.join(', '),   style: dStyle)),
-                DataCell(Text(pallets.join(', '), style: dStyle)),
-                DataCell(Text('${wt.toStringAsFixed(2)}',
-                  style: dStyle.copyWith(color: Colors.deepPurple, fontWeight: FontWeight.bold))),
+                DataCell(
+                  Text(lot['lotName']?.toString() ?? '-', style: dStyle),
+                ),
+                DataCell(Text(lot['lotNo']?.toString() ?? '-', style: dStyle)),
+                DataCell(
+                  Text(
+                    lot['dia']?.toString() ?? '-',
+                    style: dStyle.copyWith(color: Colors.blue),
+                  ),
+                ),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.teal.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      '${setNos.length}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    setRange(setNos),
+                    style: dStyle.copyWith(fontWeight: FontWeight.w500),
+                  ),
+                ),
+                DataCell(
+                  Text(racks.isEmpty ? '-' : racks.join(', '), style: dStyle),
+                ),
+                DataCell(
+                  Text(
+                    pallets.isEmpty ? '-' : pallets.join(', '),
+                    style: dStyle,
+                  ),
+                ),
+                DataCell(
+                  Text(
+                    '${wt.toStringAsFixed(2)}',
+                    style: dStyle.copyWith(
+                      color: Colors.deepPurple,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
                 DataCell(
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                        icon: const Icon(
+                          Icons.edit,
+                          size: 16,
+                          color: Colors.blue,
+                        ),
                         onPressed: () => _editAllocationRow(lot),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                        icon: const Icon(
+                          Icons.delete,
+                          size: 16,
+                          color: Colors.red,
+                        ),
                         onPressed: () => _deleteAllocationRow(lot['id']),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -1926,7 +2215,10 @@ class _LotRequirementAllocationScreenState
             children: [
               // ── DAY HEADER — full width (inside vertical scroll = bounded) ─
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
                 decoration: BoxDecoration(
                   color: primary.withOpacity(0.08),
                   border: Border.all(color: primary.withOpacity(0.3)),
@@ -1945,12 +2237,14 @@ class _LotRequirementAllocationScreenState
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade200),
-                  columnSpacing  : 14,
+                  headingRowColor: WidgetStateProperty.all(
+                    Colors.grey.shade200,
+                  ),
+                  columnSpacing: 14,
                   dataRowMinHeight: 40,
                   dataRowMaxHeight: double.infinity,
                   columns: cols,
-                  rows   : dataRows,
+                  rows: dataRows,
                 ),
               ),
               const SizedBox(height: 16),

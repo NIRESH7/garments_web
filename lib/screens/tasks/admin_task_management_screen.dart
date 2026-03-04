@@ -8,7 +8,6 @@ import 'package:audioplayers/audioplayers.dart';
 import '../../core/constants/api_constants.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -26,13 +25,15 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   final _audioPlayer = AudioPlayer();
   final _recorder = AudioRecorder();
   final _tts = FlutterTts();
-  
+
   bool _isListening = false;
   bool _isRecording = false;
+  bool _isTranscribing = false;
   bool _isLoading = false;
   bool _isSaving = false;
   String? _recordedPath;
   String _voiceLocale = 'en_US'; // 'en_US' or 'ta_IN'
+  bool _speechReady = false;
 
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
@@ -45,65 +46,148 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   @override
   void initState() {
     super.initState();
+    _initVoice();
     _loadTasks();
   }
 
   @override
   void dispose() {
+    _stt.stop();
     _audioPlayer.dispose();
     _recorder.dispose();
+    _tts.stop();
     _titleController.dispose();
     _descController.dispose();
     super.dispose();
   }
 
+  Future<void> _initVoice() async {
+    _speechReady = await _stt.initialize(
+      onStatus: (status) {
+        final listening = status.toLowerCase().contains('listening');
+        if (mounted && _isListening != listening) {
+          setState(() => _isListening = listening);
+        }
+      },
+      onError: (error) {
+        if (mounted) setState(() => _isListening = false);
+        debugPrint('Speech error: ${error.errorMsg}');
+      },
+    );
+  }
+
+  void _showMsg(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+    );
+  }
+
+  Future<void> _transcribeAndFillDescription(String audioPath) async {
+    setState(() => _isTranscribing = true);
+    try {
+      final transcribed = await _api.transcribeAudioFile(audioPath);
+      if (transcribed != null && transcribed.trim().isNotEmpty) {
+        setState(() {
+          _descController.text = transcribed.trim();
+          _descController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _descController.text.length),
+          );
+        });
+      } else {
+        _showMsg(
+          'Voice to text failed on server. Check live OPENAI_API_KEY and /api/ai/transcribe.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTranscribing = false);
+    }
+  }
+
   Future<void> _startRecording() async {
     try {
-      if (await _recorder.hasPermission()) {
-        await _tts.speak("Tell me, I am listening");
-        String path = '';
-        if (!kIsWeb) {
-          final dir = await getTemporaryDirectory();
-          path = '${dir.path}/task_desc_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        }
-        
-        await _recorder.start(const RecordConfig(), path: path);
-        setState(() {
-          _isRecording = true;
-          _recordedPath = null;
-        });
-        
-        // Also start speech to text
-        _listen();
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        _showMsg('Microphone permission is required', error: true);
+        return;
       }
+
+      await _tts.stop();
+      // Do not speak prompt here; it can conflict with iOS listen session.
+
+      String path = '';
+      if (!kIsWeb) {
+        final dir = await getTemporaryDirectory();
+        path =
+            '${dir.path}/task_desc_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      }
+
+      await _recorder.start(const RecordConfig(), path: path);
+
+      setState(() {
+        _isRecording = true;
+        _recordedPath = null;
+      });
+
+      // Start live STT only as best-effort; transcription after stop is the guaranteed path.
+      try {
+        if (!_speechReady) {
+          _speechReady = await _stt.initialize();
+        }
+        if (_speechReady) {
+          await _listen(startOnly: true);
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('Error starting record: $e');
+      _showMsg('Failed to start recording', error: true);
     }
   }
 
   Future<void> _stopRecording() async {
     try {
-      final path = await _recorder.stop();
-      if (_isListening) _listen(); // stop STT
-      
+      String? path;
+      if (_isRecording) {
+        path = await _recorder.stop();
+      }
+      if (_isListening) {
+        await _listen(stopOnly: true);
+      }
+
       setState(() {
         _isRecording = false;
-        _recordedPath = path;
+        if (path != null && path.isNotEmpty) _recordedPath = path;
       });
+
+      // Guaranteed fallback: transcribe recorded audio and auto-fill description.
+      if (path != null && path.isNotEmpty) {
+        await _transcribeAndFillDescription(path);
+      }
     } catch (e) {
       debugPrint('Error stopping record: $e');
+      _showMsg('Failed to stop voice recording', error: true);
     }
   }
 
   void _playLocalRecording() async {
     if (_recordedPath != null) {
-      await _audioPlayer.play(DeviceFileSource(_recordedPath!));
+      try {
+        await _transcribeAndFillDescription(_recordedPath!);
+        await _audioPlayer.play(DeviceFileSource(_recordedPath!));
+      } catch (e) {
+        _showMsg('Unable to play local recording', error: true);
+      }
     }
   }
 
   void _playRemoteAudio(String url) async {
-    final fullUrl = ApiConstants.getImageUrl(url);
-    await _audioPlayer.play(UrlSource(fullUrl));
+    try {
+      final fullUrl = ApiConstants.getImageUrl(url);
+      await _audioPlayer.play(UrlSource(fullUrl));
+    } catch (e) {
+      _showMsg('Unable to play voice description', error: true);
+    }
   }
 
   Future<void> _loadTasks() async {
@@ -115,23 +199,49 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     });
   }
 
-  void _listen() async {
-    if (!_isListening) {
-      bool available = await _stt.initialize();
-      if (available) {
+  Future<void> _listen({bool startOnly = false, bool stopOnly = false}) async {
+    try {
+      if (stopOnly) {
+        await _stt.stop();
+        if (mounted) setState(() => _isListening = false);
+        return;
+      }
+
+      if (!_speechReady) {
+        _speechReady = await _stt.initialize();
+      }
+      if (!_speechReady) return;
+
+      if (!_isListening) {
+        await _stt.stop();
         setState(() => _isListening = true);
-        _stt.listen(
+        await _stt.listen(
+          localeId: _voiceLocale,
+          partialResults: true,
+          listenFor: const Duration(minutes: 2),
+          pauseFor: const Duration(seconds: 4),
+          cancelOnError: true,
           onResult: (val) {
+            final recognized = val.recognizedWords.trim();
+            if (recognized.isEmpty) return;
             setState(() {
-              _descController.text = val.recognizedWords;
+              _descController.text = recognized;
+              _descController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _descController.text.length),
+              );
             });
           },
-          localeId: _voiceLocale,
         );
+        return;
       }
-    } else {
-      setState(() => _isListening = false);
-      _stt.stop();
+
+      if (!startOnly) {
+        await _stt.stop();
+        if (mounted) setState(() => _isListening = false);
+      }
+    } catch (e) {
+      debugPrint('Speech listen failed: $e');
+      if (mounted) setState(() => _isListening = false);
     }
   }
 
@@ -144,7 +254,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     }
 
     setState(() => _isSaving = true);
-    
+
     final data = {
       'title': _titleController.text,
       'description': _descController.text,
@@ -158,6 +268,11 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       final voiceUrl = await _api.uploadAudio(_recordedPath!);
       if (voiceUrl != null) {
         data['voiceDescriptionUrl'] = voiceUrl;
+      } else {
+        _showMsg(
+          'Voice upload failed; task will be saved without audio.',
+          error: true,
+        );
       }
     }
 
@@ -221,11 +336,18 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.checkCircle, color: Colors.green, size: 16),
+                    const Icon(
+                      LucideIcons.checkCircle,
+                      color: Colors.green,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Voice description recorded',
-                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -251,13 +373,20 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                     // Language toggle
                     GestureDetector(
                       onTap: () => setState(() {
-                        _voiceLocale = _voiceLocale == 'en_US' ? 'ta_IN' : 'en_US';
+                        _voiceLocale = _voiceLocale == 'en_US'
+                            ? 'ta_IN'
+                            : 'en_US';
                       }),
                       child: Container(
                         margin: const EdgeInsets.only(right: 4, top: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: _voiceLocale == 'ta_IN' ? Colors.orange.shade100 : Colors.blue.shade100,
+                          color: _voiceLocale == 'ta_IN'
+                              ? Colors.orange.shade100
+                              : Colors.blue.shade100,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -265,7 +394,9 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: _voiceLocale == 'ta_IN' ? Colors.orange.shade900 : Colors.blue.shade900,
+                            color: _voiceLocale == 'ta_IN'
+                                ? Colors.orange.shade900
+                                : Colors.blue.shade900,
                           ),
                         ),
                       ),
@@ -273,19 +404,37 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (_isTranscribing)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 4),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
                         if (_recordedPath != null)
                           IconButton(
-                            icon: const Icon(LucideIcons.playCircle, color: Colors.green),
+                            icon: const Icon(
+                              LucideIcons.playCircle,
+                              color: Colors.green,
+                            ),
                             onPressed: _playLocalRecording,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           ),
                         IconButton(
                           icon: Icon(
-                            _isRecording ? LucideIcons.mic : LucideIcons.micOff,
-                            color: _isRecording ? Colors.red : primaryColor,
+                            (_isRecording || _isListening)
+                                ? LucideIcons.stopCircle
+                                : LucideIcons.mic,
+                            color: (_isRecording || _isListening)
+                                ? Colors.red
+                                : primaryColor,
                           ),
-                          onPressed: _isRecording ? _stopRecording : _startRecording,
+                          onPressed: (_isRecording || _isListening)
+                              ? _stopRecording
+                              : _startRecording,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -393,20 +542,32 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                   if (task['voiceDescriptionUrl'] != null && task['voiceDescriptionUrl'].toString().isNotEmpty)
+                  if (task['voiceDescriptionUrl'] != null &&
+                      task['voiceDescriptionUrl'].toString().isNotEmpty)
                     IconButton(
-                      icon: const Icon(LucideIcons.volume2, color: Colors.blue, size: 20),
-                      onPressed: () => _playRemoteAudio(task['voiceDescriptionUrl']),
+                      icon: const Icon(
+                        LucideIcons.volume2,
+                        color: Colors.blue,
+                        size: 20,
+                      ),
+                      onPressed: () =>
+                          _playRemoteAudio(task['voiceDescriptionUrl']),
                       tooltip: 'Listen to description',
                     ),
                   IconButton(
-                    icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),
+                    icon: const Icon(
+                      LucideIcons.trash2,
+                      color: Colors.red,
+                      size: 20,
+                    ),
                     onPressed: () {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text('Delete Task'),
-                          content: const Text('Are you sure you want to delete this task?'),
+                          content: const Text(
+                            'Are you sure you want to delete this task?',
+                          ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
@@ -415,19 +576,31 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                             TextButton(
                               onPressed: () async {
                                 Navigator.pop(context);
-                                final success = await _api.deleteTask(task['_id']);
+                                final success = await _api.deleteTask(
+                                  task['_id'],
+                                );
                                 if (success) {
                                   _loadTasks();
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Task deleted successfully')),
+                                    const SnackBar(
+                                      content: Text(
+                                        'Task deleted successfully',
+                                      ),
+                                    ),
                                   );
                                 } else {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Failed to delete task'), backgroundColor: Colors.red),
+                                    const SnackBar(
+                                      content: Text('Failed to delete task'),
+                                      backgroundColor: Colors.red,
+                                    ),
                                   );
                                 }
                               },
-                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                              child: const Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
                             ),
                           ],
                         ),

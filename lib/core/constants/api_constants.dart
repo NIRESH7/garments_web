@@ -40,6 +40,7 @@ class ApiConstants {
   static const String godownStockReport = '/inventory/reports/godown-stock';
   static const String shadeCardReport = '/inventory/reports/shade-card';
   static const String rackPalletStockReport = '/inventory/reports/rack-pallet';
+  static const String aiTranscribe = '/ai/transcribe';
 
   // Production
   static const String assignments = '/production/assignments';

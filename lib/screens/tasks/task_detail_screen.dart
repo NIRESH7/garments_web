@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import '../../core/constants/api_constants.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -28,12 +27,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final _recorder = AudioRecorder();
   final _audioPlayer = AudioPlayer();
   final _tts = FlutterTts();
-  
+
   bool _isListening = false;
   bool _isRecording = false;
+  bool _isTranscribing = false;
   bool _isSaving = false;
   String? _recordedPath;
   String _voiceLocale = 'en_US'; // 'en_US' or 'ta_IN'
+  bool _speechReady = false;
 
   final _workerNameController = TextEditingController();
   final _replyController = TextEditingController();
@@ -43,82 +44,178 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _initVoice();
     _status = widget.task['status'] ?? 'To Do';
   }
 
   @override
   void dispose() {
+    _stt.stop();
     _recorder.dispose();
     _audioPlayer.dispose();
+    _tts.stop();
+    _workerNameController.dispose();
+    _replyController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initVoice() async {
+    _speechReady = await _stt.initialize();
+  }
+
+  void _showMsg(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+    );
+  }
+
+  Future<void> _transcribeAndFillReply(String audioPath) async {
+    setState(() => _isTranscribing = true);
+    try {
+      final transcribed = await _api.transcribeAudioFile(audioPath);
+      if (transcribed != null && transcribed.trim().isNotEmpty) {
+        setState(() {
+          _replyController.text = transcribed.trim();
+          _replyController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _replyController.text.length),
+          );
+        });
+      } else {
+        _showMsg(
+          'Voice to text failed on server. Check live OPENAI_API_KEY and /api/ai/transcribe.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTranscribing = false);
+    }
   }
 
   Future<void> _startRecording() async {
     try {
-      if (await _recorder.hasPermission()) {
-        await _tts.speak("Tell me, I am listening");
-        String path = '';
-        if (!kIsWeb) {
-          final dir = await getTemporaryDirectory();
-          path = '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        }
-        
-        await _recorder.start(const RecordConfig(), path: path);
-        setState(() {
-          _isRecording = true;
-          _recordedPath = null;
-        });
-        
-        // Also start speech to text
-        _listen();
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        _showMsg('Microphone permission is required', error: true);
+        return;
       }
+
+      await _tts.stop();
+      // Do not speak prompt here; it can conflict with iOS listen session.
+
+      String path = '';
+      if (!kIsWeb) {
+        final dir = await getTemporaryDirectory();
+        path =
+            '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      }
+
+      await _recorder.start(const RecordConfig(), path: path);
+      setState(() {
+        _isRecording = true;
+        _recordedPath = null;
+      });
+
+      // Best-effort live STT; guaranteed text comes from transcribing recorded audio on stop.
+      try {
+        if (!_speechReady) {
+          _speechReady = await _stt.initialize();
+        }
+        if (_speechReady) {
+          await _listen(startOnly: true);
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('Error starting record: $e');
+      _showMsg('Failed to start voice recording', error: true);
     }
   }
 
   Future<void> _stopRecording() async {
     try {
-      final path = await _recorder.stop();
-      if (_isListening) _listen(); // stop STT
-      
+      String? path;
+      if (_isRecording) {
+        path = await _recorder.stop();
+      }
+      if (_isListening) {
+        await _listen(stopOnly: true);
+      }
+
       setState(() {
         _isRecording = false;
-        _recordedPath = path;
+        if (path != null && path.isNotEmpty) _recordedPath = path;
       });
+
+      // Guaranteed fallback: transcribe recorded audio and auto-fill progress details.
+      if (path != null && path.isNotEmpty) {
+        await _transcribeAndFillReply(path);
+      }
     } catch (e) {
       debugPrint('Error stopping record: $e');
+      _showMsg('Failed to stop voice recording', error: true);
     }
   }
 
   void _playLocalRecording() async {
     if (_recordedPath != null) {
-      await _audioPlayer.play(DeviceFileSource(_recordedPath!));
+      try {
+        await _transcribeAndFillReply(_recordedPath!);
+        await _audioPlayer.play(DeviceFileSource(_recordedPath!));
+      } catch (e) {
+        _showMsg('Unable to play local recording', error: true);
+      }
     }
   }
 
   void _playRemoteAudio(String url) async {
-    final fullUrl = ApiConstants.getImageUrl(url);
-    await _audioPlayer.play(UrlSource(fullUrl));
+    try {
+      final fullUrl = ApiConstants.getImageUrl(url);
+      await _audioPlayer.play(UrlSource(fullUrl));
+    } catch (e) {
+      _showMsg('Unable to play voice audio', error: true);
+    }
   }
 
-  void _listen() async {
-    if (!_isListening) {
-      bool available = await _stt.initialize();
-      if (available) {
+  Future<void> _listen({bool startOnly = false, bool stopOnly = false}) async {
+    try {
+      if (stopOnly) {
+        await _stt.stop();
+        if (mounted) setState(() => _isListening = false);
+        return;
+      }
+
+      if (!_speechReady) {
+        _speechReady = await _stt.initialize();
+      }
+      if (!_speechReady) return;
+
+      if (!_isListening) {
+        await _stt.stop();
         setState(() => _isListening = true);
-        _stt.listen(
+        await _stt.listen(
+          localeId: _voiceLocale,
+          partialResults: true,
           onResult: (val) {
+            final recognized = val.recognizedWords.trim();
+            if (recognized.isEmpty) return;
             setState(() {
-              _replyController.text = val.recognizedWords;
+              _replyController.text = recognized;
+              _replyController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _replyController.text.length),
+              );
             });
           },
-          localeId: _voiceLocale,
         );
+        return;
       }
-    } else {
-      setState(() => _isListening = false);
-      _stt.stop();
+
+      if (!startOnly) {
+        await _stt.stop();
+        if (mounted) setState(() => _isListening = false);
+      }
+    } catch (e) {
+      debugPrint('Speech listen failed: $e');
+      if (mounted) setState(() => _isListening = false);
     }
   }
 
@@ -140,8 +237,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     };
 
     final result = await _api.addTaskReply(
-      widget.task['_id'], 
-      data, 
+      widget.task['_id'],
+      data,
       voicePath: _recordedPath,
     );
     if (result != null) {
@@ -280,20 +377,27 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         const Text(
                           'Instruction:',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold, color: Colors.grey),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
                         ),
-                        if (
-                            (task['description'] != null && task['description'].toString().isNotEmpty) ||
-                            (task['voiceDescriptionUrl'] != null && task['voiceDescriptionUrl'].toString().isNotEmpty))
+                        if ((task['description'] != null &&
+                                task['description'].toString().isNotEmpty) ||
+                            (task['voiceDescriptionUrl'] != null &&
+                                task['voiceDescriptionUrl']
+                                    .toString()
+                                    .isNotEmpty))
                           Padding(
                             padding: const EdgeInsets.only(left: 8),
                             child: InkWell(
                               onTap: () {
                                 final voiceUrl = task['voiceDescriptionUrl'];
-                                if (voiceUrl != null && voiceUrl.toString().isNotEmpty) {
+                                if (voiceUrl != null &&
+                                    voiceUrl.toString().isNotEmpty) {
                                   _playRemoteAudio(voiceUrl.toString());
                                 } else {
-                                  final desc = task['description']?.toString() ?? '';
+                                  final desc =
+                                      task['description']?.toString() ?? '';
                                   if (desc.isNotEmpty) _tts.speak(desc);
                                 }
                               },
@@ -303,12 +407,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                   color: Colors.blue.withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(LucideIcons.volume2,
-                                    color: Colors.blue, size: 16),
+                                child: const Icon(
+                                  LucideIcons.volume2,
+                                  color: Colors.blue,
+                                  size: 16,
+                                ),
                               ),
                             ),
                           ),
-
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -318,9 +424,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ),
                   ],
                 ),
-                if (
-                    (task['description'] != null && task['description'].toString().isNotEmpty) ||
-                    (task['voiceDescriptionUrl'] != null && task['voiceDescriptionUrl'].toString().isNotEmpty))
+                if ((task['description'] != null &&
+                        task['description'].toString().isNotEmpty) ||
+                    (task['voiceDescriptionUrl'] != null &&
+                        task['voiceDescriptionUrl'].toString().isNotEmpty))
                   Positioned(
                     top: 0,
                     right: 0,
@@ -331,11 +438,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         border: Border.all(color: Colors.blue.withOpacity(0.3)),
                       ),
                       child: IconButton(
-                        icon: const Icon(LucideIcons.volume2, color: Colors.blue),
+                        icon: const Icon(
+                          LucideIcons.volume2,
+                          color: Colors.blue,
+                        ),
                         tooltip: 'Listen to instruction',
                         onPressed: () {
                           final voiceUrl = task['voiceDescriptionUrl'];
-                          if (voiceUrl != null && voiceUrl.toString().isNotEmpty) {
+                          if (voiceUrl != null &&
+                              voiceUrl.toString().isNotEmpty) {
                             _playRemoteAudio(voiceUrl.toString());
                           } else {
                             // Fallback: TTS reads the description aloud
@@ -385,51 +496,60 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 'History:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              ...(task['replies'] as List).map(
-                (r) {
-                  final String type = r['type'] ?? 'Progress';
-                  final String label = type == 'Completion' ? '✅ COMPLETION' : (type == 'Client' ? '💬 CLIENT' : '⚙️ PROGRESS');
-                  final String dateStr = r['submittedAt'] != null 
-                    ? DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.parse(r['submittedAt'].toString())) 
+              ...(task['replies'] as List).map((r) {
+                final String type = r['type'] ?? 'Progress';
+                final String label = type == 'Completion'
+                    ? '✅ COMPLETION'
+                    : (type == 'Client' ? '💬 CLIENT' : '⚙️ PROGRESS');
+                final String dateStr = r['submittedAt'] != null
+                    ? DateFormat(
+                        'dd-MM-yyyy hh:mm a',
+                      ).format(DateTime.parse(r['submittedAt'].toString()))
                     : 'N/A';
-                  final String? voiceUrl = r['voiceReplyUrl'];
-                  
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '• $label: ${r['workerName']} - ${r['replyText']} ($dateStr)',
-                            style: const TextStyle(fontSize: 13, color: Colors.black87),
+                final String? voiceUrl = r['voiceReplyUrl'];
+
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '• $label: ${r['workerName']} - ${r['replyText']} ($dateStr)',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
                           ),
                         ),
-                        // Always show speaker for any reply that has text or voice
-                        IconButton(
-                          icon: const Icon(LucideIcons.volume2, size: 18, color: Colors.blue),
-                          onPressed: () {
-                            if (voiceUrl != null && voiceUrl.isNotEmpty) {
-                              _playRemoteAudio(voiceUrl);
-                            } else {
-                              // TTS fallback — read the reply text aloud
-                              final replyText = r['replyText']?.toString() ?? '';
-                              final workerName = r['workerName']?.toString() ?? '';
-                              if (replyText.isNotEmpty) {
-                                _tts.speak('$workerName said: $replyText');
-                              }
-                            }
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          tooltip: 'Listen to reply',
+                      ),
+                      // Always show speaker for any reply that has text or voice
+                      IconButton(
+                        icon: const Icon(
+                          LucideIcons.volume2,
+                          size: 18,
+                          color: Colors.blue,
                         ),
-
-                      ],
-                    ),
-                  );
-                },
-              ),
+                        onPressed: () {
+                          if (voiceUrl != null && voiceUrl.isNotEmpty) {
+                            _playRemoteAudio(voiceUrl);
+                          } else {
+                            // TTS fallback — read the reply text aloud
+                            final replyText = r['replyText']?.toString() ?? '';
+                            final workerName =
+                                r['workerName']?.toString() ?? '';
+                            if (replyText.isNotEmpty) {
+                              _tts.speak('$workerName said: $replyText');
+                            }
+                          }
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Listen to reply',
+                      ),
+                    ],
+                  ),
+                );
+              }),
             ],
           ],
         ),
@@ -497,9 +617,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   }),
                   child: Container(
                     margin: const EdgeInsets.only(right: 4, top: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: _voiceLocale == 'ta_IN' ? Colors.orange.shade100 : Colors.blue.shade100,
+                      color: _voiceLocale == 'ta_IN'
+                          ? Colors.orange.shade100
+                          : Colors.blue.shade100,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -507,7 +632,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: _voiceLocale == 'ta_IN' ? Colors.orange.shade900 : Colors.blue.shade900,
+                        color: _voiceLocale == 'ta_IN'
+                            ? Colors.orange.shade900
+                            : Colors.blue.shade900,
                       ),
                     ),
                   ),
@@ -515,19 +642,33 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (_isTranscribing)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 4),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
                     if (_recordedPath != null)
                       IconButton(
-                        icon: const Icon(LucideIcons.playCircle, color: Colors.green),
+                        icon: const Icon(
+                          LucideIcons.playCircle,
+                          color: Colors.green,
+                        ),
                         onPressed: _playLocalRecording,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
                     IconButton(
                       icon: Icon(
-                        _isRecording ? LucideIcons.mic : LucideIcons.micOff,
+                        _isRecording ? LucideIcons.stopCircle : LucideIcons.mic,
                         color: _isRecording ? Colors.red : primaryColor,
                       ),
-                      onPressed: _isRecording ? _stopRecording : _startRecording,
+                      onPressed: _isRecording
+                          ? _stopRecording
+                          : _startRecording,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
