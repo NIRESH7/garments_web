@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
+import { File as NodeFile } from 'node:buffer';
 import Inward from '../inventory/inwardModel.js';
 import Outward from '../inventory/outwardModel.js';
 import ProductionOrder from '../production/cuttingOrderModel.js';
@@ -11,6 +12,11 @@ import CuttingOrder from '../production/cuttingOrderModel.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Compatibility fallback for Node 18 runtimes.
+if (typeof globalThis.File === 'undefined') {
+    globalThis.File = NodeFile;
+}
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'dummy_key',

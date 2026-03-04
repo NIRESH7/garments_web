@@ -1,5 +1,5 @@
-# Use Node.js 18 alpine for a lightweight image
-FROM node:18-alpine
+# Use Node.js 20 alpine (required for OpenAI file uploads / File global support)
+FROM node:20-alpine
 
 # Create app directory
 WORKDIR /usr/src/app
