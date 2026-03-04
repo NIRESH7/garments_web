@@ -1,5 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import OpenAI from 'openai';
+import { toFile } from 'openai/uploads';
 import Inward from '../inventory/inwardModel.js';
 import Outward from '../inventory/outwardModel.js';
 import ProductionOrder from '../production/cuttingOrderModel.js';
@@ -69,6 +70,38 @@ export const chatWithAI = asyncHandler(async (req, res) => {
     } catch (error) {
         console.error('AI Error:', error);
         await handleRuleBasedChat(message, res, language);
+    }
+});
+
+/**
+ * @desc    Transcribe uploaded audio to text
+ * @route   POST /api/ai/transcribe
+ * @access  Private
+ */
+export const transcribeAudio = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: 'Audio file is required' });
+    }
+
+    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'dummy_key') {
+        return res.status(501).json({ message: 'Transcription service is not configured' });
+    }
+
+    try {
+        const audioFile = await toFile(
+            req.file.buffer,
+            req.file.originalname || 'voice.m4a'
+        );
+
+        const transcript = await openai.audio.transcriptions.create({
+            file: audioFile,
+            model: 'whisper-1',
+        });
+
+        return res.json({ text: transcript.text || '' });
+    } catch (error) {
+        console.error('Transcription Error:', error);
+        return res.status(500).json({ message: 'Failed to transcribe audio' });
     }
 });
 

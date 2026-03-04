@@ -7,6 +7,15 @@ import Assignment from './assignmentModel.js';
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ROLLS_PER_SET = 11;
 
+function normalizeDia(value) {
+    const raw = (value ?? '').toString().trim();
+    if (!raw) return '';
+    const numericPart = raw.replace(',', '.').match(/-?\d+(\.\d+)?/);
+    const n = numericPart ? Number(numericPart[0]) : Number.NaN;
+    if (Number.isNaN(n)) return raw.toLowerCase().replace(/\s+/g, '');
+    return Number.isInteger(n) ? String(n) : String(n);
+}
+
 // ─── Helper: weight-per-roll from inward entry ────────────────────────────────
 function calcWeightPerRoll(entry, effDozenWeight) {
     const recRolls = entry.recRoll || 0;
@@ -28,8 +37,9 @@ async function getLotBalance(inw, dia) {
 
 // ─── FIFO Allocator (core logic, returns set rows) ───────────────────────────
 async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, excludedSets = [] }) {
-    const inwards = await Inward.find({ 'diaEntries.dia': dia })
+    const inwards = await Inward.find({})
         .sort({ inwardDate: 1, createdAt: 1 });
+    const normalizedDia = normalizeDia(dia);
 
     const setRows = [];
     let remainingWeight = requiredWeight;
@@ -43,30 +53,35 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
     for (const inw of inwards) {
         if (remainingWeight <= 0.001) break;
 
-        const entry = inw.diaEntries.find(e => e.dia === dia);
+        const entry = inw.diaEntries.find(e => normalizeDia(e.dia) === normalizedDia);
         if (!entry) continue;
 
         const totalInwardWt = entry.recWt || 0;
 
         // Calculate used weight from Outwards
-        const outwards = await Outward.find({ lotNo: inw.lotNo, dia });
+        const outwards = await Outward.find({ lotNo: inw.lotNo });
         let usedWt = 0;
 
         // Track which set numbers have already been outward-posted for this lot+dia
         const usedSetNos = new Set(excludedSetNos); // Start with externally excluded sets
-        outwards.forEach(out => out.items.forEach(item => {
-            if (item.set_no) usedSetNos.add(parseInt(item.set_no));
-        }));
+        outwards.forEach(out => {
+            if (normalizeDia(out.dia) !== normalizedDia) return;
+            out.items.forEach(item => {
+                if (item.set_no) usedSetNos.add(parseInt(item.set_no));
+            });
+        });
 
         // Also deduct allocations in CuttingOrders
         const existingAllocations = await CuttingOrder.find({
             'lotAllocations.lotNo': inw.lotNo,
-            'lotAllocations.dia': dia
         });
 
         existingAllocations.forEach(plan => {
             plan.lotAllocations.forEach(alloc => {
-                if (alloc.lotNo === inw.lotNo && alloc.dia === dia) {
+                if (
+                    alloc.lotNo === inw.lotNo &&
+                    normalizeDia(alloc.dia) === normalizedDia
+                ) {
                     if (alloc.setNo) usedSetNos.add(parseInt(alloc.setNo));
                 }
             });
@@ -76,77 +91,82 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
 
         // Storage Data
         let sd = null;
-        if (inw.storageDetails) {
-            if (Array.isArray(inw.storageDetails)) {
-                sd = inw.storageDetails.find(s => s.dia === dia);
-            } else if (inw.storageDetails.dia === dia) {
-                sd = inw.storageDetails;
+        let storageDetails = inw.storageDetails;
+        if (typeof storageDetails === 'string') {
+            try {
+                storageDetails = JSON.parse(storageDetails);
+            } catch (_) {
+                storageDetails = null;
+            }
+        }
+        if (storageDetails) {
+            if (Array.isArray(storageDetails)) {
+                sd = storageDetails.find(s => normalizeDia(s?.dia) === normalizedDia);
+                if (!sd && storageDetails.length === 1) {
+                    // Backward compatibility: older records may not carry dia inside storageDetails.
+                    sd = storageDetails[0];
+                }
+            } else if (
+                normalizeDia(storageDetails.dia) === normalizedDia ||
+                !storageDetails.dia
+            ) {
+                sd = storageDetails;
             }
         }
 
-        // Flatten all weights across all colors for this DIA to get a sequence of set weights
-        const allInwardWeights = [];
-        if (sd && sd.rows) {
+        // Build set-wise weights by summing all color rows at the same set index.
+        const setWeightMap = new Map();
+        let maxSetIndexFromSticker = 0;
+        if (sd && Array.isArray(sd.rows)) {
             sd.rows.forEach(row => {
-                if (row.setWeights && Array.isArray(row.setWeights)) {
-                    row.setWeights.forEach(w => {
-                        const val = parseFloat(w.toString().replace(/[^0-9.]/g, '')) || 0;
-                        if (val > 0) allInwardWeights.push(val);
+                if (Array.isArray(row.setWeights)) {
+                    row.setWeights.forEach((w, idx) => {
+                        const val =
+                            parseFloat(w.toString().replace(/[^0-9.]/g, '')) || 0;
+                        if (val <= 0) return;
+                        const setNo = idx + 1;
+                        setWeightMap.set(setNo, (setWeightMap.get(setNo) || 0) + val);
+                        if (setNo > maxSetIndexFromSticker) {
+                            maxSetIndexFromSticker = setNo;
+                        }
                     });
                 }
             });
         }
 
-        // Determine total capacity of this lot in rolls
-        const lotCapacityRolls = allInwardWeights.length > 0 ? allInwardWeights.length : Math.round(totalInwardWt / wpr);
+        const setsFromDiaEntry = parseInt(entry.sets || 0) || 0;
+        const setsFromRecRoll = Math.floor((entry.recRoll || 0) / ROLLS_PER_SET);
+        let totalSetsInLot = Math.max(
+            maxSetIndexFromSticker,
+            setsFromDiaEntry,
+            setsFromRecRoll
+        );
+        if (totalSetsInLot <= 0) {
+            totalSetsInLot = Math.max(1, Math.floor(totalInwardWt / (ROLLS_PER_SET * wpr)));
+        }
 
-        // Expand into individual set rows, skipping already-used set numbers
-        let setIndexInLot = 0;
-        let lotLevelRollsCounted = 0;
-
-        while (remainingWeight > 0.001 && lotLevelRollsCounted < lotCapacityRolls) {
-            // Strictly enforce sets of ROLLS_PER_SET (11). No partial sets.
+        // Expand into set rows, skipping already-used set numbers
+        for (let setNo = 1; remainingWeight > 0.001 && setNo <= totalSetsInLot; setNo++) {
             const rollsInSet = ROLLS_PER_SET;
-
-            // If the lot doesn't have enough rolls for a FULL set, break out and move to the next lot.
-            if (lotLevelRollsCounted + rollsInSet > lotCapacityRolls) {
-                break;
-            }
-
-            const setNo = Math.floor(lotLevelRollsCounted / ROLLS_PER_SET) + 1;
-
-            // 1. Get Actual Weight
-            let actualSetWeight = 0;
-            let hasStickerWeights = false;
-
-            for (let i = 0; i < rollsInSet; i++) {
-                const w = allInwardWeights[setIndexInLot + i];
-                if (w !== undefined) {
-                    actualSetWeight += w;
-                    hasStickerWeights = true;
-                }
-            }
-
-            if (!hasStickerWeights) {
-                actualSetWeight = parseFloat((rollsInSet * wpr).toFixed(2));
-            } else {
-                actualSetWeight = parseFloat(actualSetWeight.toFixed(2));
-            }
+            const setWeightFromSticker = setWeightMap.get(setNo);
+            let actualSetWeight = setWeightFromSticker != null
+                ? parseFloat(setWeightFromSticker.toFixed(2))
+                : parseFloat((rollsInSet * wpr).toFixed(2));
 
             // Skip sets that have already been used
             if (!usedSetNos.has(setNo)) {
                 // 2. Get Specific Rack/Pallet for this specific set
-                // sd.racks and sd.pallets are indexed PER SET (0=Set1, 1=Set2, ...)
-                // setIndexInLot is a ROLL index (0, 11, 22, ...), so divide by ROLLS_PER_SET
-                const setPositionIndex = Math.floor(setIndexInLot / ROLLS_PER_SET);
+                const setPositionIndex = setNo - 1;
                 let rackName = 'N/A';
                 let palletNumber = 'N/A';
                 if (sd) {
-                    if (sd.racks && sd.racks.length > 0) {
-                        rackName = sd.racks[setPositionIndex % sd.racks.length] || sd.racks[0] || 'N/A';
+                    if (Array.isArray(sd.racks) && setPositionIndex < sd.racks.length) {
+                        const rackVal = (sd.racks[setPositionIndex] ?? '').toString().trim();
+                        rackName = rackVal || 'N/A';
                     }
-                    if (sd.pallets && sd.pallets.length > 0) {
-                        palletNumber = sd.pallets[setPositionIndex % sd.pallets.length] || sd.pallets[0] || 'N/A';
+                    if (Array.isArray(sd.pallets) && setPositionIndex < sd.pallets.length) {
+                        const palletVal = (sd.pallets[setPositionIndex] ?? '').toString().trim();
+                        palletNumber = palletVal || 'N/A';
                     }
                 }
 
@@ -167,9 +187,6 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
                 totalWprUsed += (actualSetWeight / rollsInSet);
                 wprCount++;
             }
-
-            lotLevelRollsCounted += rollsInSet;
-            setIndexInLot += rollsInSet;
         }
     }
 
