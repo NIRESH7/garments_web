@@ -33,6 +33,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   bool _isRecording = false;
   bool _isSaving = false;
   String? _recordedPath;
+  String _voiceLocale = 'en_US'; // 'en_US' or 'ta_IN'
 
   final _workerNameController = TextEditingController();
   final _replyController = TextEditingController();
@@ -112,6 +113,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               _replyController.text = val.recognizedWords;
             });
           },
+          localeId: _voiceLocale,
         );
       }
     } else {
@@ -280,13 +282,21 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           style: TextStyle(
                               fontWeight: FontWeight.bold, color: Colors.grey),
                         ),
-                        if (task['voiceDescriptionUrl'] != null &&
-                            task['voiceDescriptionUrl'].toString().isNotEmpty)
+                        if (
+                            (task['description'] != null && task['description'].toString().isNotEmpty) ||
+                            (task['voiceDescriptionUrl'] != null && task['voiceDescriptionUrl'].toString().isNotEmpty))
                           Padding(
                             padding: const EdgeInsets.only(left: 8),
                             child: InkWell(
-                              onTap: () =>
-                                  _playRemoteAudio(task['voiceDescriptionUrl']),
+                              onTap: () {
+                                final voiceUrl = task['voiceDescriptionUrl'];
+                                if (voiceUrl != null && voiceUrl.toString().isNotEmpty) {
+                                  _playRemoteAudio(voiceUrl.toString());
+                                } else {
+                                  final desc = task['description']?.toString() ?? '';
+                                  if (desc.isNotEmpty) _tts.speak(desc);
+                                }
+                              },
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
@@ -298,6 +308,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                               ),
                             ),
                           ),
+
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -307,8 +318,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ),
                   ],
                 ),
-                if (task['voiceDescriptionUrl'] != null &&
-                    task['voiceDescriptionUrl'].toString().isNotEmpty)
+                if (
+                    (task['description'] != null && task['description'].toString().isNotEmpty) ||
+                    (task['voiceDescriptionUrl'] != null && task['voiceDescriptionUrl'].toString().isNotEmpty))
                   Positioned(
                     top: 0,
                     right: 0,
@@ -320,14 +332,23 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       ),
                       child: IconButton(
                         icon: const Icon(LucideIcons.volume2, color: Colors.blue),
-                        onPressed: () =>
-                            _playRemoteAudio(task['voiceDescriptionUrl']),
                         tooltip: 'Listen to instruction',
+                        onPressed: () {
+                          final voiceUrl = task['voiceDescriptionUrl'];
+                          if (voiceUrl != null && voiceUrl.toString().isNotEmpty) {
+                            _playRemoteAudio(voiceUrl.toString());
+                          } else {
+                            // Fallback: TTS reads the description aloud
+                            final desc = task['description']?.toString() ?? '';
+                            if (desc.isNotEmpty) _tts.speak(desc);
+                          }
+                        },
                       ),
                     ),
                   ),
               ],
             ),
+
             const SizedBox(height: 20),
             Row(
               children: [
@@ -384,13 +405,26 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             style: const TextStyle(fontSize: 13, color: Colors.black87),
                           ),
                         ),
-                        if (voiceUrl != null && voiceUrl.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(LucideIcons.volume2, size: 18, color: Colors.blue),
-                            onPressed: () => _playRemoteAudio(voiceUrl),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
+                        // Always show speaker for any reply that has text or voice
+                        IconButton(
+                          icon: const Icon(LucideIcons.volume2, size: 18, color: Colors.blue),
+                          onPressed: () {
+                            if (voiceUrl != null && voiceUrl.isNotEmpty) {
+                              _playRemoteAudio(voiceUrl);
+                            } else {
+                              // TTS fallback — read the reply text aloud
+                              final replyText = r['replyText']?.toString() ?? '';
+                              final workerName = r['workerName']?.toString() ?? '';
+                              if (replyText.isNotEmpty) {
+                                _tts.speak('$workerName said: $replyText');
+                              }
+                            }
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Listen to reply',
+                        ),
+
                       ],
                     ),
                   );
@@ -453,25 +487,57 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           decoration: InputDecoration(
             labelText: 'Progress Details',
             border: const OutlineInputBorder(),
-            suffixIcon: Row(
+            suffixIcon: Column(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (_recordedPath != null)
-                   IconButton(
-                    icon: const Icon(LucideIcons.playCircle, color: Colors.green),
-                    onPressed: _playLocalRecording,
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _voiceLocale = _voiceLocale == 'en_US' ? 'ta_IN' : 'en_US';
+                  }),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 4, top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _voiceLocale == 'ta_IN' ? Colors.orange.shade100 : Colors.blue.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _voiceLocale == 'ta_IN' ? 'TA' : 'EN',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: _voiceLocale == 'ta_IN' ? Colors.orange.shade900 : Colors.blue.shade900,
+                      ),
+                    ),
                   ),
-                IconButton(
-                  icon: Icon(
-                    _isRecording ? LucideIcons.mic : LucideIcons.micOff,
-                    color: _isRecording ? Colors.red : primaryColor,
-                  ),
-                  onPressed: _isRecording ? _stopRecording : _startRecording,
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_recordedPath != null)
+                      IconButton(
+                        icon: const Icon(LucideIcons.playCircle, color: Colors.green),
+                        onPressed: _playLocalRecording,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    IconButton(
+                      icon: Icon(
+                        _isRecording ? LucideIcons.mic : LucideIcons.micOff,
+                        color: _isRecording ? Colors.red : primaryColor,
+                      ),
+                      onPressed: _isRecording ? _stopRecording : _startRecording,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
+
         const SizedBox(height: 24),
         ElevatedButton(
           onPressed: _isSaving ? null : _submitReply,

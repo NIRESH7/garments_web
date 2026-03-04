@@ -32,6 +32,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
   String? _recordedPath;
+  String _voiceLocale = 'en_US'; // 'en_US' or 'ta_IN'
 
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
@@ -125,6 +126,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
               _descController.text = val.recognizedWords;
             });
           },
+          localeId: _voiceLocale,
         );
       }
     } else {
@@ -242,20 +244,52 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
               decoration: InputDecoration(
                 labelText: 'Task Description',
                 border: const OutlineInputBorder(),
-                suffixIcon: Row(
+                suffixIcon: Column(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (_recordedPath != null)
-                      IconButton(
-                        icon: const Icon(LucideIcons.playCircle, color: Colors.green),
-                        onPressed: _playLocalRecording,
+                    // Language toggle
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _voiceLocale = _voiceLocale == 'en_US' ? 'ta_IN' : 'en_US';
+                      }),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 4, top: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _voiceLocale == 'ta_IN' ? Colors.orange.shade100 : Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _voiceLocale == 'ta_IN' ? 'TA' : 'EN',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: _voiceLocale == 'ta_IN' ? Colors.orange.shade900 : Colors.blue.shade900,
+                          ),
+                        ),
                       ),
-                    IconButton(
-                      icon: Icon(
-                        _isRecording ? LucideIcons.mic : LucideIcons.micOff,
-                        color: _isRecording ? Colors.red : primaryColor,
-                      ),
-                      onPressed: _isRecording ? _stopRecording : _startRecording,
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_recordedPath != null)
+                          IconButton(
+                            icon: const Icon(LucideIcons.playCircle, color: Colors.green),
+                            onPressed: _playLocalRecording,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        IconButton(
+                          icon: Icon(
+                            _isRecording ? LucideIcons.mic : LucideIcons.micOff,
+                            color: _isRecording ? Colors.red : primaryColor,
+                          ),
+                          onPressed: _isRecording ? _stopRecording : _startRecording,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
                     ),
                   ],
                 ),

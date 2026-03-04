@@ -3,6 +3,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
 import './task_detail_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
+import '../../core/constants/api_constants.dart';
 
 class WorkerTaskDashboardScreen extends StatefulWidget {
   const WorkerTaskDashboardScreen({super.key});
@@ -13,6 +15,7 @@ class WorkerTaskDashboardScreen extends StatefulWidget {
 
 class _WorkerTaskDashboardScreenState extends State<WorkerTaskDashboardScreen> {
   final _api = MobileApiService();
+  final _audioPlayer = AudioPlayer();
   bool _isLoading = false;
   List<dynamic> _tasks = [];
 
@@ -20,6 +23,12 @@ class _WorkerTaskDashboardScreenState extends State<WorkerTaskDashboardScreen> {
   void initState() {
     super.initState();
     _loadTasks();
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTasks() async {
@@ -93,6 +102,17 @@ class _WorkerTaskDashboardScreenState extends State<WorkerTaskDashboardScreen> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Play admin voice instruction if available
+                          if (task['voiceDescriptionUrl'] != null &&
+                              task['voiceDescriptionUrl'].toString().isNotEmpty)
+                            IconButton(
+                              icon: const Icon(LucideIcons.volume2, color: Colors.blue, size: 22),
+                              onPressed: () {
+                                final fullUrl = ApiConstants.getImageUrl(task['voiceDescriptionUrl']);
+                                _audioPlayer.play(UrlSource(fullUrl));
+                              },
+                              tooltip: 'Listen to instruction',
+                            ),
                           IconButton(
                             icon: const Icon(LucideIcons.trash2, color: Colors.grey, size: 20),
                             onPressed: () {
