@@ -83,10 +83,15 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     );
   }
 
+  String _transcribeLang() => _voiceLocale.startsWith('ta') ? 'ta' : 'en';
+
   Future<void> _transcribeAndFillDescription(String audioPath) async {
     setState(() => _isTranscribing = true);
     try {
-      final transcribed = await _api.transcribeAudioFile(audioPath);
+      final transcribed = await _api.transcribeAudioFile(
+        audioPath,
+        language: _transcribeLang(),
+      );
       if (transcribed != null && transcribed.trim().isNotEmpty) {
         setState(() {
           _descController.text = transcribed.trim();
@@ -130,15 +135,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
         _recordedPath = null;
       });
 
-      // Start live STT only as best-effort; transcription after stop is the guaranteed path.
-      try {
-        if (!_speechReady) {
-          _speechReady = await _stt.initialize();
-        }
-        if (_speechReady) {
-          await _listen(startOnly: true);
-        }
-      } catch (_) {}
+      // Do not start live STT while recording; rely on server transcription for final text.
     } catch (e) {
       debugPrint('Error starting record: $e');
       _showMsg('Failed to start recording', error: true);

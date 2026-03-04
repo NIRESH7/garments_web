@@ -94,6 +94,11 @@ export const transcribeAudio = asyncHandler(async (req, res) => {
     }
 
     try {
+        const inputLang = (req.body?.language || '').toString().trim().toLowerCase();
+        let whisperLang;
+        if (inputLang.startsWith('en')) whisperLang = 'en';
+        if (inputLang.startsWith('ta')) whisperLang = 'ta';
+
         const audioFile = await toFile(
             req.file.buffer,
             req.file.originalname || 'voice.m4a'
@@ -102,6 +107,7 @@ export const transcribeAudio = asyncHandler(async (req, res) => {
         const transcript = await openai.audio.transcriptions.create({
             file: audioFile,
             model: 'whisper-1',
+            ...(whisperLang ? { language: whisperLang } : {}),
         });
 
         return res.json({ text: transcript.text || '' });

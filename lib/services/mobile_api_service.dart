@@ -869,7 +869,7 @@ class MobileApiService {
     }
   }
 
-  Future<String?> transcribeAudioFile(String path) async {
+  Future<String?> transcribeAudioFile(String path, {String? language}) async {
     try {
       final fileName = path.split('/').last;
       final formData = FormData.fromMap({
@@ -878,6 +878,7 @@ class MobileApiService {
           filename: fileName,
           contentType: _inferMediaType(fileName),
         ),
+        if (language != null && language.isNotEmpty) 'language': language,
       });
       final response = await _client.post(
         ApiConstants.aiTranscribe,

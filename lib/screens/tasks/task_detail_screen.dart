@@ -70,10 +70,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
+  String _transcribeLang() => _voiceLocale.startsWith('ta') ? 'ta' : 'en';
+
   Future<void> _transcribeAndFillReply(String audioPath) async {
     setState(() => _isTranscribing = true);
     try {
-      final transcribed = await _api.transcribeAudioFile(audioPath);
+      final transcribed = await _api.transcribeAudioFile(
+        audioPath,
+        language: _transcribeLang(),
+      );
       if (transcribed != null && transcribed.trim().isNotEmpty) {
         setState(() {
           _replyController.text = transcribed.trim();
@@ -116,15 +121,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         _recordedPath = null;
       });
 
-      // Best-effort live STT; guaranteed text comes from transcribing recorded audio on stop.
-      try {
-        if (!_speechReady) {
-          _speechReady = await _stt.initialize();
-        }
-        if (_speechReady) {
-          await _listen(startOnly: true);
-        }
-      } catch (_) {}
+      // Do not start live STT while recording; rely on server transcription for final text.
     } catch (e) {
       debugPrint('Error starting record: $e');
       _showMsg('Failed to start voice recording', error: true);
