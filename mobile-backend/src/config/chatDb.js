@@ -12,7 +12,7 @@ if (!chatDbUri) {
 const chatDbConnection = mongoose.createConnection(chatDbUri);
 
 chatDbConnection.on('connected', () => {
-    console.log(`AI Chatbot connected to remote DB: ${chatDbUri.split('@')[1]}`);
+    console.log(`AI Chatbot connected to DB: ${chatDbUri}`);
 });
 
 chatDbConnection.on('error', (err) => {

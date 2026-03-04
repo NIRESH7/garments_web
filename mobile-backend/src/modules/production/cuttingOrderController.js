@@ -75,9 +75,14 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
         const wpr = calcWeightPerRoll(entry, effDozenWeight);
 
         // Storage Data
-        const sd = inw.storageDetails && Array.isArray(inw.storageDetails)
-            ? inw.storageDetails.find(s => s.dia === dia)
-            : null;
+        let sd = null;
+        if (inw.storageDetails) {
+            if (Array.isArray(inw.storageDetails)) {
+                sd = inw.storageDetails.find(s => s.dia === dia);
+            } else if (inw.storageDetails.dia === dia) {
+                sd = inw.storageDetails;
+            }
+        }
 
         // Flatten all weights across all colors for this DIA to get a sequence of set weights
         const allInwardWeights = [];
@@ -131,11 +136,14 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
             // Skip sets that have already been used
             if (!usedSetNos.has(setNo)) {
                 // 2. Get Specific Rack/Pallet for this specific set
+                // sd.racks and sd.pallets are indexed PER SET (0=Set1, 1=Set2, ...)
+                // setIndexInLot is a ROLL index (0, 11, 22, ...), so divide by ROLLS_PER_SET
+                const setPositionIndex = Math.floor(setIndexInLot / ROLLS_PER_SET);
                 let rackName = 'N/A';
                 let palletNumber = 'N/A';
                 if (sd) {
-                    if (sd.racks && sd.racks[setIndexInLot]) rackName = sd.racks[setIndexInLot];
-                    if (sd.pallets && sd.pallets[setIndexInLot]) palletNumber = sd.pallets[setIndexInLot];
+                    if (sd.racks && sd.racks[setPositionIndex]) rackName = sd.racks[setPositionIndex];
+                    if (sd.pallets && sd.pallets[setPositionIndex]) palletNumber = sd.pallets[setPositionIndex];
                 }
 
                 setRows.push({
