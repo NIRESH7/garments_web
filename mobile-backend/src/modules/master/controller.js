@@ -195,7 +195,10 @@ const getItemGroupByGroupName = asyncHandler(async (req, res) => {
         throw new Error('name query param is required');
     }
     const group = await ItemGroup.findOne({
-        groupName: { $regex: new RegExp(`^${name.trim()}$`, 'i') }
+        $or: [
+            { groupName: { $regex: new RegExp(`^${name.trim()}$`, 'i') } },
+            { itemNames: { $regex: new RegExp(`^${name.trim()}$`, 'i') } }
+        ]
     });
     if (group) {
         res.json(group);

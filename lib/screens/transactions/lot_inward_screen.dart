@@ -93,7 +93,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _userRole;
-  String? _lastStickerGsm;
+  final Map<String, String> _lastStickerGsmMap = {};
+  String _selectedVoiceLocale = 'en_US'; // 'en_US' or 'ta_IN'
 
   // Voice input
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -202,7 +203,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             .replaceAll(',', '.')
             .replaceAll('point', '.')
             .replaceAll('dot', '.')
-            .replaceAll('decimal', '.');
+            .replaceAll('decimal', '.')
+            .replaceAll('புள்ளி', '.'); // Tamil for point
 
         final regExp = RegExp(r'\d+\.?\d*');
         final match = regExp.firstMatch(words);
@@ -223,7 +225,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       listenFor: const Duration(seconds: 10),
       pauseFor: const Duration(seconds: 3),
       partialResults: true,
-      localeId: 'en_US',
+      localeId: _selectedVoiceLocale,
     );
   }
 
@@ -266,7 +268,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             .replaceAll(',', '.')
             .replaceAll('point', '.')
             .replaceAll('dot', '.')
-            .replaceAll('decimal', '.');
+            .replaceAll('decimal', '.')
+            .replaceAll('புள்ளி', '.'); // Tamil for point
 
         final regExp = RegExp(r'\d+\.?\d*');
         final match = regExp.firstMatch(words);
@@ -288,7 +291,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       listenFor: const Duration(seconds: 10),
       pauseFor: const Duration(seconds: 3),
       partialResults: true,
-      localeId: 'en_US',
+      localeId: _selectedVoiceLocale,
     );
   }
 
@@ -535,13 +538,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               // Pre-fill GSM for this DIA if we found it
               if (d['gsm'] != null && d['gsm'].toString().isNotEmpty) {
                 final gsmVal = d['gsm'].toString();
-                _lastStickerGsm = gsmVal; // Track as latest known
+                // Store in map under a special 'default' key only if no colour-specific entries exist yet
                 final diaData = _stickerData.putIfAbsent(dia, () => StickerDiaData());
                 if (diaData.rows.isNotEmpty) {
                   for (var sRow in diaData.rows) {
-                    sRow.gsm = gsmVal;
-                    sRow.gsmController ??= TextEditingController();
-                    sRow.gsmController?.text = gsmVal;
+                    // Only set if no colour-specific GSM already tracked
+                    if (sRow.colour != null && !_lastStickerGsmMap.containsKey(sRow.colour)) {
+                      sRow.gsm = gsmVal;
+                      sRow.gsmController ??= TextEditingController();
+                      sRow.gsmController?.text = gsmVal;
+                    }
                   }
                 }
               }
@@ -575,6 +581,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       _stickerData.clear();
       _completedStickerDias.clear();
       _lotMappedColours = [];
+      _lastStickerGsmMap.clear(); // Clear session GSMs for new lot
     });
 
     if (val != null) {
@@ -1627,30 +1634,38 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     setState(() {
       _selectedStickerDia = nextDia;
-      final diaData = _stickerData.putIfAbsent(nextDia, () => StickerDiaData());
+      _initializeStickerRows(nextDia);
+      _currentPage = 1;
+    });
+  }
 
-      // Initialize session GSM from Lot GSM if we don't have one yet
-      if (_lastStickerGsm == null && _gsmController.text.isNotEmpty) {
-        _lastStickerGsm = _gsmController.text;
-      }
-
-      // If we have mapped colours but no rows, create them
-      if (diaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
-        diaData.rows = _lotMappedColours.map((c) => StickerRow()..colour = c).toList();
-      }
-
-      // Pre-fill rows with last known GSM if they are empty
-      if (_lastStickerGsm != null) {
-        for (var row in diaData.rows) {
-          if (row.gsm == null || row.gsm!.isEmpty) {
-            row.gsm = _lastStickerGsm;
-            row.gsmController?.text = _lastStickerGsm!;
+  void _initializeStickerRows(String dia) {
+    final diaData = _stickerData.putIfAbsent(dia, () => StickerDiaData());
+    if (diaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
+      // First time: create all rows from mapped colours
+      diaData.rows = _lotMappedColours.map((c) {
+        final row = StickerRow()..colour = c;
+        final gsmToUse = _lastStickerGsmMap[c];
+        if (gsmToUse != null) {
+          row.gsm = gsmToUse;
+          row.gsmController = TextEditingController(text: gsmToUse);
+        }
+        return row;
+      }).toList();
+    } else {
+      // Rows already exist — refresh empty GSM fields from the map
+      for (var row in diaData.rows) {
+        final colour = row.colour;
+        if (colour != null && colour.isNotEmpty) {
+          final gsmToUse = _lastStickerGsmMap[colour];
+          if (gsmToUse != null && (row.gsm == null || row.gsm!.isEmpty)) {
+            row.gsm = gsmToUse;
+            row.gsmController ??= TextEditingController();
+            row.gsmController!.text = gsmToUse;
           }
         }
       }
-
-      _currentPage = 1;
-    });
+    }
   }
 
   /// All DIAs from the main grid that have rolls entered
@@ -1698,6 +1713,39 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 : 'Sticker & Storage Details',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
+          actions: [
+            // Language Toggle for Voice Input
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ActionChip(
+                avatar: Icon(
+                  Icons.language,
+                  size: 16,
+                  color: _selectedVoiceLocale == 'ta_IN' ? Colors.orange : Colors.blue,
+                ),
+                label: Text(
+                  _selectedVoiceLocale == 'ta_IN' ? "தமிழ் (TA)" : "English (EN)",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: _selectedVoiceLocale == 'ta_IN' ? Colors.orange.shade900 : Colors.blue.shade900,
+                  ),
+                ),
+                backgroundColor: _selectedVoiceLocale == 'ta_IN' ? Colors.orange.shade50 : Colors.blue.shade50,
+                onPressed: () {
+                  setState(() {
+                    _selectedVoiceLocale = (_selectedVoiceLocale == 'en_US') ? 'ta_IN' : 'en_US';
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Voice Language: ${_selectedVoiceLocale == 'ta_IN' ? 'Tamil' : 'English'}"),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -2295,7 +2343,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           (v) => setState(() {
             _selectedStickerDia = v;
             if (v != null) {
-              _stickerData.putIfAbsent(v, () => StickerDiaData());
+              _initializeStickerRows(v);
             }
           }),
         ),
@@ -2503,13 +2551,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         r.gsmController!,
                         (v) {
                           r.gsm = v;
-                          _lastStickerGsm = v; // Update session GSM
-                          // Auto-fill logic: if first row is edited, fill all others for same DIA
-                          if (idx == 0) {
-                            for (int i = 1; i < rows.length; i++) {
-                              rows[i].gsm = v;
-                              rows[i].gsmController?.text = v;
-                            }
+                          // Only store if colour is known
+                          final colour = r.colour;
+                          if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
+                            _lastStickerGsmMap[colour] = v; // Update color-specific session GSM
                           }
                           setState(() {});
                         },
@@ -3028,22 +3073,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       if (remaining.isNotEmpty) {
         // Move to next DIA
         _selectedStickerDia = remaining.first;
-        final nextDiaData = _stickerData.putIfAbsent(_selectedStickerDia!, () => StickerDiaData());
-
-        // Ensure rows exist
-        if (nextDiaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
-          nextDiaData.rows = _lotMappedColours.map((c) => StickerRow()..colour = c).toList();
-        }
-
-        // Apply session GSM to empty rows
-        if (_lastStickerGsm != null) {
-          for (var row in nextDiaData.rows) {
-            if (row.gsm == null || row.gsm!.isEmpty) {
-              row.gsm = _lastStickerGsm;
-              row.gsmController?.text = _lastStickerGsm!;
-            }
-          }
-        }
+        _initializeStickerRows(_selectedStickerDia!);
       } else {
         _selectedStickerDia = null;
         _currentPage = 0; // Back to main page only if all done
@@ -3272,5 +3302,5 @@ class StickerRow {
 class StickerDiaData {
   List<String?> racks = [];
   List<String?> pallets = [];
-  List<StickerRow> rows = [StickerRow()];
+  List<StickerRow> rows = []; // Start empty so it can be auto-filled correctly
 }
