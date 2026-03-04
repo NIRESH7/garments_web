@@ -1175,7 +1175,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                       const Text(
                                         'SCAN FOR AUTH',
                                         style: TextStyle(
-                                          fontSize: 8,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -1307,13 +1307,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       child: Row(
         children: [
           SizedBox(
-            width: 80,
+            width: 100, // Increased width for bold label
             child: Text(
               '$label :',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), // Increased from 14
             ),
           ),
-          Text(value, style: const TextStyle(fontSize: 14)),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), // Slightly reduced from 16
+            ),
+          ),
         ],
       ),
     );
@@ -1414,14 +1419,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 8),
             ],
           ),
-          pw.Spacer(),
+          pw.SizedBox(height: 4),
           pw.Center(
             child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Container(
-                  width: 40,
-                  height: 40,
+                  width: 32,
+                  height: 32,
                   child: pw.BarcodeWidget(
                     barcode: pw.Barcode.qrCode(),
                     data:
@@ -1430,7 +1435,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 ),
                 pw.SizedBox(height: 0.5),
                 pw.Text(
-                  'SCAN',
+                  'SCAN FOR AUTH',
                   style: pw.TextStyle(
                     fontSize: 7,
                     fontWeight: pw.FontWeight.bold,
@@ -1581,15 +1586,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     String label,
     String value, {
     double fontSize = 9,
-    bool isBoldValue = false,
+    bool isBoldValue = true,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 0.5),
+      padding: const pw.EdgeInsets.symmetric(vertical: 0.2),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 40, // Reduced width for small label
+            width: 45,
             child: pw.Text(
               '$label:',
               style: pw.TextStyle(
@@ -1603,9 +1608,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               value,
               style: pw.TextStyle(
                 fontSize: fontSize,
-                fontWeight: isBoldValue
-                    ? pw.FontWeight.bold
-                    : pw.FontWeight.normal,
+                fontWeight: pw.FontWeight.bold, // Always bold
               ),
               maxLines: 2,
               overflow: pw.TextOverflow.clip,
@@ -2510,9 +2513,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   _buildGridCell("GSM", 80),
                   ...List.generate(
                     sets,
-                    (i) => _buildGridCell("Set-${i + 1}", 100),
+                    (i) => _buildGridCell("Set-${i + 1}", 125), // Increased from 100
                   ),
-                  _buildGridCell("TOTAL", 100),
+                  _buildGridCell("TOTAL", 125), // Increased from 100
                 ],
               ),
             ),
@@ -2569,7 +2572,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       }
                       return _buildGridCell(
                         "",
-                        100,
+                        125, // Increased from 100
                         child: _buildTableInputText(
                           r.controllers[i],
                           (v) => setState(() => r.setWeights[i] = v),
@@ -2584,8 +2587,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     }),
                     _buildGridCell(
                       r.totalWeight.toStringAsFixed(3),
-                      100,
+                      125,
                       alignment: Alignment.center,
+                      child: Text(
+                        r.totalWeight.toStringAsFixed(3),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Color(0xFF475569),
+                        ),
+                        maxLines: 2,
+                        softWrap: true,
+                      ),
                     ),
                   ],
                 ),
@@ -2622,7 +2636,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }) {
     return Container(
       width: width,
-      height: 50,
+      height: 65, // Increased from 50 to allow wrapping
       padding: EdgeInsets.symmetric(horizontal: padding),
       decoration: BoxDecoration(
         border: Border(right: BorderSide(color: Colors.grey.shade300)),
@@ -2653,12 +2667,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
       ],
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), // Reduced from 13
       textAlign: TextAlign.center,
+      maxLines: 2, // Allow wrapping
+      minLines: 1,
       decoration: InputDecoration(
         hintText: '-',
         border: InputBorder.none,
         isDense: true,
+        contentPadding: EdgeInsets.zero, // Maximize space
         suffixIcon: onMicTap != null
             ? IconButton(
                 icon: Icon(

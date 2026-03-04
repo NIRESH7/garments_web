@@ -950,13 +950,18 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
       child: Row(
         children: [
           SizedBox(
-            width: 80,
+            width: 100, // Increased width for bold label
             child: Text(
               '$label :',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), // Increased from 14
             ),
           ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), // Made bold and increased from 14
+            ),
+          ),
         ],
       ),
     );
@@ -965,15 +970,15 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   pw.Widget _buildPdfRow(
     String label,
     String value, {
-    double fontSize = 10,
+    double fontSize = 9,
     bool isBoldValue = true,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 0.3),
+      padding: const pw.EdgeInsets.symmetric(vertical: 0.1),
       child: pw.Row(
         children: [
           pw.SizedBox(
-            width: 38,
+            width: 45, // Increased width for bold label
             child: pw.Text(
               '$label:',
               style: pw.TextStyle(
@@ -1031,17 +1036,19 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
             child: pw.Column(
               mainAxisSize: pw.MainAxisSize.min,
               children: [
-                pw.BarcodeWidget(
-                  barcode: pw.Barcode.qrCode(),
-                  data: qrData,
-                  width: 35,
-                  height: 35,
+                pw.Container(
+                  width: 32,
+                  height: 32,
+                  child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data: qrData,
+                  ),
                 ),
-                pw.SizedBox(height: 1),
+                pw.SizedBox(height: 0.5),
                 pw.Text(
                   'SCAN FOR AUTH',
                   style: pw.TextStyle(
-                    fontSize: 6,
+                    fontSize: 7,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),

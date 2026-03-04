@@ -11,7 +11,7 @@ async def create_admin():
     # Connect to DB
     db.connect()
     
-    email = "garments@gmail.com"
+    email = "garments1@gmail.com"
     password = "Admin@123"
     hashed_password = pwd_context.hash(password)
     

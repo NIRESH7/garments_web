@@ -11,7 +11,7 @@ def test_get_colours(lot_no):
     
     # Let's try to login first.
     auth_url = "http://localhost:5001/api/auth/login"
-    login_payload = {"email": "garments@gmail.com", "password": "Admin@123"}
+    login_payload = {"email": "garments1@gmail.com", "password": "Admin@123"}
     
     try:
         session = requests.Session()
