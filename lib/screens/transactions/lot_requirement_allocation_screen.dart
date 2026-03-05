@@ -9,6 +9,7 @@ import 'package:garments/services/lot_allocation_print_service.dart';
 import 'package:garments/widgets/app_drawer.dart';
 import 'package:garments/widgets/custom_dropdown_field.dart';
 import 'package:share_plus/share_plus.dart';
+import 'lot_outward_screen.dart';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const List<String> _kWeekDays = [
@@ -133,10 +134,32 @@ class _LotRequirementAllocationScreenState
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
 
+  DateTime _dateForDayInSameWeek(String day, {DateTime? anchor}) {
+    final base = DateTime(
+      (anchor ?? _selectedDate).year,
+      (anchor ?? _selectedDate).month,
+      (anchor ?? _selectedDate).day,
+    );
+    final dayIndex = _kWeekDays.indexOf(day);
+    if (dayIndex < 0) return base;
+    final monday = base.subtract(
+      Duration(days: base.weekday - DateTime.monday),
+    );
+    return monday.add(Duration(days: dayIndex));
+  }
+
+  String _dayFromDate(DateTime date) {
+    if (date.weekday >= DateTime.monday && date.weekday <= DateTime.saturday) {
+      return _kWeekDays[date.weekday - DateTime.monday];
+    }
+    return _selectedDay;
+  }
+
   // ─── Init ─────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
+    _selectedDate = _dateForDayInSameWeek(_selectedDay, anchor: DateTime.now());
     _loadInitialData();
     _dozenCtrl.addListener(() => setState(() {}));
     _dozenWeightCtrl.addListener(() {
@@ -678,6 +701,7 @@ class _LotRequirementAllocationScreenState
     if (idx < _kWeekDays.length - 1) {
       setState(() {
         _selectedDay = _kWeekDays[idx + 1];
+        _selectedDate = _dateForDayInSameWeek(_selectedDay);
       });
       _showSuccess(
         '$_selectedDay recorded. Now entering ${_kWeekDays[idx + 1]}.',
@@ -712,12 +736,13 @@ class _LotRequirementAllocationScreenState
     try {
       for (final day in daysToSave) {
         final entries = _dayEntries[day] ?? [];
+        final dayDate = _dateForDayInSameWeek(day);
         for (final entry in entries) {
           final success = await _api.saveLotAllocation(
             _selectedPlanId!,
             entry.sets,
             day: day,
-            date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+            date: DateFormat('yyyy-MM-dd').format(dayDate),
             itemName: entry.itemName,
             size: entry.size,
             dozen: entry.dozen,
@@ -924,6 +949,22 @@ class _LotRequirementAllocationScreenState
   }
 
   // ─── Snackbars ────────────────────────────────────────────────────────────
+  void _directOutward(Map<String, dynamic> lot) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LotOutwardScreen(
+          initialOutwardData: {
+            'lotName': lot['lotName'],
+            'lotNo': lot['lotNo'],
+            'dia': lot['dia'],
+            'setNos': lot['setNos'],
+          },
+        ),
+      ),
+    );
+  }
+
   void _showError(String msg) => ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
@@ -1121,7 +1162,9 @@ class _LotRequirementAllocationScreenState
                         .map((d) => DropdownMenuItem(value: d, child: Text(d)))
                         .toList(),
                     onChanged: (v) => setState(() {
-                      _selectedDay = v!;
+                      if (v == null) return;
+                      _selectedDay = v;
+                      _selectedDate = _dateForDayInSameWeek(v);
                       _currentSets = [];
                     }),
                   ),
@@ -1137,8 +1180,19 @@ class _LotRequirementAllocationScreenState
                         firstDate: DateTime(2024),
                         lastDate: DateTime(2030),
                       );
-                      if (picked != null)
-                        setState(() => _selectedDate = picked);
+                      if (picked != null) {
+                        if (picked.weekday == DateTime.sunday) {
+                          _showError(
+                            'Sunday is not supported. Select Monday to Saturday.',
+                          );
+                          return;
+                        }
+                        setState(() {
+                          _selectedDate = picked;
+                          _selectedDay = _dayFromDate(picked);
+                          _currentSets = [];
+                        });
+                      }
                     },
                     child: InputDecorator(
                       decoration: const InputDecoration(
@@ -2200,6 +2254,18 @@ class _LotRequirementAllocationScreenState
                           color: Colors.red,
                         ),
                         onPressed: () => _deleteAllocationRow(lot['id']),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.swap_horiz,
+                          size: 18,
+                          color: Colors.orange,
+                        ),
+                        onPressed: () => _directOutward(lot),
+                        tooltip: 'Swap to Outward',
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),

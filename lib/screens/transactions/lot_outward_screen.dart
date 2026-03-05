@@ -14,7 +14,12 @@ import '../../core/constants/api_constants.dart';
 
 class LotOutwardScreen extends StatefulWidget {
   final Map<String, dynamic>? editOutward;
-  const LotOutwardScreen({super.key, this.editOutward});
+  final Map<String, dynamic>? initialOutwardData;
+  const LotOutwardScreen({
+    super.key,
+    this.editOutward,
+    this.initialOutwardData,
+  });
 
   @override
   State<LotOutwardScreen> createState() => _LotOutwardScreenState();
@@ -73,6 +78,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     if (widget.editOutward != null) {
       _isEditMode = true;
       _loadEditData();
+    } else if (widget.initialOutwardData != null) {
+      _loadInitialFromData();
     } else {
       _loadInitialData();
     }
@@ -167,6 +174,51 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         final sets = await _api.getBalancedSets(_selectedLotNo!, _selectedDia!);
         setState(() => _availableSets = sets);
       }
+    }
+  }
+
+  Future<void> _loadInitialFromData() async {
+    final categories = await _api.getCategories();
+    final parties = await _api.getParties();
+    final dc = await _api.generateDcNumber();
+    final data = widget.initialOutwardData!;
+
+    setState(() {
+      _lotNames = _getValues(categories, 'Lot Name');
+      _dias = _getValues(categories, 'dia');
+      _allColours = _getValues(categories, 'Colours');
+      _parties = parties.map((m) => m['name'] as String).toList();
+      _dcNumber = dc ?? 'ERR-GEN';
+
+      _selectedLotName = data['lotName'];
+      _selectedDia = data['dia'];
+      _selectedLotNo = data['lotNo'];
+    });
+
+    if (_selectedDia != null) {
+      final lots = await _api.getLotsFifo(dia: _selectedDia!);
+      setState(() => _lotNos = lots);
+
+      if (_selectedLotNo != null) {
+        final colours = await _api.getColoursByLot(_selectedLotNo!);
+        setState(() => _currentLotColours = colours);
+
+        final sets = await _api.getBalancedSets(_selectedLotNo!, _selectedDia!);
+        setState(() {
+          _availableSets = sets;
+          _isLoading = false;
+        });
+
+        // Auto-select sets passed in data
+        final List<int> targetSetNos = List<int>.from(data['setNos'] ?? []);
+        for (var sNo in targetSetNos) {
+          await _toggleSetSelection(sNo.toString(), true);
+        }
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } else {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -435,7 +487,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         // Fallback: If _currentLotColours is empty, extract from setStock
         final lotColours = _currentLotColours.isNotEmpty
             ? _currentLotColours
-            : setStock.map((s) => s['colour']?.toString() ?? 'N/A').toSet().toList();
+            : setStock
+                  .map((s) => s['colour']?.toString() ?? 'N/A')
+                  .toSet()
+                  .toList();
 
         for (var lotCol in lotColours) {
           // Check if we have stock for this color in this set
@@ -1493,7 +1548,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     if (scannedSetNo != null && scannedSetNo.startsWith('#')) {
       scannedSetNo = scannedSetNo.substring(1);
     }
-    
+
     String? scannedColour = getValue('COL');
 
     // If no keys found, treat whole code as Lot No (Fallback)
@@ -1547,7 +1602,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   ) {
     // Check if lot exists in current DIA's list
     if (!_lotNos.contains(lotNo)) {
-      // If lot name was provided, maybe it's recommended? 
+      // If lot name was provided, maybe it's recommended?
       // But we strictly check the loaded _lotNos for safety.
       _showError('Lot No "$lotNo" not found for DIA $_selectedDia');
       return;
@@ -1564,7 +1619,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           if (mounted) {
             _toggleSetSelection(setNo, true);
 
-            // After toggling, we can try to find the specific color from scan 
+            // After toggling, we can try to find the specific color from scan
             // and ensure it's checked (though our logic already checks all stock colors)
             if (scannedColour != null) {
               setState(() {
