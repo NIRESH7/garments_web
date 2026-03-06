@@ -174,6 +174,41 @@ class MobileApiService {
     }
   }
 
+  Future<Map<String, dynamic>> importInwardExcel(
+    String filePath, {
+    String? fileName,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': await MultipartFile.fromFile(
+          filePath,
+          filename: fileName ?? filePath.split('/').last,
+        ),
+      });
+
+      final response = await _client.post(
+        ApiConstants.inwardImport,
+        data: formData,
+      );
+
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      return {};
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        throw Exception(data['message'].toString());
+      }
+      throw Exception(e.message ?? 'Import failed');
+    } catch (e) {
+      throw Exception('Import failed: $e');
+    }
+  }
+
   Future<List<dynamic>> getInwards({
     String? startDate,
     String? endDate,

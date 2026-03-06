@@ -16,6 +16,19 @@ function normalizeDia(value) {
     return Number.isInteger(n) ? String(n) : String(n);
 }
 
+function parseSetNo(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return Math.trunc(value);
+    }
+    const raw = value.toString().trim();
+    if (!raw) return null;
+    const match = raw.match(/\d+/);
+    if (!match) return null;
+    const parsed = Number.parseInt(match[0], 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 // ─── Helper: weight-per-roll from inward entry ────────────────────────────────
 function calcWeightPerRoll(entry, effDozenWeight) {
     const recRolls = entry.recRoll || 0;
@@ -48,7 +61,11 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
     let wprCount = 0;
 
     // Normalize excludedSets to a Set of numbers
-    const excludedSetNos = new Set((excludedSets || []).map(num => parseInt(num)));
+    const excludedSetNos = new Set(
+        (excludedSets || [])
+            .map((num) => parseSetNo(num))
+            .filter((num) => Number.isFinite(num))
+    );
 
     for (const inw of inwards) {
         if (remainingWeight <= 0.001) break;
@@ -67,7 +84,8 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
         outwards.forEach(out => {
             if (normalizeDia(out.dia) !== normalizedDia) return;
             out.items.forEach(item => {
-                if (item.set_no) usedSetNos.add(parseInt(item.set_no));
+                const parsedSet = parseSetNo(item.set_no);
+                if (parsedSet !== null) usedSetNos.add(parsedSet);
             });
         });
 
@@ -82,7 +100,8 @@ async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, exclu
                     alloc.lotNo === inw.lotNo &&
                     normalizeDia(alloc.dia) === normalizedDia
                 ) {
-                    if (alloc.setNo) usedSetNos.add(parseInt(alloc.setNo));
+                    const parsedSet = parseSetNo(alloc.setNo);
+                    if (parsedSet !== null) usedSetNos.add(parsedSet);
                 }
             });
         });
@@ -264,9 +283,15 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     let excludedSetList = [];
     if (excludedSets) {
         if (Array.isArray(excludedSets)) {
-            excludedSetList = excludedSets;
+            excludedSetList = excludedSets
+                .map((value) => parseSetNo(value))
+                .filter((value) => Number.isFinite(value));
         } else {
-            excludedSetList = excludedSets.split(',').filter(x => x).map(x => parseInt(x));
+            excludedSetList = excludedSets
+                .split(',')
+                .filter((x) => x)
+                .map((x) => parseSetNo(x))
+                .filter((value) => Number.isFinite(value));
         }
     }
 

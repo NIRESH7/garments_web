@@ -210,9 +210,13 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         });
 
         // Auto-select sets passed in data
-        final List<int> targetSetNos = List<int>.from(data['setNos'] ?? []);
-        for (var sNo in targetSetNos) {
-          await _toggleSetSelection(sNo.toString(), true);
+        final List<dynamic> targetSetNos = List<dynamic>.from(
+          data['setNos'] ?? const [],
+        );
+        for (final sNo in targetSetNos) {
+          final setNoText = sNo.toString().trim();
+          if (setNoText.isEmpty) continue;
+          await _toggleSetSelection(setNoText, true);
         }
       } else {
         setState(() => _isLoading = false);
@@ -1563,14 +1567,24 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     }
     if (_availableSets.isEmpty) return const SizedBox.shrink();
 
-    // Group available sets by unique set number to satisfy client req "Show only Set 1, 2, 3..."
-    final uniqueSetNos = <int>{};
+    // Group available sets by unique set id (supports both numeric and labels like S-4)
+    final uniqueSetNos = <String>{};
     for (var s in _availableSets) {
-      uniqueSetNos.add(int.tryParse(s['set_no'].toString()) ?? 0);
+      final setNo = s['set_no']?.toString().trim() ?? '';
+      if (setNo.isNotEmpty) uniqueSetNos.add(setNo);
     }
     final sortedSetNos = uniqueSetNos.toList()
-      ..remove(0)
-      ..sort();
+      ..sort((a, b) {
+        int key(String value) {
+          final match = RegExp(r'\d+').firstMatch(value);
+          return int.tryParse(match?.group(0) ?? '') ?? 1 << 30;
+        }
+
+        final kA = key(a);
+        final kB = key(b);
+        if (kA != kB) return kA.compareTo(kB);
+        return a.compareTo(b);
+      });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1584,14 +1598,14 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           spacing: 8,
           children: sortedSetNos.map((setNo) {
             final isSelected = _selectedSets.any(
-              (sel) => sel['set_no'].toString() == setNo.toString(),
+              (sel) => sel['set_no'].toString() == setNo,
             );
 
             return ChoiceChip(
               label: Text('Set $setNo', style: const TextStyle(fontSize: 12)),
               selected: isSelected,
               onSelected: (selected) {
-                _toggleSetSelection(setNo.toString(), selected);
+                _toggleSetSelection(setNo, selected);
               },
               selectedColor: ColorPalette.primary.withOpacity(0.2),
               labelStyle: TextStyle(

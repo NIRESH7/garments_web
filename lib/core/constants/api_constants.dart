@@ -1,12 +1,14 @@
 class ApiConstants {
-  // static const String baseUrl = 'http://192.168.29.179:5001/api'; // LAN
-  // static const String serverUrl = 'http://192.168.29.179:5001'; // LAN
-  static const String baseUrl = 'http://13.220.94.83:5001/api'; // Remote AWS
-  static const String serverUrl = 'http://13.220.94.83:5001'; // Remote AWS
-  // static const String baseUrl = 'http://10.0.2.2:5001/api'; // Local (Android Emulator)
-  // static const String serverUrl = 'http://10.0.2.2:5001'; // Local (Android Emulator)
-  // static const String baseUrl = 'http://localhost:5001/api'; // Local (iOS/Web)
-  // static const String serverUrl = 'http://localhost:5001'; // Local (iOS/Web)
+  // For release/live builds:
+  // flutter build apk --release --dart-define=API_BASE_URL=http://your-server:5001/api --dart-define=SERVER_URL=http://your-server:5001
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://13.220.94.83:5001/api',
+  );
+  static const String serverUrl = String.fromEnvironment(
+    'SERVER_URL',
+    defaultValue: 'http://13.220.94.83:5001',
+  );
   static const String s3BaseUrl =
       'https://garments-app-storage.s3.us-east-1.amazonaws.com';
 
@@ -28,6 +30,7 @@ class ApiConstants {
 
   // Inventory
   static const String inward = '/inventory/inward';
+  static const String inwardImport = '/inventory/inward/import';
   static const String fifoRecommendation =
       '/inventory/inward/fifo-recommendation';
   static const String qualityAuditReport = '/inventory/reports/quality-audit';

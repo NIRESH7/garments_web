@@ -1,258 +1,619 @@
 import asyncHandler from 'express-async-handler';
+import XLSX from 'xlsx';
 import Inward from './inwardModel.js';
 import Outward from './outwardModel.js';
 import Notification from '../notification/model.js';
+import Category from '../master/categoryModel.js';
 import { getFilePath } from '../../utils/fileUtils.js';
 
 // --- INWARD HANDLERS ---
+
+const COLOUR_CATEGORY_REGEX = /^(colou?r|colou?rs|color|colors)$/i;
+
+const normalizeText = (value) => value?.toString().trim() ?? '';
+
+const extractColoursFromStorageDetails = (storageDetails) => {
+    const colours = new Set();
+    if (!storageDetails) return colours;
+
+    const blocks = Array.isArray(storageDetails)
+        ? storageDetails
+        : Object.values(storageDetails);
+
+    blocks.forEach((block) => {
+        const rows = Array.isArray(block?.rows) ? block.rows : [];
+        rows.forEach((row) => {
+            const colour = normalizeText(row?.colour);
+            if (colour) colours.add(colour);
+        });
+    });
+
+    return colours;
+};
+
+const normalizeCategoryValues = (values) => {
+    if (!Array.isArray(values)) return [];
+    return values
+        .map((value) => {
+            if (typeof value === 'string') {
+                const name = normalizeText(value);
+                return name ? { name } : null;
+            }
+            if (value && typeof value === 'object') {
+                const name = normalizeText(value.name);
+                if (!name) return null;
+                return {
+                    name,
+                    photo: value.photo ?? null,
+                    gsm: value.gsm ?? null,
+                };
+            }
+            return null;
+        })
+        .filter(Boolean);
+};
+
+const syncColoursCategory = async (storageDetails) => {
+    try {
+        const colours = Array.from(extractColoursFromStorageDetails(storageDetails));
+        if (colours.length === 0) return;
+
+        let category = await Category.findOne({ name: { $regex: COLOUR_CATEGORY_REGEX } });
+        if (!category) {
+            await Category.create({
+                name: 'Colours',
+                values: colours.map((name) => ({ name })),
+            });
+            return;
+        }
+
+        const normalizedValues = normalizeCategoryValues(category.values);
+        const existing = new Set(
+            normalizedValues.map((value) => normalizeText(value.name).toLowerCase()).filter(Boolean)
+        );
+
+        let changed = normalizedValues.length !== (category.values?.length ?? 0);
+        for (const colour of colours) {
+            const key = colour.toLowerCase();
+            if (!existing.has(key)) {
+                normalizedValues.push({ name: colour, photo: null, gsm: null });
+                existing.add(key);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            category.values = normalizedValues;
+            await category.save();
+        }
+    } catch (error) {
+        console.error('Failed to sync colours category:', error);
+    }
+};
+
+const parseNumber = (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const text = normalizeText(value);
+    if (!text || text === '-' || text === '--') return null;
+    const parsed = Number(text.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatWeight = (value) => {
+    const rounded = Number(value.toFixed(3));
+    return rounded.toString();
+};
+
+const extractPrefixedValueFromRows = (rows, prefixes, maxScanRows = 12) => {
+    const patterns = prefixes.map(
+        (prefix) => new RegExp(`^${prefix.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*-\\s*(.+)$`, 'i')
+    );
+
+    for (let r = 0; r < Math.min(rows.length, maxScanRows); r++) {
+        const row = Array.isArray(rows[r]) ? rows[r] : [];
+        for (const raw of row) {
+            const text = normalizeText(raw);
+            if (!text) continue;
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) return normalizeText(match[1]);
+            }
+        }
+    }
+    return '';
+};
+
+const parseDateToIso = (rawValue) => {
+    const text = normalizeText(rawValue);
+    if (!text) return new Date().toISOString().slice(0, 10);
+
+    const match = text.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+    if (!match) return new Date().toISOString().slice(0, 10);
+
+    let day = Number(match[1]);
+    let month = Number(match[2]);
+    let year = Number(match[3]);
+    if (year < 100) year += 2000;
+
+    if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.toISOString().slice(0, 10);
+};
+
+const getSetIdentifierFromRow = (row, idx) => {
+    const labels = Array.isArray(row?.setLabels) ? row.setLabels : [];
+    const label = normalizeText(labels[idx]);
+    return label || (idx + 1).toString();
+};
+
+const findSetIndexInRow = (row, setNo) => {
+    const target = normalizeText(setNo).toLowerCase();
+    if (!target) return -1;
+
+    const labels = Array.isArray(row?.setLabels) ? row.setLabels : [];
+    const byLabel = labels.findIndex((label) => normalizeText(label).toLowerCase() === target);
+    if (byLabel >= 0) return byLabel;
+
+    const parsed = Number.parseInt(target, 10);
+    if (!Number.isNaN(parsed)) return parsed - 1;
+
+    return -1;
+};
+
+const buildInwardPayloadFromSheet = (sheet) => {
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        raw: true,
+        defval: null,
+        blankrows: false,
+    });
+
+    if (!rows || rows.length === 0) return null;
+
+    const lotNo = extractPrefixedValueFromRows(rows, ['LOT NO', 'LOT NUMBER']);
+    const dateRaw = extractPrefixedValueFromRows(rows, ['DATE']);
+    const fromParty = extractPrefixedValueFromRows(rows, ['PARTY NAME', 'PARTY']);
+    const lotName = extractPrefixedValueFromRows(rows, ['LOT NAME']);
+    const dia = extractPrefixedValueFromRows(rows, ['DIA']);
+
+    if (!lotNo || !lotName || !fromParty || !dia) return null;
+
+    const headerRow = Array.isArray(rows[6]) ? rows[6] : [];
+    const setCols = [];
+    let started = false;
+    for (let c = 1; c < headerRow.length; c++) {
+        const value = normalizeText(headerRow[c]).toUpperCase();
+        if (!value) {
+            if (started) break;
+            continue;
+        }
+        if (value.startsWith('TOTAL')) break;
+        if (value.startsWith('S-') || value.startsWith('SET')) {
+            setCols.push(c);
+            started = true;
+        }
+    }
+
+    if (setCols.length === 0) return null;
+    const setLabels = setCols.map((col, idx) => normalizeText(headerRow[col]) || `S-${idx + 1}`);
+
+    const rackRow = Array.isArray(rows[4]) ? rows[4] : [];
+    const palletRow = Array.isArray(rows[5]) ? rows[5] : [];
+    const racks = setCols.map((col) => normalizeText(rackRow[col]));
+    const pallets = setCols.map((col) => normalizeText(palletRow[col]));
+
+    const storageRows = [];
+    let recRoll = 0;
+    let recWt = 0;
+    let rowStartFound = false;
+
+    for (let r = 7; r < rows.length; r++) {
+        const row = Array.isArray(rows[r]) ? rows[r] : [];
+        const colour = normalizeText(row[0]);
+        if (!colour) {
+            if (rowStartFound) break;
+            continue;
+        }
+        rowStartFound = true;
+
+        const setWeights = [];
+        let totalWeight = 0;
+        let rowRolls = 0;
+
+        for (const col of setCols) {
+            const num = parseNumber(row[col]);
+            if (num === null) {
+                setWeights.push('');
+            } else {
+                setWeights.push(formatWeight(num));
+                totalWeight += num;
+                rowRolls += 1;
+            }
+        }
+
+        if (rowRolls === 0) continue;
+
+        storageRows.push({
+            colour,
+            gsm: '',
+            setWeights,
+            setLabels,
+            totalWeight: Number(totalWeight.toFixed(3)),
+        });
+        recRoll += rowRolls;
+        recWt += totalWeight;
+    }
+
+    if (storageRows.length === 0) return null;
+
+    return {
+        inwardDate: parseDateToIso(dateRaw),
+        inTime: '09:00 AM',
+        outTime: '09:30 AM',
+        lotName,
+        lotNo,
+        fromParty,
+        process: fromParty.toUpperCase().includes('COMPACT') ? 'COMPACTING' : '',
+        rate: 0,
+        gsm: '',
+        vehicleNo: '',
+        partyDcNo: '',
+        diaEntries: [{
+            dia,
+            roll: recRoll,
+            sets: setCols.length,
+            delivWt: Number(recWt.toFixed(3)),
+            recRoll: recRoll,
+            recWt: Number(recWt.toFixed(3)),
+            rate: 0,
+        }],
+        storageDetails: [{
+            dia,
+            racks,
+            pallets,
+            rows: storageRows,
+        }],
+        qualityStatus: 'OK',
+        gsmStatus: 'OK',
+        shadeStatus: 'OK',
+        washingStatus: 'OK',
+        complaintText: '',
+    };
+};
+
+const upsertInwardEntry = async ({ userId, body, files }) => {
+    const {
+        inwardNo,
+        inwardDate,
+        inTime,
+        outTime,
+        lotName,
+        lotNo,
+        fromParty,
+        process,
+        rate,
+        gsm,
+        vehicleNo,
+        partyDcNo,
+        diaEntries,
+        storageDetails,
+        qualityStatus,
+        qualityImage,
+        gsmStatus,
+        gsmImage,
+        shadeStatus,
+        shadeImage,
+        washingStatus,
+        washingImage,
+        complaintText,
+        complaintImage,
+        balanceImage,
+    } = body;
+
+    let finalLotInchargeSignature = body.lotInchargeSignature;
+    let finalAuthorizedSignature = body.authorizedSignature;
+    let finalMdSignature = body.mdSignature;
+
+    if (files) {
+        if (files.lotInchargeSignature) {
+            finalLotInchargeSignature = getFilePath(files.lotInchargeSignature[0]);
+        }
+        if (files.authorizedSignature) {
+            finalAuthorizedSignature = getFilePath(files.authorizedSignature[0]);
+        }
+        if (files.mdSignature) {
+            finalMdSignature = getFilePath(files.mdSignature[0]);
+        }
+    }
+
+    let processedDiaEntries = diaEntries;
+    if (typeof diaEntries === 'string') {
+        try {
+            processedDiaEntries = JSON.parse(diaEntries);
+        } catch (e) {
+            console.error('Failed to parse diaEntries JSON:', e);
+        }
+    }
+
+    let processedStorageDetails = storageDetails;
+    if (typeof storageDetails === 'string') {
+        try {
+            processedStorageDetails = JSON.parse(storageDetails);
+        } catch (e) {
+            console.error('Failed to parse storageDetails JSON:', e);
+        }
+    }
+
+    const cleanLotNo = lotNo?.toString().trim();
+    const cleanLotName = lotName?.toString().trim();
+    if (!cleanLotNo || !cleanLotName) {
+        throw new Error('Lot No and Lot Name are required');
+    }
+
+    const escapedLotNo = cleanLotNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedLotName = cleanLotName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    console.log(`Checking merge for Lot No: [${cleanLotNo}], Lot Name: [${cleanLotName}]`);
+
+    let inward = await Inward.findOne({
+        lotNo: { $regex: new RegExp(`^\\s*${escapedLotNo}\\s*$`, 'i') },
+        lotName: { $regex: new RegExp(`^\\s*${escapedLotName}\\s*$`, 'i') },
+    });
+
+    if (inward) {
+        console.log(`SUCCESS: Found existing Inward: ${inward.inwardNo} (ID: ${inward._id})`);
+
+        if (processedDiaEntries && Array.isArray(processedDiaEntries)) {
+            console.log(`Merging ${processedDiaEntries.length} new DIA entries...`);
+            processedDiaEntries.forEach((newEntry) => {
+                const existingEntry = inward.diaEntries.find(
+                    (entry) => entry.dia?.toString().trim() === newEntry.dia?.toString().trim()
+                );
+                if (existingEntry) {
+                    console.log(`  Updating existing DIA: ${newEntry.dia}`);
+                    existingEntry.roll = (Number(existingEntry.roll) || 0) + (Number(newEntry.roll) || 0);
+                    existingEntry.sets = (Number(existingEntry.sets) || 0) + (Number(newEntry.sets) || 0);
+                    existingEntry.delivWt = Number(((Number(existingEntry.delivWt) || 0) + (Number(newEntry.delivWt) || 0)).toFixed(2));
+                    existingEntry.recRoll = (Number(existingEntry.recRoll) || 0) + (Number(newEntry.recRoll) || 0);
+                    existingEntry.recWt = Number(((Number(existingEntry.recWt) || 0) + (Number(newEntry.recWt) || 0)).toFixed(2));
+                    existingEntry.rate = Number(newEntry.rate) || existingEntry.rate;
+                } else {
+                    console.log(`  Adding new DIA: ${newEntry.dia}`);
+                    inward.diaEntries.push(newEntry);
+                }
+            });
+        }
+
+        let currentStorage = Array.isArray(inward.storageDetails) ? inward.storageDetails : [];
+        if (processedStorageDetails && Array.isArray(processedStorageDetails)) {
+            console.log(`Merging ${processedStorageDetails.length} storage detail blocks...`);
+            processedStorageDetails.forEach((newStorage) => {
+                const existingStorage = currentStorage.find(
+                    (storage) => storage.dia?.toString().trim() === newStorage.dia?.toString().trim()
+                );
+                if (existingStorage) {
+                    console.log(`  Updating storage for DIA: ${newStorage.dia}`);
+                    existingStorage.racks = [...(existingStorage.racks || []), ...(newStorage.racks || [])];
+                    existingStorage.pallets = [...(existingStorage.pallets || []), ...(newStorage.pallets || [])];
+
+                    if (!existingStorage.rows) existingStorage.rows = [];
+                    newStorage.rows.forEach((newRow) => {
+                        const existingRow = existingStorage.rows.find(
+                            (row) => row.colour?.toString().trim().toLowerCase() === newRow.colour?.toString().trim().toLowerCase()
+                        );
+                        if (existingRow) {
+                            console.log(`    Appending to existing colour: ${newRow.colour}`);
+                            existingRow.setWeights = [...(existingRow.setWeights || []), ...(newRow.setWeights || [])];
+                            existingRow.setLabels = [...(existingRow.setLabels || []), ...(newRow.setLabels || [])];
+                            existingRow.totalWeight = Number(((Number(existingRow.totalWeight) || 0) + (Number(newRow.totalWeight) || 0)).toFixed(2));
+                        } else {
+                            console.log(`    Adding new colour: ${newRow.colour}`);
+                            existingStorage.rows.push(newRow);
+                        }
+                    });
+                } else {
+                    console.log(`  Adding new storage DIA: ${newStorage.dia}`);
+                    currentStorage.push(newStorage);
+                }
+            });
+        }
+
+        inward.storageDetails = currentStorage;
+        inward.markModified('storageDetails');
+        inward.markModified('diaEntries');
+        await syncColoursCategory(inward.storageDetails);
+
+        if (process) inward.process = process;
+        if (fromParty) inward.fromParty = fromParty;
+        if (rate) inward.rate = Number(rate);
+        if (gsm) inward.gsm = gsm;
+        if (vehicleNo) inward.vehicleNo = vehicleNo;
+        if (partyDcNo) inward.partyDcNo = partyDcNo;
+        if (outTime) inward.outTime = outTime;
+
+        if (qualityStatus) inward.qualityStatus = qualityStatus;
+        if (qualityImage) inward.qualityImage = qualityImage;
+        if (gsmStatus) inward.gsmStatus = gsmStatus;
+        if (gsmImage) inward.gsmImage = gsmImage;
+        if (shadeStatus) inward.shadeStatus = shadeStatus;
+        if (shadeImage) inward.shadeImage = shadeImage;
+        if (washingStatus) inward.washingStatus = washingStatus;
+        if (washingImage) inward.washingImage = washingImage;
+        if (complaintText) inward.complaintText = complaintText;
+        if (complaintImage) inward.complaintImage = complaintImage;
+        if (balanceImage) inward.balanceImage = balanceImage;
+
+        if (finalLotInchargeSignature) inward.lotInchargeSignature = finalLotInchargeSignature;
+        if (finalAuthorizedSignature) inward.authorizedSignature = finalAuthorizedSignature;
+        if (finalMdSignature) inward.mdSignature = finalMdSignature;
+
+        await inward.save();
+        return { inward, mode: 'updated', cleanLotNo, cleanLotName };
+    }
+
+    let finalInwardNo = inwardNo;
+    if (!finalInwardNo) {
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const count = await Inward.countDocuments({
+            createdAt: {
+                $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+                $lt: new Date(new Date().setHours(23, 59, 59, 999)),
+            },
+        });
+        finalInwardNo = `INW-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
+    }
+
+    await syncColoursCategory(processedStorageDetails);
+    inward = await Inward.create({
+        user: userId,
+        inwardNo: finalInwardNo,
+        inwardDate,
+        inTime,
+        outTime,
+        lotName,
+        lotNo,
+        fromParty,
+        process,
+        rate: Number(rate) || 0,
+        gsm,
+        vehicleNo,
+        partyDcNo,
+        diaEntries: processedDiaEntries,
+        storageDetails: processedStorageDetails,
+        qualityStatus,
+        qualityImage,
+        gsmStatus,
+        gsmImage,
+        shadeStatus,
+        shadeImage,
+        washingStatus,
+        washingImage,
+        complaintText,
+        complaintImage,
+        balanceImage,
+        lotInchargeSignature: finalLotInchargeSignature,
+        authorizedSignature: finalAuthorizedSignature,
+        mdSignature: finalMdSignature,
+    });
+
+    return { inward, mode: 'created', cleanLotNo, cleanLotName };
+};
 
 // @desc    Create a new inward entry (Lot Inward Entry)
 // @route   POST /api/inventory/inward
 // @access  Private
 const createInward = asyncHandler(async (req, res) => {
     try {
-        const {
-            inwardNo,
-            inwardDate,
-            inTime,
-            outTime,
-            lotName,
-            lotNo,
-            fromParty,
-            process,
-            rate,
-            gsm,
-            vehicleNo,
-            partyDcNo,
-            diaEntries,
-            storageDetails,
-            qualityStatus,
-            qualityImage,
-            gsmStatus,
-            gsmImage,
-            shadeStatus,
-            shadeImage,
-            washingStatus,
-            washingImage,
-            complaintText,
-            complaintImage,
-            balanceImage,
-        } = req.body;
-
-        // Handle file uploads for signatures
-        let finalLotInchargeSignature = req.body.lotInchargeSignature;
-        let finalAuthorizedSignature = req.body.authorizedSignature;
-        let finalMdSignature = req.body.mdSignature;
-
-        if (req.files) {
-            if (req.files.lotInchargeSignature) {
-                finalLotInchargeSignature = getFilePath(req.files.lotInchargeSignature[0]);
-            }
-            if (req.files.authorizedSignature) {
-                finalAuthorizedSignature = getFilePath(req.files.authorizedSignature[0]);
-            }
-            if (req.files.mdSignature) {
-                finalMdSignature = getFilePath(req.files.mdSignature[0]);
-            }
-        }
-
-        // --- Parse JSON strings for diaEntries and storageDetails ---
-        let processedDiaEntries = diaEntries;
-        if (typeof diaEntries === 'string') {
-            try {
-                processedDiaEntries = JSON.parse(diaEntries);
-            } catch (e) {
-                console.error('Failed to parse diaEntries JSON:', e);
-            }
-        }
-
-        let processedStorageDetails = storageDetails;
-        if (typeof storageDetails === 'string') {
-            try {
-                processedStorageDetails = JSON.parse(storageDetails);
-            } catch (e) {
-                console.error('Failed to parse storageDetails JSON:', e);
-            }
-        }
-
-        // --- MERGE LOGIC: Check for existing lot ---
-        const cleanLotNo = lotNo?.toString().trim();
-        const cleanLotName = lotName?.toString().trim();
-
-        // Escape regex special characters just in case
-        const escapedLotNo = cleanLotNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const escapedLotName = cleanLotName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-        console.log(`Checking merge for Lot No: [${cleanLotNo}], Lot Name: [${cleanLotName}]`);
-
-        let inward = await Inward.findOne({
-            lotNo: { $regex: new RegExp(`^\\s*${escapedLotNo}\\s*$`, 'i') },
-            lotName: { $regex: new RegExp(`^\\s*${escapedLotName}\\s*$`, 'i') }
+        const result = await upsertInwardEntry({
+            userId: req.user._id,
+            body: req.body,
+            files: req.files,
         });
 
-        if (inward) {
-            console.log(`SUCCESS: Found existing Inward: ${inward.inwardNo} (ID: ${inward._id})`);
-
-            // 1. Merge diaEntries
-            if (processedDiaEntries && Array.isArray(processedDiaEntries)) {
-                console.log(`Merging ${processedDiaEntries.length} new DIA entries...`);
-                processedDiaEntries.forEach(newEntry => {
-                    const existingEntry = inward.diaEntries.find(e => e.dia?.toString().trim() === newEntry.dia?.toString().trim());
-                    if (existingEntry) {
-                        console.log(`  Updating existing DIA: ${newEntry.dia}`);
-                        existingEntry.roll = (Number(existingEntry.roll) || 0) + (Number(newEntry.roll) || 0);
-                        existingEntry.sets = (Number(existingEntry.sets) || 0) + (Number(newEntry.sets) || 0);
-                        existingEntry.delivWt = Number(((Number(existingEntry.delivWt) || 0) + (Number(newEntry.delivWt) || 0)).toFixed(2));
-                        existingEntry.recRoll = (Number(existingEntry.recRoll) || 0) + (Number(newEntry.recRoll) || 0);
-                        existingEntry.recWt = Number(((Number(existingEntry.recWt) || 0) + (Number(newEntry.recWt) || 0)).toFixed(2));
-                        existingEntry.rate = Number(newEntry.rate) || existingEntry.rate;
-                    } else {
-                        console.log(`  Adding new DIA: ${newEntry.dia}`);
-                        inward.diaEntries.push(newEntry);
-                    }
-                });
-            }
-
-            // 2. Merge storageDetails
-            let currentStorage = Array.isArray(inward.storageDetails) ? inward.storageDetails : [];
-
-            if (processedStorageDetails && Array.isArray(processedStorageDetails)) {
-                console.log(`Merging ${processedStorageDetails.length} storage detail blocks...`);
-                processedStorageDetails.forEach(newStorage => {
-                    const existingStorage = currentStorage.find(s => s.dia?.toString().trim() === newStorage.dia?.toString().trim());
-                    if (existingStorage) {
-                        console.log(`  Updating storage for DIA: ${newStorage.dia}`);
-                        // Merge Racks & Pallets
-                        const combinedRacks = [...(existingStorage.racks || []), ...(newStorage.racks || [])];
-                        existingStorage.racks = combinedRacks;
-
-                        const combinedPallets = [...(existingStorage.pallets || []), ...(newStorage.pallets || [])];
-                        existingStorage.pallets = combinedPallets;
-
-                        // Merge Rows (Colours)
-                        if (!existingStorage.rows) existingStorage.rows = [];
-                        newStorage.rows.forEach(newRow => {
-                            const existingRow = existingStorage.rows.find(r => r.colour?.toString().trim().toLowerCase() === newRow.colour?.toString().trim().toLowerCase());
-                            if (existingRow) {
-                                console.log(`    Appending to existing colour: ${newRow.colour}`);
-                                existingRow.setWeights = [...(existingRow.setWeights || []), ...(newRow.setWeights || [])];
-                                existingRow.totalWeight = Number(((Number(existingRow.totalWeight) || 0) + (Number(newRow.totalWeight) || 0)).toFixed(2));
-                            } else {
-                                console.log(`    Adding new colour: ${newRow.colour}`);
-                                existingStorage.rows.push(newRow);
-                            }
-                        });
-                    } else {
-                        console.log(`  Adding new storage DIA: ${newStorage.dia}`);
-                        currentStorage.push(newStorage);
-                    }
-                });
-            }
-            inward.storageDetails = currentStorage;
-            inward.markModified('storageDetails');
-            inward.markModified('diaEntries');
-
-            // 3. Update metadata fields with latest info
-            console.log("Updating metadata fields...");
-            if (process) inward.process = process;
-            if (fromParty) inward.fromParty = fromParty;
-            if (rate) inward.rate = Number(rate);
-            if (gsm) inward.gsm = gsm;
-            if (vehicleNo) inward.vehicleNo = vehicleNo;
-            if (partyDcNo) inward.partyDcNo = partyDcNo;
-            if (outTime) inward.outTime = outTime;
-
-            // ... keep latest check statuses
-            if (qualityStatus) inward.qualityStatus = qualityStatus;
-            if (qualityImage) inward.qualityImage = qualityImage;
-            if (gsmStatus) inward.gsmStatus = gsmStatus;
-            if (gsmImage) inward.gsmImage = gsmImage;
-            if (shadeStatus) inward.shadeStatus = shadeStatus;
-            if (shadeImage) inward.shadeImage = shadeImage;
-            if (washingStatus) inward.washingStatus = washingStatus;
-            if (washingImage) inward.washingImage = washingImage;
-            if (complaintText) inward.complaintText = complaintText;
-            if (complaintImage) inward.complaintImage = complaintImage;
-            if (balanceImage) inward.balanceImage = balanceImage;
-
-            if (finalLotInchargeSignature) inward.lotInchargeSignature = finalLotInchargeSignature;
-            if (finalAuthorizedSignature) inward.authorizedSignature = finalAuthorizedSignature;
-            if (finalMdSignature) inward.mdSignature = finalMdSignature;
-
-            await inward.save();
-            console.log("Merge complete and saved.");
-
-            // Create notification
+        if (result.mode === 'updated') {
             await Notification.create({
                 user: req.user._id,
                 title: 'Inward Updated',
-                body: `Inward Lot ${cleanLotNo} (${cleanLotName}) updated with new entries.`,
-                type: 'info'
-            }).catch(err => console.error('Notification failed:', err));
-
-            return res.status(201).json(inward); // Return 201 for Flutter app success
+                body: `Inward Lot ${result.cleanLotNo} (${result.cleanLotName}) updated with new entries.`,
+                type: 'info',
+            }).catch((err) => console.error('Notification failed:', err));
+        } else {
+            await Notification.create({
+                user: req.user._id,
+                title: 'New Inward Created',
+                body: `New Inward processed for Lot ${result.cleanLotNo} (${result.cleanLotName}).`,
+                type: 'success',
+            }).catch((err) => console.error('Notification failed:', err));
         }
 
-        console.log("No existing Lot found. Creating new Inward record...");
-        // --- CREATE LOGIC (If no existing lot) ---
-        let finalInwardNo = inwardNo;
-        if (!finalInwardNo) {
-            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            const count = await Inward.countDocuments({
-                createdAt: {
-                    $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-                    $lt: new Date(new Date().setHours(23, 59, 59, 999))
-                }
-            });
-            finalInwardNo = `INW-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
-        }
-
-        inward = await Inward.create({
-            user: req.user._id,
-            inwardNo: finalInwardNo,
-            inwardDate,
-            inTime,
-            outTime,
-            lotName,
-            lotNo,
-            fromParty,
-            process,
-            rate: Number(rate) || 0,
-            gsm,
-            vehicleNo,
-            partyDcNo,
-            diaEntries: processedDiaEntries,
-            storageDetails: processedStorageDetails,
-            qualityStatus,
-            qualityImage,
-            gsmStatus,
-            gsmImage,
-            shadeStatus,
-            shadeImage,
-            washingStatus,
-            washingImage,
-            complaintText,
-            complaintImage,
-            balanceImage,
-            lotInchargeSignature: finalLotInchargeSignature,
-            authorizedSignature: finalAuthorizedSignature,
-            mdSignature: finalMdSignature,
-        });
-
-        // Create notification
-        await Notification.create({
-            user: req.user._id,
-            title: 'New Inward Created',
-            body: `New Inward processed for Lot ${lotNo} (${lotName}).`,
-            type: 'success'
-        }).catch(err => console.error('Notification failed:', err));
-
-        res.status(201).json(inward);
+        res.status(201).json(result.inward);
     } catch (error) {
         console.error('Error in createInward:', error);
         res.status(500);
         throw new Error(`Failed to process inward entry: ${error.message}`);
     }
+});
+
+// @desc    Import inward entries from Excel workbook
+// @route   POST /api/inventory/inward/import
+// @access  Private
+const importInwardWorkbook = asyncHandler(async (req, res) => {
+    if (!req.file || !req.file.buffer) {
+        res.status(400);
+        throw new Error('Excel file is required');
+    }
+
+    let workbook;
+    try {
+        workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    } catch (error) {
+        res.status(400);
+        throw new Error(`Invalid Excel file: ${error.message}`);
+    }
+
+    const sheetNames = workbook.SheetNames || [];
+    const results = [];
+    let imported = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const sheetName of sheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const payload = buildInwardPayloadFromSheet(sheet);
+
+        if (!payload) {
+            skipped += 1;
+            results.push({
+                sheet: sheetName,
+                status: 'skipped',
+                message: 'Missing required format/values in sheet',
+            });
+            continue;
+        }
+
+        try {
+            const result = await upsertInwardEntry({
+                userId: req.user._id,
+                body: payload,
+                files: null,
+            });
+            imported += 1;
+            results.push({
+                sheet: sheetName,
+                status: 'imported',
+                mode: result.mode,
+                lotNo: payload.lotNo,
+                lotName: payload.lotName,
+                inwardId: result.inward?._id?.toString(),
+            });
+        } catch (error) {
+            failed += 1;
+            results.push({
+                sheet: sheetName,
+                status: 'failed',
+                lotNo: payload.lotNo,
+                lotName: payload.lotName,
+                error: error.message,
+            });
+        }
+    }
+
+    res.json({
+        fileName: req.file.originalname,
+        totalSheets: sheetNames.length,
+        imported,
+        failed,
+        skipped,
+        results,
+    });
 });
 
 // @desc    Get all inward entries
@@ -299,7 +660,7 @@ const getBalancedSets = asyncHandler(async (req, res) => {
                     sd.rows.forEach(row => {
                         row.setWeights.forEach((wt, idx) => {
                             allSets.push({
-                                set_no: (idx + 1).toString(),
+                                set_no: getSetIdentifierFromRow(row, idx),
                                 colour: row.colour,
                                 weight: parseFloat(wt) || 0,
                                 rack_name: sd.racks && sd.racks[idx] ? sd.racks[idx] : 'Not Assigned',
@@ -435,7 +796,7 @@ const getFifoRecommendation = asyncHandler(async (req, res) => {
                             // Assuming sets are listed in rows
                             for (const row of sd.rows) {
                                 for (let i = 0; i < row.setWeights.length; i++) {
-                                    const setNo = (i + 1).toString();
+                                    const setNo = getSetIdentifierFromRow(row, i);
                                     if (!usedSetNumbers.has(setNo)) {
                                         availableSet = {
                                             lotNo,
@@ -980,10 +1341,7 @@ const checkFifoViolation = asyncHandler(async (req, res) => {
             oldLot.storageDetails.forEach(sd => {
                 if (sd.dia === dia) {
                     sd.rows.forEach(row => {
-                        // Check matching set index? 
-                        // Logic: Set No 1 = Index 0.
-                        // User passes setNo (string "1").
-                        const setIdx = parseInt(setNo) - 1;
+                        const setIdx = findSetIndexInRow(row, setNo);
                         if (setIdx >= 0 && setIdx < row.setWeights.length) {
                             // This old lot HAS this set number.
                             // Check if Rack/Pallet matches? 
@@ -1125,6 +1483,7 @@ const updateInward = asyncHandler(async (req, res) => {
         }
         if (storageDetails) {
             inward.storageDetails = typeof storageDetails === 'string' ? JSON.parse(storageDetails) : storageDetails;
+            await syncColoursCategory(inward.storageDetails);
         }
 
         if (req.files) {
@@ -1149,6 +1508,7 @@ const updateInward = asyncHandler(async (req, res) => {
 
 export {
     createInward,
+    importInwardWorkbook,
     getInwards,
     deleteInward,
     updateInward,
@@ -1169,4 +1529,3 @@ export {
     getDistinctLots,
     checkFifoViolation,
 };
-

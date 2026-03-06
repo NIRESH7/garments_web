@@ -1,7 +1,10 @@
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
 const router = express.Router();
 import {
     createInward,
+    importInwardWorkbook,
     getInwards,
     deleteInward,
     updateInward,
@@ -37,6 +40,21 @@ import {
 import { protect } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
+const inwardImportUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        const mime = (file.mimetype || '').toLowerCase();
+        const isExcelMime = mime.includes('spreadsheetml') || mime === 'application/vnd.ms-excel';
+        if (ext === '.xlsx' || ext === '.xls' || isExcelMime) {
+            cb(null, true);
+            return;
+        }
+        cb(new Error('Only Excel files (.xlsx/.xls) are allowed'));
+    },
+});
+
 router.route('/inward')
     .post(protect, upload.fields([
         { name: 'lotInchargeSignature', maxCount: 1 },
@@ -44,6 +62,8 @@ router.route('/inward')
         { name: 'mdSignature', maxCount: 1 },
     ]), createInward)
     .get(protect, getInwards);
+
+router.post('/inward/import', protect, inwardImportUpload.single('file'), importInwardWorkbook);
 
 router.route('/inward/:id')
     .put(protect, upload.fields([

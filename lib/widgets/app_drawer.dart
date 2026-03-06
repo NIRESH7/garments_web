@@ -17,6 +17,7 @@ import '../screens/masters/stock_limit_master_screen.dart';
 
 // Transactions
 import '../screens/transactions/lot_inward_screen.dart';
+import '../screens/transactions/inward_upload_screen.dart';
 import '../screens/transactions/lot_outward_screen.dart';
 import '../screens/transactions/inward_list_screen.dart';
 import '../screens/transactions/outward_list_screen.dart';
@@ -158,6 +159,11 @@ class AppDrawer extends ConsumerWidget {
                       context,
                       "Lot Inward",
                       const LotInwardScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Inward Upload",
+                      const InwardUploadScreen(),
                     ),
                     _buildSubItem(
                       context,

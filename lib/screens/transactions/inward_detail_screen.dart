@@ -697,9 +697,15 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
         final colour = (r['colour'] ?? '').toString();
         if (colour.isNotEmpty) {
           final setWeights = r['setWeights'] as List<dynamic>? ?? [];
+          final setLabels = r['setLabels'] as List<dynamic>? ?? [];
           for (int i = 0; i < setWeights.length; i++) {
             final weight = setWeights[i]?.toString() ?? '';
             if (weight.trim().isNotEmpty) {
+              final setNo =
+                  i < setLabels.length &&
+                      (setLabels[i]?.toString().trim().isNotEmpty ?? false)
+                  ? setLabels[i].toString().trim()
+                  : (i + 1).toString();
               stickers.add({
                 'lotNo': inward['lotNo']?.toString() ?? '',
                 'lotName': inward['lotName']?.toString() ?? '',
@@ -717,7 +723,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
                     return inward['inwardDate'] ?? '';
                   }
                 }(),
-                'setNo': i + 1,
+                'setNo': setNo,
               });
             }
           }
@@ -834,7 +840,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
     final rawWt = item['weight']?.toString() ?? '0';
     final weightDouble = double.tryParse(rawWt) ?? 0.0;
     final displayWeight = weightDouble.toStringAsFixed(2);
-    
+
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(16),
@@ -852,7 +858,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
               _buildStickerRow('Lot Name', item['lotName']),
               _buildStickerRow('Dia', item['dia']),
               _buildStickerRow('Colour', item['colour']),
-              _buildStickerRow('Set No', '#${item['setNo']}'),
+              _buildStickerRow('Set No', item['setNo'].toString()),
               _buildStickerRow('Roll Wt', '$displayWeight kg'),
               _buildStickerRow('Date', item['date']),
               const SizedBox(height: 12),
@@ -953,13 +959,19 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
             width: 100, // Increased width for bold label
             child: Text(
               '$label :',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), // Increased from 14
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ), // Increased from 14
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), // Made bold and increased from 14
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ), // Made bold and increased from 14
             ),
           ),
         ],
@@ -1005,10 +1017,10 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
     final rawWt = item['weight']?.toString() ?? '0';
     final weightDouble = double.tryParse(rawWt) ?? 0.0;
     final displayWeight = weightDouble.toStringAsFixed(2);
-    
+
     final qrData =
         'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${displayWeight}kg\nDT: ${item['date']}';
-        
+
     return pw.Container(
       width: double.infinity,
       height: double.infinity,
@@ -1025,12 +1037,12 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
           _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 9),
           _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 9),
           _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 9),
-          _buildPdfRow('Set', '#${item['setNo']}', fontSize: 9),
+          _buildPdfRow('Set', item['setNo']?.toString() ?? '', fontSize: 9),
           _buildPdfRow('Wt', '$displayWeight kg', fontSize: 9),
           _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 9),
-          
+
           pw.SizedBox(height: 2),
-          
+
           // QR code at bottom centre
           pw.Center(
             child: pw.Column(
@@ -1059,7 +1071,6 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
       ),
     );
   }
-
 
   pw.Document _generateStickersPdf(List<Map<String, dynamic>> stickerList) {
     final pdf = pw.Document();

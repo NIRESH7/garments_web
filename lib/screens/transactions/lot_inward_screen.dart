@@ -408,6 +408,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               sRow.colour = r['colour'];
               sRow.gsm = r['gsm']?.toString();
               sRow.setWeights = List<String>.from(r['setWeights'] ?? []);
+              final labels = List<String>.from(r['setLabels'] ?? []);
+              sRow.setLabels = List<String>.generate(
+                sRow.setWeights.length,
+                (i) => i < labels.length && labels[i].trim().isNotEmpty
+                    ? labels[i].trim()
+                    : (i + 1).toString(),
+              );
               // Initialize controller right away if gsm exists
               if (sRow.gsm != null) {
                 sRow.gsmController = TextEditingController(text: sRow.gsm);
@@ -539,11 +546,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               if (d['gsm'] != null && d['gsm'].toString().isNotEmpty) {
                 final gsmVal = d['gsm'].toString();
                 // Store in map under a special 'default' key only if no colour-specific entries exist yet
-                final diaData = _stickerData.putIfAbsent(dia, () => StickerDiaData());
+                final diaData = _stickerData.putIfAbsent(
+                  dia,
+                  () => StickerDiaData(),
+                );
                 if (diaData.rows.isNotEmpty) {
                   for (var sRow in diaData.rows) {
                     // Only set if no colour-specific GSM already tracked
-                    if (sRow.colour != null && !_lastStickerGsmMap.containsKey(sRow.colour)) {
+                    if (sRow.colour != null &&
+                        !_lastStickerGsmMap.containsKey(sRow.colour)) {
                       sRow.gsm = gsmVal;
                       sRow.gsmController ??= TextEditingController();
                       sRow.gsmController?.text = gsmVal;
@@ -856,6 +867,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       "colour": r.colour,
                       "gsm": r.gsm,
                       "setWeights": r.setWeights,
+                      "setLabels": _normalizedSetLabels(r),
                       "totalWeight": r.totalWeight,
                     },
                   )
@@ -949,6 +961,45 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
+  String _resolveSetLabel(StickerRow row, int index) {
+    if (index >= 0 && index < row.setLabels.length) {
+      final label = row.setLabels[index].trim();
+      if (label.isNotEmpty) return label;
+    }
+    return (index + 1).toString();
+  }
+
+  List<String> _normalizedSetLabels(StickerRow row) {
+    final labels = List<String>.generate(
+      row.setWeights.length,
+      (i) => _resolveSetLabel(row, i),
+    );
+    row.setLabels = labels;
+    return labels;
+  }
+
+  List<String> _resolveDiaSetLabels(StickerDiaData data, int sets) {
+    List<String>? source;
+    for (final row in data.rows) {
+      if (row.setLabels.isNotEmpty) {
+        source = row.setLabels;
+        break;
+      }
+    }
+
+    return List<String>.generate(sets, (i) {
+      final label = (source != null && i < source.length)
+          ? source[i].trim()
+          : '';
+      return label.isNotEmpty ? label : 'Set-${i + 1}';
+    });
+  }
+
+  int _setSortKey(String value) {
+    final match = RegExp(r'\d+').firstMatch(value);
+    return int.tryParse(match?.group(0) ?? '') ?? 1 << 30;
+  }
+
   void _printStickers(Map<String, dynamic>? inwardData) {
     // Flatten sticker data
     final List<Map<String, dynamic>> stickers = [];
@@ -959,6 +1010,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           for (int i = 0; i < row.setWeights.length; i++) {
             final weight = row.setWeights[i];
             if (weight.trim().isNotEmpty) {
+              final setNo = _resolveSetLabel(row, i);
               stickers.add({
                 'lotNo': _lotNumberController.text,
                 'lotName': _selectedLotName ?? '',
@@ -966,7 +1018,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 'colour': row.colour!,
                 'weight': weight,
                 'date': DateFormat('dd-MM-yyyy').format(_inwardDate),
-                'setNo': i + 1,
+                'setNo': setNo,
               });
             }
           }
@@ -994,7 +1046,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           // Available filter options
           final allSets =
               stickers.map((e) => e['setNo'].toString()).toSet().toList()
-                ..sort((a, b) => int.parse(a).compareTo(int.parse(b)));
+                ..sort((a, b) {
+                  final keyA = _setSortKey(a);
+                  final keyB = _setSortKey(b);
+                  if (keyA != keyB) return keyA.compareTo(keyB);
+                  return a.compareTo(b);
+                });
           final allColours =
               stickers.map((e) => e['colour'].toString()).toSet().toList()
                 ..sort();
@@ -1146,7 +1203,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                 _buildStickerRow('Lot Name', item['lotName']),
                                 _buildStickerRow('Dia', item['dia']),
                                 _buildStickerRow('Colour', item['colour']),
-                                _buildStickerRow('Set No', '#${item['setNo']}'),
+                                _buildStickerRow(
+                                  'Set No',
+                                  item['setNo'].toString(),
+                                ),
                                 _buildStickerRow(
                                   'Roll Wt',
                                   '${item['weight']} kg',
@@ -1215,12 +1275,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                 }
                                 return true;
                               }).toList();
-                              
+
                               if (filteredToPrint.isEmpty) {
                                 _showError("No stickers to print");
                                 return;
                               }
-                              
+
                               Navigator.pop(ctx); // Close the modal
                               _printStickersCustom(filteredToPrint);
                               if (inwardData != null) _askToShare(inwardData);
@@ -1310,13 +1370,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             width: 100, // Increased width for bold label
             child: Text(
               '$label :',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), // Increased from 14
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ), // Increased from 14
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), // Slightly reduced from 16
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ), // Slightly reduced from 16
             ),
           ),
         ],
@@ -1409,7 +1475,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 item['colour']?.toString() ?? '',
                 fontSize: 9,
               ),
-              _buildPdfRow('Set', '#${item['setNo']}', fontSize: 9),
+              _buildPdfRow('Set', item['setNo']?.toString() ?? '', fontSize: 9),
               _buildPdfRow(
                 'Wt',
                 '${item['weight']} kg',
@@ -1544,7 +1610,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
-  Future<void> _printStickersCustom(List<Map<String, dynamic>> stickerList) async {
+  Future<void> _printStickersCustom(
+    List<Map<String, dynamic>> stickerList,
+  ) async {
     final pdf = pw.Document();
 
     for (int i = 0; i < stickerList.length; i += 2) {
@@ -1724,24 +1792,36 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 avatar: Icon(
                   Icons.language,
                   size: 16,
-                  color: _selectedVoiceLocale == 'ta_IN' ? Colors.orange : Colors.blue,
+                  color: _selectedVoiceLocale == 'ta_IN'
+                      ? Colors.orange
+                      : Colors.blue,
                 ),
                 label: Text(
-                  _selectedVoiceLocale == 'ta_IN' ? "தமிழ் (TA)" : "English (EN)",
+                  _selectedVoiceLocale == 'ta_IN'
+                      ? "தமிழ் (TA)"
+                      : "English (EN)",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: _selectedVoiceLocale == 'ta_IN' ? Colors.orange.shade900 : Colors.blue.shade900,
+                    color: _selectedVoiceLocale == 'ta_IN'
+                        ? Colors.orange.shade900
+                        : Colors.blue.shade900,
                   ),
                 ),
-                backgroundColor: _selectedVoiceLocale == 'ta_IN' ? Colors.orange.shade50 : Colors.blue.shade50,
+                backgroundColor: _selectedVoiceLocale == 'ta_IN'
+                    ? Colors.orange.shade50
+                    : Colors.blue.shade50,
                 onPressed: () {
                   setState(() {
-                    _selectedVoiceLocale = (_selectedVoiceLocale == 'en_US') ? 'ta_IN' : 'en_US';
+                    _selectedVoiceLocale = (_selectedVoiceLocale == 'en_US')
+                        ? 'ta_IN'
+                        : 'en_US';
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Voice Language: ${_selectedVoiceLocale == 'ta_IN' ? 'Tamil' : 'English'}"),
+                      content: Text(
+                        "Voice Language: ${_selectedVoiceLocale == 'ta_IN' ? 'Tamil' : 'English'}",
+                      ),
                       duration: const Duration(seconds: 1),
                     ),
                   );
@@ -2425,6 +2505,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     final dia = _selectedStickerDia!;
     final diaData = _stickerData[dia] ?? StickerDiaData();
     final rows = diaData.rows;
+    final setHeaders = _resolveDiaSetLabels(diaData, sets);
 
     // Ensure rack and pallet lists are sized correctly
     while (diaData.racks.length < sets) diaData.racks.add(null);
@@ -2513,7 +2594,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   _buildGridCell("GSM", 80),
                   ...List.generate(
                     sets,
-                    (i) => _buildGridCell("Set-${i + 1}", 125), // Increased from 100
+                    (i) => _buildGridCell(
+                      setHeaders[i],
+                      125,
+                    ), // Increased from 100
                   ),
                   _buildGridCell("TOTAL", 125), // Increased from 100
                 ],
@@ -2523,7 +2607,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             ...rows.asMap().entries.map((e) {
               final idx = e.key;
               final r = e.value;
-              
+
               // Initialize gsmController if null
               r.gsmController ??= TextEditingController(text: r.gsm);
 
@@ -2550,21 +2634,24 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     _buildGridCell(
                       "",
                       80,
-                      child: _buildTableInputText(
-                        r.gsmController!,
-                        (v) {
-                          r.gsm = v;
-                          // Only store if colour is known
-                          final colour = r.colour;
-                          if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
-                            _lastStickerGsmMap[colour] = v; // Update color-specific session GSM
-                          }
-                          setState(() {});
-                        },
-                      ),
+                      child: _buildTableInputText(r.gsmController!, (v) {
+                        r.gsm = v;
+                        // Only store if colour is known
+                        final colour = r.colour;
+                        if (v.isNotEmpty &&
+                            colour != null &&
+                            colour.isNotEmpty) {
+                          _lastStickerGsmMap[colour] =
+                              v; // Update color-specific session GSM
+                        }
+                        setState(() {});
+                      }),
                     ),
                     ...List.generate(sets, (i) {
                       if (r.setWeights.length <= i) r.setWeights.add('');
+                      if (r.setLabels.length <= i) {
+                        r.setLabels.add(setHeaders[i]);
+                      }
                       if (r.controllers.length <= i) {
                         r.controllers.add(
                           TextEditingController(text: r.setWeights[i]),
@@ -2611,7 +2698,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               child: TextButton.icon(
                 onPressed: () {
                   setState(() {
-                    diaData.rows.add(StickerRow());
+                    final row = StickerRow();
+                    row.setWeights = List<String>.filled(sets, '');
+                    row.setLabels = List<String>.from(setHeaders);
+                    diaData.rows.add(row);
                   });
                 },
                 icon: const Icon(Icons.add, size: 20),
@@ -2667,7 +2757,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
       ],
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), // Reduced from 13
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      ), // Reduced from 13
       textAlign: TextAlign.center,
       maxLines: 2, // Allow wrapping
       minLines: 1,
@@ -3297,6 +3390,7 @@ class StickerRow {
   String? colour;
   String? gsm;
   List<String> setWeights = [];
+  List<String> setLabels = [];
   List<TextEditingController> controllers = [];
   TextEditingController? gsmController;
 

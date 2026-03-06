@@ -3,8 +3,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const maskMongoUri = (uri) => {
+    if (!uri) return '';
+    return uri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
+};
+
 const testConnection = async () => {
-    console.log(`Connecting to: ${process.env.MONGODB_URI}`);
+    console.log(`Connecting to: ${maskMongoUri(process.env.MONGODB_URI)}`);
     try {
         await mongoose.connect(process.env.MONGODB_URI, {
             serverSelectionTimeoutMS: 5000, // Timeout after 5s

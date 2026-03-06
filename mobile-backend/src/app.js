@@ -14,20 +14,30 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const isProduction = process.env.NODE_ENV === 'production';
+
+const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : true;
 
 // Middleware
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
 }));
-app.use(cors());
+app.use(cors({
+    origin: corsOrigin,
+    credentials: true,
+}));
 app.use(express.json({ limit: '20mb' }));
-app.use(morgan('dev'));
+app.use(morgan(isProduction ? 'combined' : 'dev'));
 
-app.use((req, res, next) => {
-    console.log(`DEBUG: Request URL: ${req.url}`);
-    next();
-});
+if (!isProduction) {
+    app.use((req, res, next) => {
+        console.log(`DEBUG: Request URL: ${req.url}`);
+        next();
+    });
+}
 
 // Routes
 app.get('/', (req, res) => {
@@ -69,7 +79,9 @@ app.use('/api/color-predict', colorPredictRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/ai', aiRoutes);
-console.log('DEBUG: Registering /api/tasks route');
+if (!isProduction) {
+    console.log('DEBUG: Registering /api/tasks route');
+}
 app.use('/api/tasks', taskRoutes);
 
 const __dirname = path.resolve();

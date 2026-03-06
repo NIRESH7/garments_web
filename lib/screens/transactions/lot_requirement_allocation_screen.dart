@@ -265,7 +265,12 @@ class _LotRequirementAllocationScreenState
 
   int _toSetNo(dynamic value) {
     if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return 0;
+    final direct = int.tryParse(raw);
+    if (direct != null) return direct;
+    final match = RegExp(r'\d+').firstMatch(raw);
+    return int.tryParse(match?.group(0) ?? '') ?? 0;
   }
 
   Future<List<Map<String, dynamic>>> _fillRackPalletFromInward(
@@ -510,8 +515,8 @@ class _LotRequirementAllocationScreenState
       for (var alloc in savedAllocations) {
         if (alloc['itemName'] == _selectedItem &&
             alloc['size'] == _selectedSize) {
-          final sNo = (alloc['setNo'] as num?)?.toInt();
-          if (sNo != null) excludedSets.add(sNo);
+          final sNo = _toSetNo(alloc['setNo']);
+          if (sNo > 0) excludedSets.add(sNo);
         }
       }
     }
@@ -521,8 +526,8 @@ class _LotRequirementAllocationScreenState
       for (var entry in _dayEntries[day]!) {
         if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
           for (var s in entry.sets) {
-            final sNo = (s['setNo'] as num?)?.toInt();
-            if (sNo != null) excludedSets.add(sNo);
+            final sNo = _toSetNo(s['setNo']);
+            if (sNo > 0) excludedSets.add(sNo);
           }
         }
       }
@@ -628,7 +633,7 @@ class _LotRequirementAllocationScreenState
     if (sets.isEmpty) return [];
     final Map<String, Map<String, dynamic>> grouped = {};
     for (var s in sets) {
-      final setNo = (s['setNo'] as num?)?.toInt() ?? 0;
+      final setNo = _toSetNo(s['setNo']);
       if (setNo == 0) continue;
 
       final itemName = s['itemName']?.toString() ?? '';
@@ -1524,7 +1529,7 @@ class _LotRequirementAllocationScreenState
     final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
 
     for (var s in _currentSets) {
-      final setNo = (s['setNo'] as num?)?.toInt() ?? 0;
+      final setNo = _toSetNo(s['setNo']);
       if (setNo == 0) continue;
 
       if (!bySet.containsKey(setNo)) {
@@ -2096,7 +2101,7 @@ class _LotRequirementAllocationScreenState
           };
         }
         final entry = g[key]!;
-        final setNo = (r['setNo'] as num?)?.toInt() ?? 0;
+        final setNo = _toSetNo(r['setNo']);
         final wt = (r['setWeight'] as num?)?.toDouble() ?? 0.0;
         final rack = r['rackName']?.toString() ?? '';
         final pallet = r['palletNumber']?.toString() ?? '';

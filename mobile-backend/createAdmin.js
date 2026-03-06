@@ -6,7 +6,7 @@ dotenv.config();
 
 const createAdmin = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://deepaks24062000_db_user:deepak%4024@cluster0.ffresp2.mongodb.net/garments_mobile');
+        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/garments_mobile');
 
         const userExists = await User.findOne({ email: 'admin@example.com' });
         if (userExists) {

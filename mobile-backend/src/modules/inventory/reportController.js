@@ -448,7 +448,9 @@ const getRackPalletStockReport = asyncHandler(async (req, res) => {
                         const colour = row.colour;
                         if (row.setWeights && Array.isArray(row.setWeights)) {
                             row.setWeights.forEach((weight, index) => {
-                                const setNo = (index + 1).toString();
+                                const labels = Array.isArray(row.setLabels) ? row.setLabels : [];
+                                const setLabel = (labels[index] ?? '').toString().trim();
+                                const setNo = setLabel || (index + 1).toString();
                                 const rack = sd.racks && sd.racks[index] ? sd.racks[index] : 'N/A';
                                 const pallet = sd.pallets && sd.pallets[index] ? sd.pallets[index] : 'N/A';
 
