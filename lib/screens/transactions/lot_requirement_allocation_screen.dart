@@ -1209,27 +1209,27 @@ class _LotRequirementAllocationScreenState
             ),
             const SizedBox(height: 12),
             // Post outward toggle
-            Row(
-              children: [
-                Switch(
-                  value: _postOutward,
-                  onChanged: (v) => setState(() => _postOutward = v),
-                  activeColor: Colors.green,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _postOutward
-                        ? '✅ Auto-post outward (stock will be deducted)'
-                        : 'Post Outward on Save (stock deduction)',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: _postOutward ? Colors.green.shade700 : Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            // Row(
+            //   children: [
+            //     Switch(
+            //       value: _postOutward,
+            //       onChanged: (v) => setState(() => _postOutward = v),
+            //       activeColor: Colors.green,
+            //     ),
+            //     const SizedBox(width: 8),
+            //     Expanded(
+            //       child: Text(
+            //         _postOutward
+            //             ? '✅ Auto-post outward (stock will be deducted)'
+            //             : 'Post Outward on Save (stock deduction)',
+            //         style: TextStyle(
+            //           fontSize: 13,
+            //           color: _postOutward ? Colors.green.shade700 : Colors.grey,
+            //         ),
+            //       ),
+            //     ),
+            //   ],
+            // ),
           ],
         ),
       ),

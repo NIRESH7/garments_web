@@ -877,7 +877,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     }
 
     final activeSet = _selectedSets[_activeSetIndex];
-    final colours = activeSet['colours'] as List;
+    final colours = _getSelectedSetColourOrder();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -930,170 +930,104 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'SELECTED SET DETAILS (EDITABLE)',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        Row(
+          children: [
+            const Text(
+              'SELECTED SET DETAILS (EDITABLE)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const Spacer(),
+            Text(
+              'Active: Set ${activeSet['set_no']}',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 18),
+              onPressed: () => _removeSet(_activeSetIndex),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.lightBlue.shade50.withOpacity(0.5),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(12),
-              topRight: Radius.circular(12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
             ),
-          ),
-          child: Row(
-            children: [
-              Text(
-                'SET NO: ${activeSet['set_no']}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.lightBlue,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                'RACK: ${activeSet['rack_name']}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'PALLET: ${activeSet['pallet_number']}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(
-                  LucideIcons.trash2,
-                  color: Colors.red,
-                  size: 18,
-                ),
-                onPressed: () => _removeSet(_activeSetIndex),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-        ),
-        Card(
-          margin: EdgeInsets.zero,
-          elevation: 0,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
             child: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(2.5), // Colour
-                1: FlexColumnWidth(1.5), // Weight
-                2: FlexColumnWidth(1.2), // Rolls
-                3: FlexColumnWidth(1.5), // Roll Wt
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              columnWidths: {
+                0: const FixedColumnWidth(180),
+                for (int i = 0; i < _selectedSets.length; i++)
+                  i + 1: const FixedColumnWidth(150),
+                _selectedSets.length + 1: const FixedColumnWidth(95),
+                _selectedSets.length + 2: const FixedColumnWidth(95),
+                _selectedSets.length + 3: const FixedColumnWidth(100),
               },
               children: [
-                const TableRow(
+                TableRow(
+                  decoration: BoxDecoration(
+                    color: Colors.lightBlue.shade50.withOpacity(0.6),
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
                   children: [
-                    _TableHeader('COLOUR'),
-                    _TableHeader('WT (kg)'),
-                    _TableHeader('ROLLS'),
-                    _TableHeader('ROLL WT'),
+                    _buildGridHeaderCell('COLOUR'),
+                    ..._selectedSets.map((set) {
+                      return _buildGridHeaderCell(
+                        'Set ${set['set_no']}\nRack: ${set['rack_name']}\nPallet: ${set['pallet_number']}',
+                        alignStart: true,
+                      );
+                    }),
+                    _buildGridHeaderCell('WT (kg)'),
+                    _buildGridHeaderCell('ROLLS'),
+                    _buildGridHeaderCell('ROLL WT'),
                   ],
                 ),
                 ...colours.map((col) {
+                  final rowWeight = _getColourWeightTotal(col);
+                  final rowRollWeight = _getColourRollWeightTotal(col);
+                  final rowRolls = _getColourRollTotal(col);
+
                   return TableRow(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey.shade200),
+                      ),
+                    ),
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 4,
-                          horizontal: 2,
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: Checkbox(
-                                value: col['isChecked'] ?? false,
-                                onChanged: (val) {
-                                  setState(() {
-                                    col['isChecked'] = val;
-                                  });
-                                },
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (_colourImages.containsKey(col['colour']))
-                              Container(
-                                width: 20,
-                                height: 20,
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  image: DecorationImage(
-                                    image: NetworkImage(
-                                      _colourImages[col['colour']]!,
-                                    ),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            Expanded(
-                              child: Text(
-                                col['colour'],
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      _buildTableInput(col['weight'].toString(), (v) {
-                        setState(() {
-                          double val = double.tryParse(v) ?? 0.0;
-                          col['weight'] = val;
-                          col['roll_weight'] = val;
-                          activeSet['total_weight'] = colours.fold(
-                            0.0,
-                            (sum, c) => sum + (c['weight'] as double),
-                          );
-                        });
+                      _buildColourGridCell(col, activeSet),
+                      ..._selectedSets.map((set) {
+                        final entry = _findSetColourEntry(set, col);
+                        final value =
+                            (entry?['roll_weight'] as num?)?.toDouble() ?? 0.0;
+
+                        return _buildSetWeightInput(
+                          value,
+                          onChanged: (v) {
+                            setState(() {
+                              final parsed = double.tryParse(v) ?? 0.0;
+                              final target = _ensureSetColourEntry(set, col);
+                              target['weight'] = parsed;
+                              target['roll_weight'] = parsed;
+                              target['isChecked'] = parsed > 0;
+                              _recalculateSetTotalWeight(set);
+                            });
+                          },
+                        );
                       }),
-                      _buildTableInput(
-                        col['no_of_rolls'].toString(),
-                        (v) => setState(
-                          () => col['no_of_rolls'] = int.tryParse(v) ?? 1,
-                        ),
-                      ),
-                      _buildTableInput(
-                        col['roll_weight'].toString(),
-                        (v) => setState(
-                          () => col['roll_weight'] = double.tryParse(v) ?? 0.0,
-                        ),
-                        key: ValueKey(
-                          'rollwt_${col['colour']}_${col['roll_weight']}',
-                        ),
-                      ),
+                      _buildGridValueCell(_formatGridNumber(rowWeight)),
+                      _buildGridValueCell(rowRolls.toString()),
+                      _buildGridValueCell(_formatGridNumber(rowRollWeight)),
                     ],
                   );
                 }),
@@ -1105,27 +1039,255 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     );
   }
 
-  Widget _buildTableInput(
-    String value,
-    Function(String) onChanged, {
-    Key? key,
+  List<String> _getSelectedSetColourOrder() {
+    final ordered = <String>[];
+    final seen = <String>{};
+
+    void addColour(dynamic value) {
+      final colour = value?.toString().trim() ?? '';
+      if (colour.isNotEmpty && !seen.contains(colour)) {
+        seen.add(colour);
+        ordered.add(colour);
+      }
+    }
+
+    for (final colour in _currentLotColours) {
+      addColour(colour);
+    }
+    for (final set in _selectedSets) {
+      final setColours = set['colours'] as List? ?? [];
+      for (final col in setColours) {
+        if (col is Map<String, dynamic>) {
+          addColour(col['colour']);
+        } else if (col is Map) {
+          addColour(col['colour']);
+        }
+      }
+    }
+    return ordered;
+  }
+
+  Map<String, dynamic>? _findSetColourEntry(
+    Map<String, dynamic> set,
+    String colour,
+  ) {
+    final setColours = set['colours'] as List? ?? [];
+    for (final col in setColours) {
+      if (col is Map<String, dynamic>) {
+        final name = col['colour']?.toString().trim().toLowerCase() ?? '';
+        if (name == colour.trim().toLowerCase()) return col;
+      } else if (col is Map) {
+        final name = col['colour']?.toString().trim().toLowerCase() ?? '';
+        if (name == colour.trim().toLowerCase()) {
+          return Map<String, dynamic>.from(col);
+        }
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _ensureSetColourEntry(
+    Map<String, dynamic> set,
+    String colour,
+  ) {
+    final setColours = set['colours'] as List? ?? [];
+    for (int i = 0; i < setColours.length; i++) {
+      final col = setColours[i];
+      if (col is Map<String, dynamic>) {
+        final name = col['colour']?.toString().trim().toLowerCase() ?? '';
+        if (name == colour.trim().toLowerCase()) {
+          return col;
+        }
+      } else if (col is Map) {
+        final name = col['colour']?.toString().trim().toLowerCase() ?? '';
+        if (name == colour.trim().toLowerCase()) {
+          final fixed = Map<String, dynamic>.from(col);
+          setColours[i] = fixed;
+          return fixed;
+        }
+      }
+    }
+
+    final newEntry = <String, dynamic>{
+      'colour': colour,
+      'weight': 0.0,
+      'roll_weight': 0.0,
+      'no_of_rolls': 0,
+      'isChecked': false,
+    };
+    setColours.add(newEntry);
+    set['colours'] = setColours;
+    return newEntry;
+  }
+
+  void _recalculateSetTotalWeight(Map<String, dynamic> set) {
+    final setColours = set['colours'] as List? ?? [];
+    double total = 0.0;
+    for (final col in setColours) {
+      if (col is Map<String, dynamic>) {
+        total += (col['weight'] as num?)?.toDouble() ?? 0.0;
+      } else if (col is Map) {
+        total += (col['weight'] as num?)?.toDouble() ?? 0.0;
+      }
+    }
+    set['total_weight'] = total;
+  }
+
+  int _getColourRollTotal(String colour) {
+    int total = 0;
+    for (final set in _selectedSets) {
+      final col = _findSetColourEntry(set, colour);
+      total += (col?['no_of_rolls'] as num?)?.toInt() ?? 0;
+    }
+    return total;
+  }
+
+  double _getColourWeightTotal(String colour) {
+    double total = 0.0;
+    for (final set in _selectedSets) {
+      final col = _findSetColourEntry(set, colour);
+      total += (col?['weight'] as num?)?.toDouble() ?? 0.0;
+    }
+    return total;
+  }
+
+  double _getColourRollWeightTotal(String colour) {
+    double total = 0.0;
+    for (final set in _selectedSets) {
+      final col = _findSetColourEntry(set, colour);
+      total += (col?['roll_weight'] as num?)?.toDouble() ?? 0.0;
+    }
+    return total;
+  }
+
+  String _formatGridNumber(double value) {
+    if (value == value.truncateToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+
+  Widget _buildGridHeaderCell(String label, {bool alignStart = false}) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 62),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      ),
+      alignment: alignStart ? Alignment.centerLeft : Alignment.center,
+      child: Text(
+        label,
+        textAlign: alignStart ? TextAlign.left : TextAlign.center,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF475569),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColourGridCell(String colour, Map<String, dynamic> activeSet) {
+    final activeEntry = _findSetColourEntry(activeSet, colour);
+    final checked = (activeEntry?['isChecked'] as bool?) ?? false;
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: Checkbox(
+              value: checked,
+              onChanged: (val) {
+                setState(() {
+                  final target = _ensureSetColourEntry(activeSet, colour);
+                  target['isChecked'] = val ?? false;
+                });
+              },
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (_colourImages.containsKey(colour))
+            Container(
+              width: 18,
+              height: 18,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.grey.shade300),
+                image: DecorationImage(
+                  image: NetworkImage(_colourImages[colour]!),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          Expanded(
+            child: Text(
+              colour,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSetWeightInput(
+    double value, {
+    required Function(String) onChanged,
   }) {
-    return Padding(
-      key: key,
-      padding: const EdgeInsets.all(2.0),
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      ),
       child: TextFormField(
-        initialValue: value == '0.0' || value == '0' ? '' : value,
+        initialValue: value == 0 ? '' : _formatGridNumber(value),
         onChanged: onChanged,
-        keyboardType: TextInputType.number,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 12),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 4,
+            horizontal: 6,
             vertical: 8,
           ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridValueCell(String value) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: Text(
+        value,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF334155),
         ),
       ),
     );
@@ -1655,26 +1817,5 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         );
       }
     });
-  }
-}
-
-class _TableHeader extends StatelessWidget {
-  final String title;
-  const _TableHeader(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(4.0),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: Colors.blueGrey.shade700,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
   }
 }
