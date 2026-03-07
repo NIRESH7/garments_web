@@ -5,6 +5,7 @@ import '../screens/auth/login_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/theme_provider.dart';
 import '../screens/settings/theme_settings_screen.dart';
+import '../screens/settings/scale_settings_screen.dart';
 import '../screens/chat/chat_screen.dart';
 
 // Masters
@@ -283,6 +284,12 @@ class AppDrawer extends ConsumerWidget {
                   ],
                 ),
 
+                ListTile(
+                  leading: const Icon(LucideIcons.scale),
+                  title: const Text('Scale Machine'),
+                  onTap: () =>
+                      _navigateTo(context, const ScaleSettingsScreen()),
+                ),
                 ListTile(
                   leading: const Icon(LucideIcons.palette),
                   title: const Text('App Theme'),

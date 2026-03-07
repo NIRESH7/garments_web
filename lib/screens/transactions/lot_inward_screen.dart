@@ -10,6 +10,7 @@ import '../../services/mobile_api_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/utils/format_utils.dart';
+import '../../services/scale_service.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_dropdown_field.dart';
@@ -34,6 +35,7 @@ class LotInwardScreen extends StatefulWidget {
 
 class _LotInwardScreenState extends State<LotInwardScreen> {
   final _api = MobileApiService();
+  final _scaleService = ScaleService.instance;
   final _formKey = GlobalKey<FormState>();
 
   final DateTime _inwardDate = DateTime.now();
@@ -293,6 +295,30 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       partialResults: true,
       localeId: _selectedVoiceLocale,
     );
+  }
+
+  Future<void> _captureScaleWeightForRow(InwardRow row) async {
+    try {
+      final weight = await _scaleService.captureWeight();
+      if (!mounted) return;
+      setState(() {
+        row.recWtController.text = weight.toStringAsFixed(2);
+        row.recWeight = weight;
+        _updateRowMath(row);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Machine weight captured: ${weight.toStringAsFixed(2)} Kg',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Machine read failed: $e')));
+    }
   }
 
   Future<void> _loadMasterData() async {
@@ -2243,6 +2269,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           color: (_isListening && _listeningForRowId == row.id)
                               ? Colors.red
                               : Colors.blue.shade400,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () => _captureScaleWeightForRow(row),
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.monitor_weight_outlined,
+                          size: 16,
+                          color: Colors.green.shade700,
                         ),
                       ),
                     ),
