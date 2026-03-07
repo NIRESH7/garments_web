@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:garments/services/mobile_api_service.dart';
 import 'package:garments/core/theme/color_palette.dart';
 import 'package:garments/services/lot_allocation_print_service.dart';
+import 'package:garments/services/scale_service.dart';
 import 'package:garments/widgets/app_drawer.dart';
 import 'package:garments/widgets/custom_dropdown_field.dart';
 import 'package:share_plus/share_plus.dart';
@@ -54,6 +55,7 @@ class LotRequirementAllocationScreen extends StatefulWidget {
 class _LotRequirementAllocationScreenState
     extends State<LotRequirementAllocationScreen> {
   final _api = MobileApiService();
+  final _scaleService = ScaleService.instance;
 
   bool _isLoading = false;
   bool _isAllocating = false;
@@ -101,6 +103,9 @@ class _LotRequirementAllocationScreenState
   bool _isLoadingReport = false;
   String? _reportDay;
   DateTime? _reportDate;
+  bool _enableVoiceInput = false;
+  bool _enableWeightInput = true;
+  double _tareOffset = 0.0;
 
   final _printService = LotAllocationPrintService();
 
@@ -978,6 +983,154 @@ class _LotRequirementAllocationScreenState
     context,
   ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
 
+  Future<double> _captureNetScaleWeight() async {
+    final raw = await _scaleService.captureWeight();
+    final net = raw - _tareOffset;
+    return net <= 0 ? 0.0 : net;
+  }
+
+  Future<void> _setCurrentAsTare() async {
+    try {
+      final raw = await _scaleService.captureWeight();
+      if (!mounted) return;
+      setState(() => _tareOffset = raw);
+      _showSuccess(
+        'Tare set: ${_tareOffset.toStringAsFixed(3)} Kg (net = gross - tare)',
+      );
+    } catch (e) {
+      _showError('Failed to set tare: $e');
+    }
+  }
+
+  Future<void> _fillWeightController(TextEditingController controller) async {
+    try {
+      final net = await _captureNetScaleWeight();
+      if (!mounted) return;
+      controller.text = net.toStringAsFixed(3);
+      setState(() {});
+      _showSuccess('Captured: ${net.toStringAsFixed(3)} Kg');
+    } catch (e) {
+      _showError('Machine read failed: $e');
+    }
+  }
+
+  void _openInputControlSheet() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, modalSetState) {
+            void sync(VoidCallback fn) {
+              setState(fn);
+              modalSetState(() {});
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Input Controls',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sync(
+                              () => _enableVoiceInput = !_enableVoiceInput,
+                            ),
+                            icon: Icon(
+                              _enableVoiceInput ? Icons.mic : Icons.mic_off,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _enableVoiceInput ? 'Voice ON' : 'Voice OFF',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _enableVoiceInput
+                                  ? Colors.blue.shade50
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sync(
+                              () => _enableWeightInput = !_enableWeightInput,
+                            ),
+                            icon: Icon(
+                              _enableWeightInput
+                                  ? Icons.monitor_weight_outlined
+                                  : Icons.monitor_weight,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _enableWeightInput ? 'Weight ON' : 'Weight OFF',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _enableWeightInput
+                                  ? Colors.green.shade50
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _enableWeightInput
+                                ? () async {
+                                    await _setCurrentAsTare();
+                                    if (mounted) modalSetState(() {});
+                                  }
+                                : null,
+                            icon: const Icon(Icons.tune, size: 16),
+                            label: const Text('Set Tare'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _tareOffset > 0
+                                ? () => sync(() => _tareOffset = 0)
+                                : null,
+                            icon: const Icon(Icons.restore, size: 16),
+                            label: const Text('Clear Tare'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Current Tare: ${_tareOffset.toStringAsFixed(3)} Kg',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   // ═════════════════════════════════ BUILD ══════════════════════════════════
 
   @override
@@ -988,6 +1141,11 @@ class _LotRequirementAllocationScreenState
       appBar: AppBar(
         title: const Text('LOT REQUIREMENT ALLOCATION'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.tune),
+            onPressed: _openInputControlSheet,
+            tooltip: 'Input Controls',
+          ),
           if (_tabIndex == 1)
             IconButton(
               icon: const Icon(Icons.print),
@@ -1382,8 +1540,19 @@ class _LotRequirementAllocationScreenState
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Dozen Weight (kg)',
+                      suffixIcon: _enableWeightInput
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.monitor_weight_outlined,
+                                size: 18,
+                                color: Colors.green.shade700,
+                              ),
+                              onPressed: () =>
+                                  _fillWeightController(_dozenWeightCtrl),
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -1398,8 +1567,19 @@ class _LotRequirementAllocationScreenState
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Folding Wt (kg)',
+                      suffixIcon: _enableWeightInput
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.monitor_weight_outlined,
+                                size: 18,
+                                color: Colors.green.shade700,
+                              ),
+                              onPressed: () =>
+                                  _fillWeightController(_foldingWtCtrl),
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -1562,12 +1742,7 @@ class _LotRequirementAllocationScreenState
       ..sort((a, b) => a['setNo'].compareTo(b['setNo']));
 
     // ── Helper: format set range, e.g. [1,2,3] → "1 TO 3" / [5] → "5" ──────
-    String setRange(List<int> nos) {
-      if (nos.isEmpty) return '-';
-      nos.sort();
-      if (nos.length == 1) return 'Set ${nos.first}';
-      return 'Set ${nos.first} TO ${nos.last}';
-    }
+   
 
     return Container(
       width: double.infinity,

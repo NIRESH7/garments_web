@@ -104,6 +104,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   String? _listeningForRowId; // which row is currently being listened to
   int? _listeningForStickerRowIdx; // index in diaData.rows
   int? _listeningForSetIdx; // set index
+  bool _enableVoiceInput = false;
+  bool _enableWeightInput = true;
+  double _tareOffset = 0.0;
 
   @override
   void initState() {
@@ -299,7 +302,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Future<void> _captureScaleWeightForRow(InwardRow row) async {
     try {
-      final weight = await _scaleService.captureWeight();
+      final weight = await _captureNetScaleWeight();
       if (!mounted) return;
       setState(() {
         row.recWtController.text = weight.toStringAsFixed(2);
@@ -318,6 +321,57 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Machine read failed: $e')));
+    }
+  }
+
+  Future<void> _captureScaleWeightForSet(StickerRow row, int setIdx) async {
+    try {
+      final weight = await _captureNetScaleWeight();
+      if (!mounted) return;
+      setState(() {
+        if (row.controllers.length > setIdx) {
+          row.controllers[setIdx].text = weight.toStringAsFixed(3);
+        }
+        if (row.setWeights.length > setIdx) {
+          row.setWeights[setIdx] = weight.toStringAsFixed(3);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set weight captured: ${weight.toStringAsFixed(3)} Kg'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Machine read failed: $e')));
+    }
+  }
+
+  Future<double> _captureNetScaleWeight() async {
+    final raw = await _scaleService.captureWeight();
+    final net = raw - _tareOffset;
+    return net <= 0 ? 0.0 : net;
+  }
+
+  Future<void> _setCurrentAsTare() async {
+    try {
+      final raw = await _scaleService.captureWeight();
+      if (!mounted) return;
+      setState(() => _tareOffset = raw);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Tare set: ${_tareOffset.toStringAsFixed(3)} Kg (net = gross - tare)',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to set tare: $e')));
     }
   }
 
@@ -909,21 +963,67 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     String? complaintImgPath;
 
     // Non-signature uploads still use old method (might fail on Web, needs future refactor)
-    if (_qualityImage != null)
+    if (_qualityImage != null) {
       qualityImgPath = await _api.uploadFile(_qualityImage!.path);
-    if (_complaintImage != null)
+      if (qualityImgPath == null || qualityImgPath.trim().isEmpty) {
+        _showError('Quality image upload failed. Please retry.');
+        setState(() {
+          _isLoading = false;
+          _isSaving = false;
+        });
+        return;
+      }
+    }
+    if (_complaintImage != null) {
       complaintImgPath = await _api.uploadFile(_complaintImage!.path);
+      if (complaintImgPath == null || complaintImgPath.trim().isEmpty) {
+        _showError('Complaint image upload failed. Please retry.');
+        setState(() {
+          _isLoading = false;
+          _isSaving = false;
+        });
+        return;
+      }
+    }
 
     // GSM, Shade, Washing Images
     String? gsmImgPath;
     String? shadeImgPath;
     String? washingImgPath;
 
-    if (_gsmImage != null) gsmImgPath = await _api.uploadFile(_gsmImage!.path);
-    if (_shadeImage != null)
+    if (_gsmImage != null) {
+      gsmImgPath = await _api.uploadFile(_gsmImage!.path);
+      if (gsmImgPath == null || gsmImgPath.trim().isEmpty) {
+        _showError('GSM image upload failed. Please retry.');
+        setState(() {
+          _isLoading = false;
+          _isSaving = false;
+        });
+        return;
+      }
+    }
+    if (_shadeImage != null) {
       shadeImgPath = await _api.uploadFile(_shadeImage!.path);
-    if (_washingImage != null)
+      if (shadeImgPath == null || shadeImgPath.trim().isEmpty) {
+        _showError('Shade image upload failed. Please retry.');
+        setState(() {
+          _isLoading = false;
+          _isSaving = false;
+        });
+        return;
+      }
+    }
+    if (_washingImage != null) {
       washingImgPath = await _api.uploadFile(_washingImage!.path);
+      if (washingImgPath == null || washingImgPath.trim().isEmpty) {
+        _showError('Washing image upload failed. Please retry.');
+        setState(() {
+          _isLoading = false;
+          _isSaving = false;
+        });
+        return;
+      }
+    }
 
     inwardData["qualityStatus"] = _qualityStatus;
     inwardData["qualityImage"] = qualityImgPath;
@@ -1811,6 +1911,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.tune),
+              tooltip: 'Input Controls',
+              onPressed: _openInputControlSheet,
+            ),
             // Language Toggle for Voice Input
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
@@ -1916,6 +2021,123 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         const SizedBox(height: 24),
         _buildNavigationButtons(),
       ],
+    );
+  }
+
+  void _openInputControlSheet() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, modalSetState) {
+            void sync(VoidCallback fn) {
+              setState(fn);
+              modalSetState(() {});
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Input Controls',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sync(
+                              () => _enableVoiceInput = !_enableVoiceInput,
+                            ),
+                            icon: Icon(
+                              _enableVoiceInput ? Icons.mic : Icons.mic_off,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _enableVoiceInput ? 'Voice ON' : 'Voice OFF',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _enableVoiceInput
+                                  ? Colors.blue.shade50
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sync(
+                              () => _enableWeightInput = !_enableWeightInput,
+                            ),
+                            icon: Icon(
+                              _enableWeightInput
+                                  ? Icons.monitor_weight_outlined
+                                  : Icons.monitor_weight,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _enableWeightInput ? 'Weight ON' : 'Weight OFF',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _enableWeightInput
+                                  ? Colors.green.shade50
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _enableWeightInput
+                                ? () async {
+                                    await _setCurrentAsTare();
+                                    if (mounted) modalSetState(() {});
+                                  }
+                                : null,
+                            icon: const Icon(Icons.tune, size: 16),
+                            label: const Text('Set Tare'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _tareOffset > 0
+                                ? () => sync(() => _tareOffset = 0)
+                                : null,
+                            icon: const Icon(Icons.restore, size: 16),
+                            label: const Text('Clear Tare'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Current Tare: ${_tareOffset.toStringAsFixed(3)} Kg',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -2250,44 +2472,48 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         _updateRowMath(row);
                       }, key: ValueKey('rec_${row.id}')),
                     ),
-                    // Voice input button
-                    GestureDetector(
-                      onTap: () => _startVoiceInputForRow(row),
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: (_isListening && _listeningForRowId == row.id)
-                              ? Colors.red.shade100
-                              : Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          (_isListening && _listeningForRowId == row.id)
-                              ? Icons.mic
-                              : Icons.mic_none,
-                          size: 16,
-                          color: (_isListening && _listeningForRowId == row.id)
-                              ? Colors.red
-                              : Colors.blue.shade400,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () => _captureScaleWeightForRow(row),
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.monitor_weight_outlined,
-                          size: 16,
-                          color: Colors.green.shade700,
+                    if (_enableVoiceInput) ...[
+                      GestureDetector(
+                        onTap: () => _startVoiceInputForRow(row),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color:
+                                (_isListening && _listeningForRowId == row.id)
+                                ? Colors.red.shade100
+                                : Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            (_isListening && _listeningForRowId == row.id)
+                                ? Icons.mic
+                                : Icons.mic_none,
+                            size: 16,
+                            color:
+                                (_isListening && _listeningForRowId == row.id)
+                                ? Colors.red
+                                : Colors.blue.shade400,
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 4),
+                    ],
+                    if (_enableWeightInput)
+                      GestureDetector(
+                        onTap: () => _captureScaleWeightForRow(row),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.monitor_weight_outlined,
+                            size: 16,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 if (row.prevRecWt > 0)
@@ -2705,8 +2931,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         child: _buildTableInputText(
                           r.controllers[i],
                           (v) => setState(() => r.setWeights[i] = v),
-                          onMicTap: () =>
-                              _startVoiceInputForSetWeight(r, idx, i),
+                          onMicTap: _enableVoiceInput
+                              ? () => _startVoiceInputForSetWeight(r, idx, i)
+                              : null,
+                          onWeightTap: _enableWeightInput
+                              ? () => _captureScaleWeightForSet(r, i)
+                              : null,
                           isListening:
                               _isListening &&
                               _listeningForStickerRowIdx == idx &&
@@ -2791,6 +3021,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     TextEditingController controller,
     Function(String) chg, {
     VoidCallback? onMicTap,
+    VoidCallback? onWeightTap,
     bool isListening = false,
   }) {
     return TextFormField(
@@ -2811,17 +3042,35 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         border: InputBorder.none,
         isDense: true,
         contentPadding: EdgeInsets.zero, // Maximize space
-        suffixIcon: onMicTap != null
-            ? IconButton(
-                icon: Icon(
-                  Icons.mic,
-                  size: 16,
-                  color: isListening ? Colors.red : Colors.blue,
-                ),
-                onPressed: onMicTap,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                splashRadius: 16,
+        suffixIcon: (onMicTap != null || onWeightTap != null)
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onMicTap != null)
+                    IconButton(
+                      icon: Icon(
+                        Icons.mic,
+                        size: 16,
+                        color: isListening ? Colors.red : Colors.blue,
+                      ),
+                      onPressed: onMicTap,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      splashRadius: 16,
+                    ),
+                  if (onWeightTap != null)
+                    IconButton(
+                      icon: Icon(
+                        Icons.monitor_weight_outlined,
+                        size: 16,
+                        color: Colors.green.shade700,
+                      ),
+                      onPressed: onWeightTap,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      splashRadius: 16,
+                    ),
+                ],
               )
             : null,
       ),

@@ -73,6 +73,34 @@ class MobileApiService {
     return MediaType('application', 'octet-stream');
   }
 
+  bool _isMediaField(String key) {
+    final lower = key.toLowerCase();
+    return lower.contains('image') ||
+        lower.contains('signature') ||
+        lower.contains('photo') ||
+        lower.contains('audio');
+  }
+
+  bool _looksLikeLocalFilePath(String value) {
+    final v = value.trim();
+    if (v.isEmpty) return false;
+    if (v.startsWith('http://') || v.startsWith('https://')) return false;
+    if (v.startsWith('uploads/') || v.startsWith('/uploads/')) return false;
+    if (v.startsWith('file://')) return true;
+    if (v.startsWith('/data/') ||
+        v.startsWith('/storage/') ||
+        v.startsWith('/private/') ||
+        v.startsWith('/var/mobile/') ||
+        v.startsWith('/Users/') ||
+        v.contains('Android/data/') ||
+        v.contains('/Caches/') ||
+        v.contains('/cache/') ||
+        v.contains('/tmp/')) {
+      return true;
+    }
+    return false;
+  }
+
   Future<String?> uploadImage(dynamic file) async {
     try {
       XFile xFile;
@@ -129,7 +157,11 @@ class MobileApiService {
           // Complex types must be JSON stringified for FormData text fields
           formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
         } else if (entry.value != null) {
-          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+          final value = entry.value.toString();
+          if (_isMediaField(entry.key) && _looksLikeLocalFilePath(value)) {
+            continue; // Never send local device path to backend.
+          }
+          formData.fields.add(MapEntry(entry.key, value));
         }
       }
 
@@ -158,7 +190,11 @@ class MobileApiService {
         } else if (entry.value is List || entry.value is Map) {
           formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
         } else if (entry.value != null) {
-          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+          final value = entry.value.toString();
+          if (_isMediaField(entry.key) && _looksLikeLocalFilePath(value)) {
+            continue; // Never send local device path to backend.
+          }
+          formData.fields.add(MapEntry(entry.key, value));
         }
       }
 
@@ -259,7 +295,11 @@ class MobileApiService {
         } else if (entry.value is List || entry.value is Map) {
           formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
         } else if (entry.value != null) {
-          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+          final value = entry.value.toString();
+          if (_isMediaField(entry.key) && _looksLikeLocalFilePath(value)) {
+            continue; // Never send local device path to backend.
+          }
+          formData.fields.add(MapEntry(entry.key, value));
         }
       }
 
@@ -328,7 +368,11 @@ class MobileApiService {
         } else if (entry.value is List || entry.value is Map) {
           formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
         } else if (entry.value != null) {
-          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+          final value = entry.value.toString();
+          if (_isMediaField(entry.key) && _looksLikeLocalFilePath(value)) {
+            continue; // Never send local device path to backend.
+          }
+          formData.fields.add(MapEntry(entry.key, value));
         }
       }
 

@@ -148,78 +148,72 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            item['fabricItem'] ?? 'N/A',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                item['fabricItem'] ?? 'N/A',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: ColorPalette.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${item['efficiency']}% Eff.',
+                  style: const TextStyle(
+                    color: ColorPalette.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
+              const Spacer(),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(
+                  LucideIcons.pencil,
+                  color: Colors.blue,
+                  size: 18,
+                ),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ItemAssignmentScreen(existing: item),
                     ),
-                    decoration: BoxDecoration(
-                      color: ColorPalette.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${item['efficiency']}% Eff.',
-                      style: const TextStyle(
-                        color: ColorPalette.primary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // ── EDIT button ──────────────────────────────────────────
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: const Icon(
-                      LucideIcons.pencil,
-                      color: Colors.blue,
-                      size: 18,
-                    ),
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ItemAssignmentScreen(
-                            existing: item,
-                          ),
-                        ),
-                      );
-                      _fetchAssignments();
-                    },
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: const Icon(
-                      LucideIcons.trash2,
-                      color: Colors.red,
-                      size: 18,
-                    ),
-                    onPressed: () => _deleteAssignment(item['_id']),
-                  ),
-                ],
+                  );
+                  _fetchAssignments();
+                },
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(
+                  LucideIcons.trash2,
+                  color: Colors.red,
+                  size: 18,
+                ),
+                onPressed: () => _deleteAssignment(item['_id']),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _buildInfoChip(LucideIcons.maximize, 'Size: ${item['size']}'),
-              const SizedBox(width: 8),
               _buildInfoChip(LucideIcons.circle, 'Dia: ${item['dia']}'),
             ],
           ),

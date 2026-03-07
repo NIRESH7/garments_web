@@ -11,6 +11,7 @@ import '../../dialogs/signature_pad_dialog.dart';
 import '../../core/storage/storage_service.dart';
 import '../../widgets/custom_dropdown_field.dart';
 import '../../core/constants/api_constants.dart';
+import '../../services/scale_service.dart';
 
 class LotOutwardScreen extends StatefulWidget {
   final Map<String, dynamic>? editOutward;
@@ -27,6 +28,7 @@ class LotOutwardScreen extends StatefulWidget {
 
 class _LotOutwardScreenState extends State<LotOutwardScreen> {
   final _api = MobileApiService();
+  final _scaleService = ScaleService.instance;
   final _formKey = GlobalKey<FormState>();
 
   DateTime _outwardDateTime = DateTime.now();
@@ -51,7 +53,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   List<Map<String, dynamic>> _availableSets = [];
   final List<Map<String, dynamic>> _selectedSets = [];
 
-  List<String> _allColours = [];
   List<String> _currentLotColours = [];
   Map<String, String> _colourImages = {};
 
@@ -70,6 +71,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   bool _isEditMode = false;
   String? _editInchargeSigUrl;
   String? _editAuthorizedSigUrl;
+  bool _enableVoiceInput = false;
+  bool _enableWeightInput = true;
+  double _tareOffset = 0.0;
 
   @override
   void initState() {
@@ -105,7 +109,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     setState(() {
       _lotNames = _getValues(categories, 'Lot Name');
       _dias = _getValues(categories, 'dia');
-      _allColours = _getValues(categories, 'Colours');
       _parties = parties.map((m) => m['name'] as String).toList();
       _dcNumber = dc ?? 'ERR-GEN';
       _isLoading = false;
@@ -120,7 +123,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     setState(() {
       _lotNames = _getValues(categories, 'Lot Name');
       _dias = _getValues(categories, 'dia');
-      _allColours = _getValues(categories, 'Colours');
       _parties = parties.map((m) => m['name'] as String).toList();
 
       _dcNumber = item['dcNo'] ?? '';
@@ -186,7 +188,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     setState(() {
       _lotNames = _getValues(categories, 'Lot Name');
       _dias = _getValues(categories, 'dia');
-      _allColours = _getValues(categories, 'Colours');
       _parties = parties.map((m) => m['name'] as String).toList();
       _dcNumber = dc ?? 'ERR-GEN';
 
@@ -1027,6 +1028,20 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                               _recalculateSetTotalWeight(set);
                             });
                           },
+                          onMicTap: _enableVoiceInput
+                              ? () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Voice fill will be added here.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              : null,
+                          onWeightTap: _enableWeightInput
+                              ? () => _captureScaleWeightForColour(set, col)
+                              : null,
                         );
                       }),
                       _buildGridValueCell(_formatGridNumber(rowWeight)),
@@ -1174,6 +1189,51 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         .replaceFirst(RegExp(r'\.$'), '');
   }
 
+  Future<double> _captureNetScaleWeight() async {
+    final raw = await _scaleService.captureWeight();
+    final net = raw - _tareOffset;
+    return net <= 0 ? 0.0 : net;
+  }
+
+  Future<void> _setCurrentAsTare() async {
+    try {
+      final raw = await _scaleService.captureWeight();
+      if (!mounted) return;
+      setState(() => _tareOffset = raw);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Tare set: ${_tareOffset.toStringAsFixed(3)} Kg (net = gross - tare)',
+          ),
+        ),
+      );
+    } catch (e) {
+      _showError('Failed to set tare: $e');
+    }
+  }
+
+  Future<void> _captureScaleWeightForColour(
+    Map<String, dynamic> set,
+    String colour,
+  ) async {
+    try {
+      final net = await _captureNetScaleWeight();
+      if (!mounted) return;
+      setState(() {
+        final target = _ensureSetColourEntry(set, colour);
+        target['weight'] = net;
+        target['roll_weight'] = net;
+        target['isChecked'] = net > 0;
+        _recalculateSetTotalWeight(set);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Captured: ${net.toStringAsFixed(3)} Kg')),
+      );
+    } catch (e) {
+      _showError('Machine read failed: $e');
+    }
+  }
+
   Widget _buildGridHeaderCell(String label, {bool alignStart = false}) {
     return Container(
       constraints: const BoxConstraints(minHeight: 62),
@@ -1254,6 +1314,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   Widget _buildSetWeightInput(
     double value, {
     required Function(String) onChanged,
+    VoidCallback? onMicTap,
+    VoidCallback? onWeightTap,
   }) {
     return Container(
       padding: const EdgeInsets.all(4),
@@ -1273,6 +1335,33 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             vertical: 8,
           ),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          suffixIcon: (onMicTap != null || onWeightTap != null)
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onMicTap != null)
+                      IconButton(
+                        icon: const Icon(Icons.mic, size: 14),
+                        onPressed: onMicTap,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        splashRadius: 14,
+                      ),
+                    if (onWeightTap != null)
+                      IconButton(
+                        icon: Icon(
+                          Icons.monitor_weight_outlined,
+                          size: 14,
+                          color: Colors.green.shade700,
+                        ),
+                        onPressed: onWeightTap,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        splashRadius: 14,
+                      ),
+                  ],
+                )
+              : null,
         ),
       ),
     );
@@ -1294,6 +1383,123 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           color: Color(0xFF334155),
         ),
       ),
+    );
+  }
+
+  void _openInputControlSheet() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, modalSetState) {
+            void sync(VoidCallback fn) {
+              setState(fn);
+              modalSetState(() {});
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Input Controls',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sync(
+                              () => _enableVoiceInput = !_enableVoiceInput,
+                            ),
+                            icon: Icon(
+                              _enableVoiceInput ? Icons.mic : Icons.mic_off,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _enableVoiceInput ? 'Voice ON' : 'Voice OFF',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _enableVoiceInput
+                                  ? Colors.blue.shade50
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => sync(
+                              () => _enableWeightInput = !_enableWeightInput,
+                            ),
+                            icon: Icon(
+                              _enableWeightInput
+                                  ? Icons.monitor_weight_outlined
+                                  : Icons.monitor_weight,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _enableWeightInput ? 'Weight ON' : 'Weight OFF',
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: _enableWeightInput
+                                  ? Colors.green.shade50
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _enableWeightInput
+                                ? () async {
+                                    await _setCurrentAsTare();
+                                    if (mounted) modalSetState(() {});
+                                  }
+                                : null,
+                            icon: const Icon(Icons.tune, size: 16),
+                            label: const Text('Set Tare'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _tareOffset > 0
+                                ? () => sync(() => _tareOffset = 0)
+                                : null,
+                            icon: const Icon(Icons.restore, size: 16),
+                            label: const Text('Clear Tare'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Current Tare: ${_tareOffset.toStringAsFixed(3)} Kg',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1336,6 +1542,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Input Controls',
+            onPressed: _openInputControlSheet,
+          ),
+          IconButton(
             icon: Icon(
               _isManual ? LucideIcons.scanLine : LucideIcons.mousePointer2,
             ),
@@ -1358,14 +1569,17 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               });
             },
           ),
-          IconButton(
-            icon: const Icon(LucideIcons.mic),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Voice input (Tamil/English)...')),
-              );
-            },
-          ),
+          if (_enableVoiceInput)
+            IconButton(
+              icon: const Icon(LucideIcons.mic),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Voice input (Tamil/English)...'),
+                  ),
+                );
+              },
+            ),
         ],
       ),
       body: Form(
@@ -1377,7 +1591,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             children: [
               _buildDCSection(),
               const SizedBox(height: 16),
-
               const SizedBox(height: 16),
 
               if (_isManual) _buildMainForm() else _buildScanSection(),
@@ -1751,7 +1964,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     });
 
     // If DIA changed, we need to refresh lot numbers first
-    if (needsDiaChange && scannedDia != null) {
+    if (needsDiaChange) {
       _onDiaChanged(scannedDia).then((_) {
         _processScannedLot(
           scannedLotNo!,
@@ -1789,6 +2002,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     });
 
     _onLotNoChanged(lotNo).then((_) {
+      if (!mounted) return;
       // Auto-toggle set if provided
       if (setNo != null) {
         Future.delayed(const Duration(milliseconds: 300), () {

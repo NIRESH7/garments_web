@@ -983,7 +983,6 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
     String label,
     String value, {
     double fontSize = 9,
-    bool isBoldValue = true,
   }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 0.1),

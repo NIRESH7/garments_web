@@ -15,7 +15,6 @@ class LotComplaintSolutionScreen extends StatefulWidget {
 class _LotComplaintSolutionScreenState
     extends State<LotComplaintSolutionScreen> {
   final _api = MobileApiService();
-  final _lotNoController = TextEditingController();
 
   List<Map<String, dynamic>> _complaintLots = [];
   String? _selectedLotNo;
@@ -69,33 +68,27 @@ class _LotComplaintSolutionScreenState
         (i) => i['lotNo'].toString().toLowerCase() == lotNo.toLowerCase(),
       );
 
-      if (match != null) {
-        setState(() {
-          _foundInward = match;
-          // Populate fields
-          _replyController.text = match['complaintReply'] ?? '';
-          _arrestLotController.text = match['complaintArrestLotNo'] ?? '';
-          _resolution = match['complaintResolution'];
-          _isCleared = match['isComplaintCleared'] ?? false;
+      setState(() {
+        _foundInward = match;
+        // Populate fields
+        _replyController.text = match['complaintReply'] ?? '';
+        _arrestLotController.text = match['complaintArrestLotNo'] ?? '';
+        _resolution = match['complaintResolution'];
+        _isCleared = match['isComplaintCleared'] ?? false;
 
-          if (match['complaintFindDate'] != null) {
-            _findDate = DateTime.parse(match['complaintFindDate']);
-          } else {
-            _findDate = DateTime.now();
-          }
-          
-          if (match['complaintCompletionDate'] != null) {
-            _completionDate = DateTime.parse(match['complaintCompletionDate']);
-          } else {
-            _completionDate = DateTime.now();
-          }
-        });
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Lot Number not found')));
-      }
-    } catch (e) {
+        if (match['complaintFindDate'] != null) {
+          _findDate = DateTime.parse(match['complaintFindDate']);
+        } else {
+          _findDate = DateTime.now();
+        }
+        
+        if (match['complaintCompletionDate'] != null) {
+          _completionDate = DateTime.parse(match['complaintCompletionDate']);
+        } else {
+          _completionDate = DateTime.now();
+        }
+      });
+        } catch (e) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));

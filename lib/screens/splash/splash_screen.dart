@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/color_palette.dart';
+import '../../core/storage/storage_service.dart';
 
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -11,14 +12,23 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  final StorageService _storage = StorageService();
+
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    });
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await Future.delayed(const Duration(seconds: 2));
+    final token = await _storage.getToken();
+    if (!mounted) return;
+    if (token != null && token.trim().isNotEmpty) {
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    } else {
+      Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   @override

@@ -6,13 +6,11 @@ import '../../core/theme/color_palette.dart';
 // import 'inward_outward_report.dart';
 import 'monthly_summary_report.dart';
 import 'format_reports_screen.dart';
-import 'client_format_report.dart';
 import 'godown_stock_report_screen.dart';
 import 'quality_audit_report_screen.dart';
 import 'shade_card_report_screen.dart';
 
 import 'rack_pallet_report_screen.dart';
-import 'lot_allocation_summary_report.dart';
 import 'task_progress_report.dart';
 import 'cut_order_plan_report_screen.dart';
 
