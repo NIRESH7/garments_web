@@ -71,7 +71,7 @@ class _ScaleSettingsScreenState extends State<ScaleSettingsScreen> {
     setState(() => _saving = true);
     try {
       final baud = int.tryParse(_baudController.text.trim()) ?? 9600;
-      final timeout = int.tryParse(_timeoutController.text.trim()) ?? 5000;
+      final timeout = int.tryParse(_timeoutController.text.trim()) ?? 3000;
       final updated = _settings.copyWith(
         selectedDeviceKey: _selectedUsbDeviceKey,
         selectedBluetoothAddress: _selectedBluetoothAddress,
@@ -106,7 +106,7 @@ class _ScaleSettingsScreenState extends State<ScaleSettingsScreen> {
         selectedBluetoothAddress: _selectedBluetoothAddress,
         baudRate: int.tryParse(_baudController.text.trim()) ?? 9600,
         requestCommand: _requestController.text,
-        readTimeoutMs: int.tryParse(_timeoutController.text.trim()) ?? 5000,
+        readTimeoutMs: int.tryParse(_timeoutController.text.trim()) ?? 3000,
       );
       final weight = await _scaleService.captureWeight(settings: testSettings);
       if (!mounted) return;

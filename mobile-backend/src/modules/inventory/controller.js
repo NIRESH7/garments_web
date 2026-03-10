@@ -12,6 +12,8 @@ const COLOUR_CATEGORY_REGEX = /^(colou?r|colou?rs|color|colors)$/i;
 
 const normalizeText = (value) => value?.toString().trim() ?? '';
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const extractColoursFromStorageDetails = (storageDetails) => {
     const colours = new Set();
     if (!storageDetails) return colours;
@@ -105,20 +107,42 @@ const formatWeight = (value) => {
     return rounded.toString();
 };
 
-const extractPrefixedValueFromRows = (rows, prefixes, maxScanRows = 12) => {
-    const patterns = prefixes.map(
-        (prefix) => new RegExp(`^${prefix.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*-\\s*(.+)$`, 'i')
+const extractPrefixedValueFromRows = (rows, prefixes, maxScanRows = 60) => {
+    const anchored = prefixes.map(
+        (prefix) => new RegExp(`^${prefix.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*[-:]\\s*(.+)$`, 'i')
+    );
+    const loose = prefixes.map(
+        (prefix) => new RegExp(`${prefix.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*[-:]\\s*(.+)$`, 'i')
     );
 
+    const scan = (patterns) => {
+        for (let r = 0; r < Math.min(rows.length, maxScanRows); r++) {
+            const row = Array.isArray(rows[r]) ? rows[r] : [];
+            for (const raw of row) {
+                const text = normalizeText(raw);
+                if (!text) continue;
+                for (const pattern of patterns) {
+                    const match = text.match(pattern);
+                    if (match) return normalizeText(match[1]);
+                }
+            }
+        }
+        return '';
+    };
+
+    const strictValue = scan(anchored);
+    if (strictValue) return strictValue;
+    return scan(loose);
+};
+
+const extractValueByRegex = (rows, regex, maxScanRows = 80) => {
     for (let r = 0; r < Math.min(rows.length, maxScanRows); r++) {
         const row = Array.isArray(rows[r]) ? rows[r] : [];
         for (const raw of row) {
             const text = normalizeText(raw);
             if (!text) continue;
-            for (const pattern of patterns) {
-                const match = text.match(pattern);
-                if (match) return normalizeText(match[1]);
-            }
+            const match = text.match(regex);
+            if (match) return normalizeText(match[1] ?? match[0]);
         }
     }
     return '';
@@ -168,21 +192,70 @@ const findSetIndexInRow = (row, setNo) => {
     return -1;
 };
 
-const buildInwardPayloadFromSheet = (sheet) => {
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        raw: true,
-        defval: null,
-        blankrows: false,
+const getLotBalanceByDia = async (lotNo, dia) => {
+    if (!lotNo || !dia) return 0;
+
+    const lotInwards = await Inward.find({ lotNo, 'diaEntries.dia': dia });
+    let totalInwardWt = 0;
+    lotInwards.forEach((inw) => {
+        const entry = inw.diaEntries.find((e) => e.dia === dia);
+        if (entry) totalInwardWt += (entry.recWt || 0);
     });
 
+    const lotOutwards = await Outward.find({ lotNo, dia });
+    let totalOutwardWt = 0;
+    lotOutwards.forEach((out) => {
+        out.items.forEach((item) => {
+            totalOutwardWt += (item.total_weight || 0);
+        });
+    });
+
+    return totalInwardWt - totalOutwardWt;
+};
+
+const getOldestAvailableLotNo = async (lotName, dia) => {
+    if (!lotName || !dia) return null;
+
+    const inwards = await Inward.find({
+        lotName: { $regex: new RegExp(`^${escapeRegex(lotName)}$`, 'i') },
+        'diaEntries.dia': dia,
+    }).sort({ inwardDate: 1, createdAt: 1 });
+
+    const orderedLotNos = [];
+    const seen = new Set();
+    for (const inw of inwards) {
+        const lotNo = normalizeText(inw.lotNo);
+        if (!lotNo || seen.has(lotNo)) continue;
+        seen.add(lotNo);
+        orderedLotNos.push(lotNo);
+    }
+
+    for (const lotNo of orderedLotNos) {
+        const balance = await getLotBalanceByDia(lotNo, dia);
+        if (balance > 0.1) return lotNo;
+    }
+
+    return null;
+};
+
+const buildInwardPayloadFromRows = (rows) => {
     if (!rows || rows.length === 0) return null;
 
-    const lotNo = extractPrefixedValueFromRows(rows, ['LOT NO', 'LOT NUMBER']);
-    const dateRaw = extractPrefixedValueFromRows(rows, ['DATE']);
-    const fromParty = extractPrefixedValueFromRows(rows, ['PARTY NAME', 'PARTY']);
-    const lotName = extractPrefixedValueFromRows(rows, ['LOT NAME']);
-    const dia = extractPrefixedValueFromRows(rows, ['DIA']);
+    const lotNo =
+        extractPrefixedValueFromRows(rows, ['LOT NO', 'LOT NUMBER']) ||
+        extractValueByRegex(rows, /(\d{4}\/\d{4,})/);
+    const dateRaw =
+        extractPrefixedValueFromRows(rows, ['DATE']) ||
+        extractValueByRegex(rows, /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/);
+    const fromParty =
+        extractPrefixedValueFromRows(rows, ['PARTY NAME', 'PARTY']) ||
+        extractValueByRegex(rows, /PARTY\\s*NAME\\s*[-:]\\s*(.+)$/i);
+    const lotName =
+        extractPrefixedValueFromRows(rows, ['LOT NAME']) ||
+        extractValueByRegex(rows, /LOT\\s*NAME\\s*[-:]\\s*(.+)$/i);
+    const dia =
+        extractPrefixedValueFromRows(rows, ['DIA']) ||
+        extractValueByRegex(rows, /(\d+(\.\d+)?)\s*DIA/i);
 
     if (!lotNo || !lotName || !fromParty || !dia) return null;
 
@@ -280,6 +353,193 @@ const buildInwardPayloadFromSheet = (sheet) => {
             racks,
             pallets,
             rows: storageRows,
+        }],
+        qualityStatus: 'OK',
+        gsmStatus: 'OK',
+        shadeStatus: 'OK',
+        washingStatus: 'OK',
+        complaintText: '',
+    };
+};
+
+const buildInwardPayloadFromSheet = (sheet) => {
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        raw: true,
+        defval: null,
+        blankrows: false,
+    });
+    return buildInwardPayloadFromRows(rows);
+};
+
+const parsePdfTextToRows = (text) => {
+    if (!text) return [];
+    const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+    return lines.map((line) =>
+        line
+            .split(/\s{2,}|\t+/)
+            .map((cell) => cell.trim())
+            .filter((cell) => cell.length > 0)
+    );
+};
+
+const extractDiaFromRows = (rows) => {
+    for (let r = 0; r < Math.min(rows.length, 15); r++) {
+        const row = Array.isArray(rows[r]) ? rows[r] : [];
+        for (const cell of row) {
+            const text = normalizeText(cell).toUpperCase();
+            if (!text) continue;
+            let match = text.match(/DIA\\s*[-:]*\\s*(\\d+(\\.\\d+)?)/i);
+            if (match) return match[1];
+            match = text.match(/(\\d+(\\.\\d+)?)\\s*DIA/i);
+            if (match) return match[1];
+        }
+    }
+    return '';
+};
+
+const buildInwardPayloadFromSummaryRows = (rows) => {
+    if (!rows || rows.length === 0) return null;
+
+    const lotNo =
+        extractPrefixedValueFromRows(rows, ['L.NO', 'LOT NO', 'LOT NUMBER']) ||
+        extractValueByRegex(rows, /(\d{4}\/\d{4,})/);
+    const dateRaw =
+        extractPrefixedValueFromRows(rows, ['DATE']) ||
+        extractValueByRegex(rows, /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/);
+    const fromParty =
+        extractPrefixedValueFromRows(rows, ['PARTY NAME', 'PARTY']) ||
+        extractValueByRegex(rows, /PARTY\\s*NAME\\s*[-:]\\s*(.+)$/i);
+    const lotName =
+        extractPrefixedValueFromRows(rows, ['LOT NAME']) ||
+        extractValueByRegex(rows, /LOT\\s*NAME\\s*[-:]\\s*(.+)$/i);
+    const dia =
+        extractDiaFromRows(rows) ||
+        extractValueByRegex(rows, /(\d+(\.\d+)?)\s*DIA/i);
+
+    if (!lotNo || !lotName || !fromParty || !dia) return null;
+
+    let rackList = [];
+    let palletList = [];
+    for (let r = 0; r < Math.min(rows.length, 10); r++) {
+        const row = Array.isArray(rows[r]) ? rows[r] : [];
+        const label = normalizeText(row[0]).toUpperCase();
+        if (label.includes('RACK')) {
+            const value = normalizeText(row[1]);
+            rackList = value ? value.split(',').map((v) => v.trim()).filter(Boolean) : [];
+        }
+        if (label.includes('PALLET')) {
+            const value = normalizeText(row[1]);
+            palletList = value ? value.split(',').map((v) => v.trim()).filter(Boolean) : [];
+        }
+    }
+
+    let headerIdx = -1;
+    let colourCol = -1;
+    let totalWeightCol = -1;
+    let totalRollCol = -1;
+    for (let r = 0; r < rows.length; r++) {
+        const row = Array.isArray(rows[r]) ? rows[r] : [];
+        const normalized = row.map((c) => normalizeText(c).toUpperCase());
+        const hasColour = normalized.includes('COLOUR') || normalized.includes('COLOR');
+        const hasWt = normalized.includes('TOTAL WEIGHT') || normalized.includes('TOTAL WT');
+        const hasRoll = normalized.includes('TOTAL ROLL') || normalized.includes('TOTAL ROLLS');
+        if (hasColour && (hasWt || hasRoll)) {
+            headerIdx = r;
+            colourCol = normalized.indexOf('COLOUR');
+            if (colourCol < 0) colourCol = normalized.indexOf('COLOR');
+            totalWeightCol = normalized.indexOf('TOTAL WEIGHT');
+            if (totalWeightCol < 0) totalWeightCol = normalized.indexOf('TOTAL WT');
+            totalRollCol = normalized.indexOf('TOTAL ROLL');
+            if (totalRollCol < 0) totalRollCol = normalized.indexOf('TOTAL ROLLS');
+            break;
+        }
+    }
+
+    if (headerIdx < 0 || colourCol < 0) return null;
+
+    const storageRows = [];
+    let totalRollsAll = 0;
+    let totalWeightAll = 0;
+
+    for (let r = headerIdx + 1; r < rows.length; r++) {
+        const row = Array.isArray(rows[r]) ? rows[r] : [];
+        const colour = normalizeText(row[colourCol]);
+        if (!colour) break;
+
+        const weight = totalWeightCol >= 0 ? parseNumber(row[totalWeightCol]) : null;
+        const rolls = totalRollCol >= 0 ? parseNumber(row[totalRollCol]) : null;
+        if (weight === null && rolls === null) continue;
+
+        totalRollsAll += rolls || 0;
+        totalWeightAll += weight || 0;
+
+        storageRows.push({
+            colour,
+            gsm: '',
+            totalWeight: Number((weight || 0).toFixed(3)),
+            totalRolls: Number((rolls || 0).toFixed(0)),
+        });
+    }
+
+    if (storageRows.length === 0) return null;
+
+    const totalSets = Math.max(1, Math.ceil(totalRollsAll / 11));
+    const racks = rackList.length > 0 ? rackList : [];
+    const pallets = palletList.length > 0 ? palletList : [];
+    while (racks.length > 0 && racks.length < totalSets) racks.push(racks[racks.length - 1]);
+    while (pallets.length > 0 && pallets.length < totalSets) pallets.push(pallets[pallets.length - 1]);
+
+    const rowsWithSets = storageRows.map((row) => {
+        const rolls = row.totalRolls || 0;
+        const weight = row.totalWeight || 0;
+        const avgRollWeight = rolls > 0 ? weight / rolls : 0;
+        const base = totalSets > 0 ? Math.floor(rolls / totalSets) : 0;
+        let rem = totalSets > 0 ? rolls % totalSets : 0;
+        const setWeights = [];
+        for (let i = 0; i < totalSets; i++) {
+            const rollCount = base + (rem > 0 ? 1 : 0);
+            if (rem > 0) rem -= 1;
+            const setWeight = avgRollWeight > 0 ? rollCount * avgRollWeight : (totalSets > 0 ? weight / totalSets : 0);
+            setWeights.push(formatWeight(setWeight));
+        }
+        return {
+            colour: row.colour,
+            gsm: '',
+            setWeights,
+        };
+    });
+
+    return {
+        inwardDate: parseDateToIso(dateRaw),
+        inTime: '09:00 AM',
+        outTime: '09:30 AM',
+        lotName,
+        lotNo,
+        fromParty,
+        process: fromParty.toUpperCase().includes('COMPACT') ? 'COMPACTING' : '',
+        rate: 0,
+        gsm: '',
+        vehicleNo: '',
+        partyDcNo: '',
+        diaEntries: [{
+            dia,
+            roll: totalRollsAll,
+            sets: totalSets,
+            delivWt: Number(totalWeightAll.toFixed(3)),
+            recRoll: totalRollsAll,
+            recWt: Number(totalWeightAll.toFixed(3)),
+            rate: 0,
+        }],
+        storageDetails: [{
+            dia,
+            racks,
+            pallets,
+            rows: rowsWithSets,
         }],
         qualityStatus: 'OK',
         gsmStatus: 'OK',
@@ -548,7 +808,78 @@ const createInward = asyncHandler(async (req, res) => {
 const importInwardWorkbook = asyncHandler(async (req, res) => {
     if (!req.file || !req.file.buffer) {
         res.status(400);
-        throw new Error('Excel file is required');
+        throw new Error('Excel or PDF file is required');
+    }
+
+    const originalName = (req.file.originalname || '').toLowerCase();
+    const mime = (req.file.mimetype || '').toLowerCase();
+    const isPdf = originalName.endsWith('.pdf') || mime.includes('pdf');
+
+    if (isPdf) {
+        let pdfText = '';
+        try {
+            const pdfParse = (await import('pdf-parse')).default;
+            const parsed = await pdfParse(req.file.buffer);
+            pdfText = parsed?.text || '';
+        } catch (error) {
+            res.status(400);
+            throw new Error(`Invalid PDF file: ${error.message}`);
+        }
+
+        const rows = parsePdfTextToRows(pdfText);
+        const payload =
+            buildInwardPayloadFromRows(rows) ||
+            buildInwardPayloadFromSummaryRows(rows);
+
+        const results = [];
+        let imported = 0;
+        let failed = 0;
+        let skipped = 0;
+
+        if (!payload) {
+            skipped += 1;
+            results.push({
+                sheet: 'PDF',
+                status: 'skipped',
+                message: 'Missing required format/values in PDF',
+            });
+        } else {
+            try {
+                const result = await upsertInwardEntry({
+                    userId: req.user._id,
+                    body: payload,
+                    files: null,
+                });
+                imported += 1;
+                results.push({
+                    sheet: 'PDF',
+                    status: 'imported',
+                    mode: result.mode,
+                    lotNo: payload.lotNo,
+                    lotName: payload.lotName,
+                    inwardId: result.inward?._id?.toString(),
+                });
+            } catch (error) {
+                failed += 1;
+                results.push({
+                    sheet: 'PDF',
+                    status: 'failed',
+                    lotNo: payload.lotNo,
+                    lotName: payload.lotName,
+                    error: error.message,
+                });
+            }
+        }
+
+        res.json({
+            fileName: req.file.originalname,
+            totalSheets: 1,
+            imported,
+            failed,
+            skipped,
+            results,
+        });
+        return;
     }
 
     let workbook;
@@ -567,7 +898,16 @@ const importInwardWorkbook = asyncHandler(async (req, res) => {
 
     for (const sheetName of sheetNames) {
         const sheet = workbook.Sheets[sheetName];
-        const payload = buildInwardPayloadFromSheet(sheet);
+        const payload =
+            buildInwardPayloadFromSheet(sheet) ||
+            buildInwardPayloadFromSummaryRows(
+                XLSX.utils.sheet_to_json(sheet, {
+                    header: 1,
+                    raw: true,
+                    defval: null,
+                    blankrows: false,
+                })
+            );
 
         if (!payload) {
             skipped += 1;
@@ -897,6 +1237,17 @@ const createOutward = asyncHandler(async (req, res) => {
     }
 
     const dcNo = dc_number || `DC-${Date.now()}`;
+
+    // FIFO PRIORITY CHECK (Lot Name + DIA)
+    if (lotName && dia && lotNo) {
+        const oldestAvailableLotNo = await getOldestAvailableLotNo(lotName, dia);
+        if (oldestAvailableLotNo && oldestAvailableLotNo !== lotNo) {
+            res.status(400);
+            throw new Error(
+                `FIFO Violation: Oldest available lot is ${oldestAvailableLotNo}. Please outward that lot first.`
+            );
+        }
+    }
 
     // CHECK FOR DUPLICATE SET NUMBERS (Validation Rule: Lot + Dia + Set must be unique)
     const existingOutwards = await Outward.find({ lotNo, dia });

@@ -47,11 +47,12 @@ const inwardImportUpload = multer({
         const ext = path.extname(file.originalname || '').toLowerCase();
         const mime = (file.mimetype || '').toLowerCase();
         const isExcelMime = mime.includes('spreadsheetml') || mime === 'application/vnd.ms-excel';
-        if (ext === '.xlsx' || ext === '.xls' || isExcelMime) {
+        const isPdf = ext === '.pdf' || mime === 'application/pdf';
+        if (ext === '.xlsx' || ext === '.xls' || isExcelMime || isPdf) {
             cb(null, true);
             return;
         }
-        cb(new Error('Only Excel files (.xlsx/.xls) are allowed'));
+        cb(new Error('Only Excel or PDF files are allowed'));
     },
 });
 

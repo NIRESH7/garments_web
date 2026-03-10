@@ -74,6 +74,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   bool _enableVoiceInput = false;
   bool _enableWeightInput = true;
   double _tareOffset = 0.0;
+  String? _fifoRecommendedLotNo;
+  String? _lastFifoWarnKey;
 
   @override
   void initState() {
@@ -319,9 +321,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         _selectedDia!,
       );
       if (rec != null) {
-        final recLotNo = rec['lotNo'].toString();
+        final recLotNo = rec['lotNo'].toString().trim();
+        _fifoRecommendedLotNo = recLotNo.isEmpty ? null : recLotNo;
         // If the lot is not in current list, add it
-        if (!_lotNos.contains(recLotNo)) {
+        if (recLotNo.isNotEmpty && !_lotNos.contains(recLotNo)) {
           setState(() => _lotNos.add(recLotNo));
         }
         await _onLotNoChanged(recLotNo);
@@ -460,6 +463,18 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     if (selected) {
       if (_selectedLotNo == null || _selectedDia == null) return;
 
+      final selectedLot = _selectedLotNo!.trim();
+      final recLot = _fifoRecommendedLotNo?.trim() ?? '';
+      if (recLot.isNotEmpty &&
+          selectedLot.toLowerCase() != recLot.toLowerCase()) {
+        final warnKey = 'lot|$selectedLot|${_selectedDia}|$recLot';
+        if (_lastFifoWarnKey != warnKey) {
+          _lastFifoWarnKey = warnKey;
+          _showError('FIFO: Please outward Lot $recLot first');
+        }
+        return;
+      }
+
       // FIFO VALIDATION
       final violation = await _api.checkFifoViolation(
         _selectedLotNo!,
@@ -474,22 +489,11 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             violation['message'] ??
             'This Dia, Set Number, Rack, and Pallet Number are already available in a previous lot.';
 
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text(
-              'FIFO Violation',
-              style: TextStyle(color: Colors.red),
-            ),
-            content: Text(msg),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
+        final warnKey = 'set|${_selectedLotNo}|${_selectedDia}|$setNo';
+        if (_lastFifoWarnKey != warnKey) {
+          _lastFifoWarnKey = warnKey;
+          _showError(msg);
+        }
         return; // Prevent selection
       }
 
@@ -659,6 +663,22 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     if (_selectedParty == null) {
       _showError('Please select Party Name');
       return;
+    }
+
+    // FIFO priority check (Lot Name + DIA)
+    if (_selectedLotName != null && _selectedDia != null) {
+      final rec = await _api.getFifoRecommendation(
+        _selectedLotName!,
+        _selectedDia!,
+      );
+      final fifoLotNo = rec?['lotNo']?.toString().trim();
+      final selectedLot = _selectedLotNo?.trim() ?? '';
+      if (fifoLotNo != null && fifoLotNo.isNotEmpty) {
+        if (selectedLot.toLowerCase() != fifoLotNo.toLowerCase()) {
+          _showError('FIFO: Please outward Lot $fifoLotNo first');
+          return;
+        }
+      }
     }
     if (_selectedSets.isEmpty) {
       _showError('Please select at least one set');

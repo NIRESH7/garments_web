@@ -29,6 +29,51 @@ function parseSetNo(value) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseExcludedSetsParam(excludedSets) {
+    const global = new Set();
+    const perLot = new Map();
+
+    const add = (lotNo, setNo) => {
+        if (!Number.isFinite(setNo)) return;
+        if (lotNo) {
+            const key = lotNo.toString().trim();
+            if (!perLot.has(key)) perLot.set(key, new Set());
+            perLot.get(key).add(setNo);
+        } else {
+            global.add(setNo);
+        }
+    };
+
+    const addRaw = (raw) => {
+        if (raw === null || raw === undefined) return;
+        if (typeof raw === 'number') {
+            add(null, parseSetNo(raw));
+            return;
+        }
+        const text = raw.toString().trim();
+        if (!text) return;
+        if (text.includes('|')) {
+            const [lotNoRaw, setNoRaw] = text.split('|');
+            const setNo = parseSetNo(setNoRaw);
+            if (setNo !== null) add(lotNoRaw?.trim(), setNo);
+            return;
+        }
+        add(null, parseSetNo(text));
+    };
+
+    if (Array.isArray(excludedSets)) {
+        excludedSets.forEach(addRaw);
+    } else if (excludedSets) {
+        excludedSets
+            .toString()
+            .split(',')
+            .filter((x) => x)
+            .forEach(addRaw);
+    }
+
+    return { global, perLot };
+}
+
 // ─── Helper: weight-per-roll from inward entry ────────────────────────────────
 function calcWeightPerRoll(entry, effDozenWeight) {
     const recRolls = entry.recRoll || 0;
@@ -49,7 +94,7 @@ async function getLotBalance(inw, dia) {
 }
 
 // ─── FIFO Allocator (core logic, returns set rows) ───────────────────────────
-async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeight, excludedSets = [] }) {
+async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeight, excludedSets }) {
     const query = {};
     if (lotName) {
         query.lotName = { $regex: new RegExp(`^${lotName.trim()}$`, 'i') };
@@ -65,12 +110,8 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
     let totalWprUsed = 0;
     let wprCount = 0;
 
-    // Normalize excludedSets to a Set of numbers
-    const excludedSetNos = new Set(
-        (excludedSets || [])
-            .map((num) => parseSetNo(num))
-            .filter((num) => Number.isFinite(num))
-    );
+    const excludedGlobal = excludedSets?.global ?? new Set();
+    const excludedPerLot = excludedSets?.perLot ?? new Map();
 
     for (const inw of inwards) {
         if (remainingWeight <= 0.001) break;
@@ -85,7 +126,8 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
         let usedWt = 0;
 
         // Track which set numbers have already been outward-posted for this lot+dia
-        const usedSetNos = new Set(excludedSetNos); // Start with externally excluded sets
+        const perLotExcluded = excludedPerLot.get((inw.lotNo ?? '').toString().trim()) ?? new Set();
+        const usedSetNos = new Set([...excludedGlobal, ...perLotExcluded]);
         outwards.forEach(out => {
             if (normalizeDia(out.dia) !== normalizedDia) return;
             out.items.forEach(item => {
@@ -282,21 +324,7 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
 
     const targetDozen = parseFloat(dozen);
 
-    // Parse excludedSets if provided
-    let excludedSetList = [];
-    if (excludedSets) {
-        if (Array.isArray(excludedSets)) {
-            excludedSetList = excludedSets
-                .map((value) => parseSetNo(value))
-                .filter((value) => Number.isFinite(value));
-        } else {
-            excludedSetList = excludedSets
-                .split(',')
-                .filter((x) => x)
-                .map((x) => parseSetNo(x))
-                .filter((value) => Number.isFinite(value));
-        }
-    }
+    const excludedSetMap = parseExcludedSetsParam(excludedSets);
 
     // Resolve dia + dozenWeight ─ prefer explicit params from app
     let dia = queryDia || 'Standard';
@@ -322,7 +350,7 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     const requiredWeight = targetDozen * effDozenWeight;
 
     let { setRows, totalRolls, totalSets, remainingRolls, shortfall, avgWpr } =
-        await runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeight, excludedSets: excludedSetList });
+        await runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeight, excludedSets: excludedSetMap });
 
     // Client Business Rule: If shortfall exists, add extra sets based on KG
     // - If shortfall > 5kg -> add 1 extra set (11 rolls)
@@ -339,7 +367,7 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
             effDozenWeight,
             targetDozen,
             requiredWeight: adjustedWeight,
-            excludedSets: excludedSetList
+            excludedSets: excludedSetMap
         });
 
         setRows = retry.setRows;

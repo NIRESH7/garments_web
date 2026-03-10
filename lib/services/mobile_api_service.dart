@@ -1162,7 +1162,7 @@ class MobileApiService {
     String dia,
     double dozenWeight, {
     String? lotName,
-    List<int>? excludedSets,
+    List<String>? excludedSets,
   }) async {
     try {
       final response = await _client.get(

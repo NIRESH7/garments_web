@@ -97,7 +97,7 @@ class ScaleSettings {
       requestCommand = '',
       stableReadsRequired = 2,
       stableTolerance = 0.02,
-      readTimeoutMs = 5000;
+      readTimeoutMs = 3000;
 
   ScaleSettings copyWith({
     bool? enabled,
@@ -184,7 +184,7 @@ class ScaleService {
       requestCommand: requestCommand,
       stableReadsRequired: stableReads ?? 2,
       stableTolerance: stableTolerance ?? 0.02,
-      readTimeoutMs: readTimeout ?? 5000,
+      readTimeoutMs: readTimeout ?? 3000,
     );
   }
 

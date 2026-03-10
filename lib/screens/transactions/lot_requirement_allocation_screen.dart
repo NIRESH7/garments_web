@@ -516,7 +516,7 @@ class _LotRequirementAllocationScreenState
     }
 
     // Collect already allocated sets for this Item + Size to exclude them
-    final excludedSets = <int>{};
+    final excludedSets = <String>{};
 
     // 1. From saved allocations in DB for this plan
     final plan = _allPlans.firstWhere(
@@ -529,7 +529,14 @@ class _LotRequirementAllocationScreenState
         if (alloc['itemName'] == _selectedItem &&
             alloc['size'] == _selectedSize) {
           final sNo = _toSetNo(alloc['setNo']);
-          if (sNo > 0) excludedSets.add(sNo);
+          final lotNo = alloc['lotNo']?.toString().trim();
+          if (sNo > 0) {
+            if (lotNo != null && lotNo.isNotEmpty) {
+              excludedSets.add('$lotNo|$sNo');
+            } else {
+              excludedSets.add(sNo.toString());
+            }
+          }
         }
       }
     }
@@ -540,7 +547,14 @@ class _LotRequirementAllocationScreenState
         if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
           for (var s in entry.sets) {
             final sNo = _toSetNo(s['setNo']);
-            if (sNo > 0) excludedSets.add(sNo);
+            final lotNo = s['lotNo']?.toString().trim();
+            if (sNo > 0) {
+              if (lotNo != null && lotNo.isNotEmpty) {
+                excludedSets.add('$lotNo|$sNo');
+              } else {
+                excludedSets.add(sNo.toString());
+              }
+            }
           }
         }
       }
