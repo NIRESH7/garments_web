@@ -639,8 +639,12 @@ const getInwards = asyncHandler(async (req, res) => {
 // @desc    Get Lots by DIA for FIFO
 // @route   GET /api/inventory/inward/fifo
 const getLotsFifo = asyncHandler(async (req, res) => {
-    const { dia } = req.query;
-    const inwards = await Inward.find({ 'diaEntries.dia': dia }).sort({ inwardDate: 1 });
+    const { dia, lotName } = req.query;
+    const query = { 'diaEntries.dia': dia };
+    if (lotName) {
+        query.lotName = { $regex: new RegExp(`^${lotName.trim()}$`, 'i') };
+    }
+    const inwards = await Inward.find(query).sort({ inwardDate: 1 });
     const lotNos = [...new Set(inwards.map(i => i.lotNo))];
     res.json(lotNos);
 });
@@ -1285,7 +1289,6 @@ const checkFifoViolation = asyncHandler(async (req, res) => {
         throw new Error('Dia and Set Number are required');
     }
 
-    console.log(`[FIFO Check] Checking for Dia: ${dia}, Set: ${setNo}, Rack: ${rack}, Pallet: ${pallet}`);
 
     // 1. Find all Inwards with this Dia, sorted by Date (Oldest first)
     // We need to look for ANY lot that has this combination available.
@@ -1325,12 +1328,19 @@ const checkFifoViolation = asyncHandler(async (req, res) => {
         return res.json({ violation: false });
     }
 
-    // Find all lots OLDER than current lot
+    // Find all lots with SAME Lot Name and Dia that are OLDER than current lot
     const olderInwards = await Inward.find({
+        lotName: currentInward.lotName,
         'diaEntries.dia': dia,
-        inwardDate: { $lt: currentInward.inwardDate },
-        lotNo: { $ne: currentLotNo } // Exclude self just in case date is identical
-    }).sort({ inwardDate: 1 });
+        $or: [
+            { inwardDate: { $lt: currentInward.inwardDate } },
+            {
+                inwardDate: currentInward.inwardDate,
+                createdAt: { $lt: currentInward.createdAt },
+                lotNo: { $ne: currentLotNo }
+            }
+        ]
+    }).sort({ inwardDate: 1, createdAt: 1 });
 
     for (const oldLot of olderInwards) {
         // Check if Set exists in this Old Lot

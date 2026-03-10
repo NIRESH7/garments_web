@@ -166,7 +166,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
     // Populate lot numbers and colours
     if (_selectedDia != null) {
-      final lots = await _api.getLotsFifo(dia: _selectedDia!);
+      final lots = await _api.getLotsFifo(
+        dia: _selectedDia!,
+        lotName: _selectedLotName,
+      );
       setState(() => _lotNos = lots);
 
       if (_selectedLotNo != null) {
@@ -197,7 +200,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     });
 
     if (_selectedDia != null) {
-      final lots = await _api.getLotsFifo(dia: _selectedDia!);
+      final lots = await _api.getLotsFifo(
+        dia: _selectedDia!,
+        lotName: _selectedLotName,
+      );
       setState(() => _lotNos = lots);
 
       if (_selectedLotNo != null) {
@@ -268,10 +274,17 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     setState(() {
       _selectedLotName = val;
       _selectedLotNo = null;
+      _lotNos = []; // Clear lot numbers
       _availableSets = [];
       _selectedSets.clear();
     });
+
     if (val != null && _selectedDia != null) {
+      final lots = await _api.getLotsFifo(
+        dia: _selectedDia!,
+        lotName: val,
+      );
+      setState(() => _lotNos = lots);
       await _fetchFifoRecommendation();
     }
   }
@@ -285,7 +298,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       _selectedSets.clear();
     });
     if (val != null) {
-      final lots = await _api.getLotsFifo(dia: val);
+      final lots = await _api.getLotsFifo(
+        dia: val,
+        lotName: _selectedLotName,
+      );
       setState(() => _lotNos = lots);
 
       if (_selectedLotName != null) {
@@ -1325,6 +1341,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       child: TextFormField(
         initialValue: value == 0 ? '' : _formatGridNumber(value),
         onChanged: onChanged,
+        onTap: (_enableWeightInput && onWeightTap != null) ? onWeightTap : null,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
@@ -1347,7 +1364,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                         constraints: const BoxConstraints(),
                         splashRadius: 14,
                       ),
-                    if (onWeightTap != null)
+                    if (onWeightTap != null && !_enableWeightInput)
                       IconButton(
                         icon: Icon(
                           Icons.monitor_weight_outlined,

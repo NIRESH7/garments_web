@@ -115,6 +115,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _loadUserRole();
     _loadMasterData();
     _initSpeech();
+    _loadWeightSettings();
 
     if (widget.editInward != null) {
       _populateEditData();
@@ -153,6 +154,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _dcController.dispose();
     _complaintController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadWeightSettings() async {
+    final settings = await _scaleService.loadSettings();
+    setState(() => _enableWeightInput = settings.enabled);
   }
 
   Future<void> _loadUserRole() async {
@@ -336,11 +342,29 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           row.setWeights[setIdx] = weight.toStringAsFixed(3);
         }
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Set weight captured: ${weight.toStringAsFixed(3)} Kg'),
-        ),
-      );
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   SnackBar(
+      //     content: Text('Set weight captured: ${weight.toStringAsFixed(3)} Kg'),
+      //   ),
+      // );
+      
+      // Auto-focus move logic 
+      if (setIdx < row.focusNodes.length - 1) {
+        row.focusNodes[setIdx + 1].requestFocus();
+      } else {
+        // Next Row
+        final dia = _selectedStickerDia;
+        if (dia != null && _stickerData.containsKey(dia)) {
+          final rows = _stickerData[dia]!.rows;
+          final currentIdx = rows.indexOf(row);
+          if (currentIdx != -1 && currentIdx < rows.length - 1) {
+            final nextRow = rows[currentIdx + 1];
+            if (nextRow.focusNodes.isNotEmpty) {
+              nextRow.focusNodes[0].requestFocus();
+            }
+          }
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2075,9 +2099,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () => sync(
-                              () => _enableWeightInput = !_enableWeightInput,
-                            ),
+                            onPressed: () => sync(() async {
+                              _enableWeightInput = !_enableWeightInput;
+                              await _scaleService.updateSettings(
+                                enabled: _enableWeightInput,
+                              );
+                            }),
                             icon: Icon(
                               _enableWeightInput
                                   ? Icons.monitor_weight_outlined
@@ -2467,10 +2494,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildTableInput(row.recWtController, (v) {
-                        row.recWeight = double.tryParse(v) ?? 0;
-                        _updateRowMath(row);
-                      }, key: ValueKey('rec_${row.id}')),
+                      child: _buildTableInput(
+                        row.recWtController,
+                        (v) {
+                          row.recWeight = double.tryParse(v) ?? 0;
+                          _updateRowMath(row);
+                        },
+                        key: ValueKey('rec_${row.id}'),
+                        onTap:
+                            _enableWeightInput
+                                ? () => _captureScaleWeightForRow(row)
+                                : null,
+                      ),
                     ),
                     if (_enableVoiceInput) ...[
                       GestureDetector(
@@ -2498,7 +2533,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       ),
                       const SizedBox(width: 4),
                     ],
-                    if (_enableWeightInput)
+                    if (_enableWeightInput && false) // Hide redundant icon when cell tap is enabled
                       GestureDetector(
                         onTap: () => _captureScaleWeightForRow(row),
                         child: Container(
@@ -2625,6 +2660,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     TextEditingController ctrl,
     Function(String) chg, {
     Key? key,
+    VoidCallback? onTap,
   }) {
     return Container(
       key: key,
@@ -2643,6 +2679,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       ),
       child: TextFormField(
         controller: ctrl,
+        onTap: onTap,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
@@ -2925,6 +2962,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           TextEditingController(text: r.setWeights[i]),
                         );
                       }
+                      if (r.focusNodes.length <= i) {
+                        r.focusNodes.add(FocusNode());
+                      }
                       return _buildGridCell(
                         "",
                         125, // Increased from 100
@@ -2941,6 +2981,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                               _isListening &&
                               _listeningForStickerRowIdx == idx &&
                               _listeningForSetIdx == i,
+                          focusNode: r.focusNodes.length > i ? r.focusNodes[i] : null,
                         ),
                       );
                     }),
@@ -3023,9 +3064,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     VoidCallback? onMicTap,
     VoidCallback? onWeightTap,
     bool isListening = false,
+    FocusNode? focusNode,
   }) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
+      onTap: (_enableWeightInput && onWeightTap != null) ? onWeightTap : null,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
@@ -3058,7 +3102,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       constraints: const BoxConstraints(),
                       splashRadius: 16,
                     ),
-                  if (onWeightTap != null)
+                  if (onWeightTap != null && !_enableWeightInput)
                     IconButton(
                       icon: Icon(
                         Icons.monitor_weight_outlined,
@@ -3683,6 +3727,7 @@ class StickerRow {
   List<String> setWeights = [];
   List<String> setLabels = [];
   List<TextEditingController> controllers = [];
+  List<FocusNode> focusNodes = [];
   TextEditingController? gsmController;
 
   double get totalWeight {
@@ -3696,6 +3741,9 @@ class StickerRow {
   void dispose() {
     for (var c in controllers) {
       c.dispose();
+    }
+    for (var f in focusNodes) {
+      f.dispose();
     }
     gsmController?.dispose();
   }

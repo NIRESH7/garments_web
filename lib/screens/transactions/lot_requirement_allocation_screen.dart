@@ -67,6 +67,7 @@ class _LotRequirementAllocationScreenState
   List<dynamic> _allPlans = [];
   List<String> _masterItemNames = [];
   List<String> _masterSizes = [];
+  List<String> _lotNames = [];
   List<String> _dias = [];
   List<dynamic> _assignments = [];
 
@@ -78,6 +79,7 @@ class _LotRequirementAllocationScreenState
   DateTime _selectedDate = DateTime.now();
 
   // Current item form
+  String? _selectedLotName;
   String? _selectedItem;
   String? _selectedSize;
   String? _selectedDia;
@@ -207,6 +209,7 @@ class _LotRequirementAllocationScreenState
           'item',
         ]);
         _masterSizes = _getValues(categories, ['Size', 'size']);
+        _lotNames = _getValues(categories, ['Lot Name', 'lotName', 'lot name']);
         _assignments = assignments;
         _isLoading = false;
       });
@@ -385,6 +388,7 @@ class _LotRequirementAllocationScreenState
   void _onItemSelected(String? item) {
     setState(() {
       _selectedItem = item;
+      _selectedLotName = null;
       _selectedSize = null;
       _selectedDia = null; // Clear dia to let assignment pick it
       _currentSets = [];
@@ -476,6 +480,10 @@ class _LotRequirementAllocationScreenState
 
     setState(() {
       if (_selectedSize == null) _selectedSize = best['size']?.toString();
+      if (_selectedLotName == null) {
+        final ln = best['lotName']?.toString();
+        if (ln != null && _lotNames.contains(ln)) _selectedLotName = ln;
+      }
       if (_selectedDia == null) {
         final d = best['dia']?.toString();
         if (d != null && _dias.contains(d)) _selectedDia = d;
@@ -546,6 +554,7 @@ class _LotRequirementAllocationScreenState
         dozen,
         _selectedDia!,
         _dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0),
+        lotName: _selectedLotName,
         excludedSets: excludedSets.isEmpty ? null : excludedSets.toList(),
       );
       final List<Map<String, dynamic>> allocations =
@@ -1486,6 +1495,17 @@ class _LotRequirementAllocationScreenState
               hint: 'Select Item',
             ),
             const SizedBox(height: 16),
+            CustomDropdownField(
+              label: 'Lot Name',
+              items: _lotNames,
+              value: _selectedLotName,
+              onChanged: (v) => setState(() {
+                _selectedLotName = v;
+                _currentSets = [];
+              }),
+              hint: 'Select Lot Name',
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -1537,12 +1557,15 @@ class _LotRequirementAllocationScreenState
                 Expanded(
                   child: TextFormField(
                     controller: _dozenWeightCtrl,
+                    onTap: _enableWeightInput
+                        ? () => _fillWeightController(_dozenWeightCtrl)
+                        : null,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
                     decoration: InputDecoration(
                       labelText: 'Dozen Weight (kg)',
-                      suffixIcon: _enableWeightInput
+                      suffixIcon: (_enableWeightInput && false) // Hide redundant icon
                           ? IconButton(
                               icon: Icon(
                                 Icons.monitor_weight_outlined,
@@ -1564,12 +1587,15 @@ class _LotRequirementAllocationScreenState
                 Expanded(
                   child: TextFormField(
                     controller: _foldingWtCtrl,
+                    onTap: _enableWeightInput
+                        ? () => _fillWeightController(_foldingWtCtrl)
+                        : null,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
                     decoration: InputDecoration(
                       labelText: 'Folding Wt (kg)',
-                      suffixIcon: _enableWeightInput
+                      suffixIcon: (_enableWeightInput && false) // Hide redundant icon
                           ? IconButton(
                               icon: Icon(
                                 Icons.monitor_weight_outlined,

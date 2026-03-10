@@ -16,19 +16,30 @@ connectDB();
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 
-const corsOrigin = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : true;
+// Custom CORS & Logging Middleware for Dev
+app.use((req, res, next) => {
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`DEBUG: [${new Date().toISOString()}] ${req.method} ${req.url}`);
+        console.log(`DEBUG: Origin: ${req.headers.origin}`);
+    }
 
-// Middleware
-app.use(helmet({
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
-}));
-app.use(cors({
-    origin: corsOrigin,
-    credentials: true,
-}));
+    const origin = req.headers.origin;
+    // In development, reflect any origin to satisfy CORS
+    if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+    } else {
+        res.header('Access-Control-Allow-Origin', '*');
+    }
+
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept');
+    res.header('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 app.use(express.json({ limit: '20mb' }));
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 

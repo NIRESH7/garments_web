@@ -49,8 +49,13 @@ async function getLotBalance(inw, dia) {
 }
 
 // ─── FIFO Allocator (core logic, returns set rows) ───────────────────────────
-async function runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, excludedSets = [] }) {
-    const inwards = await Inward.find({})
+async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeight, excludedSets = [] }) {
+    const query = {};
+    if (lotName) {
+        query.lotName = { $regex: new RegExp(`^${lotName.trim()}$`, 'i') };
+    }
+
+    const inwards = await Inward.find(query)
         .sort({ inwardDate: 1, createdAt: 1 });
     const normalizedDia = normalizeDia(dia);
 
@@ -268,7 +273,7 @@ const createCuttingOrder = asyncHandler(async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const getFifoAllocation = asyncHandler(async (req, res) => {
-    const { itemName, size, dozen, dia: queryDia, dozenWeight: queryDozWt, excludedSets } = req.query;
+    const { lotName, itemName, size, dozen, dia: queryDia, dozenWeight: queryDozWt, excludedSets } = req.query;
 
     if (!itemName || !size || !dozen) {
         res.status(400);
@@ -276,8 +281,6 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     }
 
     const targetDozen = parseFloat(dozen);
-    console.log('--- GET FIFO ALLOCATION ---');
-    console.log(`Params: Item=${itemName}, Size=${size}, Dozen=${targetDozen}, Dia=${queryDia}, DozWt=${queryDozWt}`);
 
     // Parse excludedSets if provided
     let excludedSetList = [];
@@ -317,10 +320,9 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
     }
 
     const requiredWeight = targetDozen * effDozenWeight;
-    console.log(`Required Weight: ${requiredWeight.toFixed(2)}kg`);
 
-    let { setRows, totalRolls, totalSets, remainingRolls, shortfall } =
-        await runFifo({ dia, effDozenWeight, targetDozen, requiredWeight, excludedSets: excludedSetList });
+    let { setRows, totalRolls, totalSets, remainingRolls, shortfall, avgWpr } =
+        await runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeight, excludedSets: excludedSetList });
 
     // Client Business Rule: If shortfall exists, add extra sets based on KG
     // - If shortfall > 5kg -> add 1 extra set (11 rolls)
@@ -330,9 +332,9 @@ const getFifoAllocation = asyncHandler(async (req, res) => {
         const weightPerSet = (ROLLS_PER_SET * avgWpr);
         const adjustedWeight = (setRows.reduce((sum, r) => sum + r.setWeight, 0)) + (setsToAdd * weightPerSet);
 
-        console.log(`Weight threshold met: Shortfall ${shortfall.toFixed(2)}kg > 5kg. Retry with ${setsToAdd} extra set(s). New Target: ${adjustedWeight.toFixed(2)}kg`);
 
         const retry = await runFifo({
+            lotName,
             dia,
             effDozenWeight,
             targetDozen,

@@ -835,11 +835,14 @@ class MobileApiService {
     }
   }
 
-  Future<List<String>> getLotsFifo({required String dia}) async {
+  Future<List<String>> getLotsFifo({required String dia, String? lotName}) async {
     try {
       final response = await _client.get(
         '${ApiConstants.inward}/fifo',
-        queryParameters: {'dia': dia},
+        queryParameters: {
+          'dia': dia,
+          if (lotName != null) 'lotName': lotName,
+        },
       );
       return List<String>.from(response.data);
     } catch (e) {
@@ -1158,12 +1161,14 @@ class MobileApiService {
     double dozen,
     String dia,
     double dozenWeight, {
+    String? lotName,
     List<int>? excludedSets,
   }) async {
     try {
       final response = await _client.get(
         ApiConstants.fifoAllocation,
         queryParameters: {
+          if (lotName != null) 'lotName': lotName,
           'itemName': itemName,
           'size': size,
           'dozen': dozen,
