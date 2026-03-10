@@ -1940,6 +1940,32 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               tooltip: 'Input Controls',
               onPressed: _openInputControlSheet,
             ),
+            // Tare Button
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ActionChip(
+                avatar: Icon(
+                  Icons.scale_outlined,
+                  size: 16,
+                  color: _tareOffset > 0 ? Colors.green : Colors.grey,
+                ),
+                label: Text(
+                  _tareOffset > 0
+                      ? "TARE: ${_tareOffset.toStringAsFixed(2)}"
+                      : "TARE",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: _tareOffset > 0
+                        ? Colors.green.shade900
+                        : Colors.grey.shade700,
+                  ),
+                ),
+                backgroundColor:
+                    _tareOffset > 0 ? Colors.green.shade50 : Colors.grey.shade50,
+                onPressed: _enableWeightInput ? _setCurrentAsTare : null,
+              ),
+            ),
             // Language Toggle for Voice Input
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
@@ -1952,9 +1978,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       : Colors.blue,
                 ),
                 label: Text(
-                  _selectedVoiceLocale == 'ta_IN'
-                      ? "தமிழ் (TA)"
-                      : "English (EN)",
+                  _selectedVoiceLocale == 'ta_IN' ? "தமிழ் (TA)" : "English (EN)",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -1968,9 +1992,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     : Colors.blue.shade50,
                 onPressed: () {
                   setState(() {
-                    _selectedVoiceLocale = (_selectedVoiceLocale == 'en_US')
-                        ? 'ta_IN'
-                        : 'en_US';
+                    _selectedVoiceLocale =
+                        (_selectedVoiceLocale == 'en_US') ? 'ta_IN' : 'en_US';
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -2099,12 +2122,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () => sync(() async {
-                              _enableWeightInput = !_enableWeightInput;
-                              await _scaleService.updateSettings(
+                            onPressed: () {
+                              sync(() {
+                                _enableWeightInput = !_enableWeightInput;
+                              });
+                              _scaleService.updateSettings(
                                 enabled: _enableWeightInput,
                               );
-                            }),
+                            },
                             icon: Icon(
                               _enableWeightInput
                                   ? Icons.monitor_weight_outlined

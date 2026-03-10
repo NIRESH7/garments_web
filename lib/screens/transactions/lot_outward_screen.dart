@@ -990,8 +990,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 for (int i = 0; i < _selectedSets.length; i++)
                   i + 1: const FixedColumnWidth(150),
                 _selectedSets.length + 1: const FixedColumnWidth(95),
-                _selectedSets.length + 2: const FixedColumnWidth(95),
-                _selectedSets.length + 3: const FixedColumnWidth(100),
+                _selectedSets.length + 2: const FixedColumnWidth(100),
               },
               children: [
                 TableRow(
@@ -1009,7 +1008,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                         alignStart: true,
                       );
                     }),
-                    _buildGridHeaderCell('WT (kg)'),
                     _buildGridHeaderCell('ROLLS'),
                     _buildGridHeaderCell('ROLL WT'),
                   ],
@@ -1060,7 +1058,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                               : null,
                         );
                       }),
-                      _buildGridValueCell(_formatGridNumber(rowWeight)),
                       _buildGridValueCell(rowRolls.toString()),
                       _buildGridValueCell(_formatGridNumber(rowRollWeight)),
                     ],
