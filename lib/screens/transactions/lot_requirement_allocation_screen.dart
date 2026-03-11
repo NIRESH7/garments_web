@@ -667,7 +667,8 @@ class _LotRequirementAllocationScreenState
       final itemName = s['itemName']?.toString() ?? '';
       final size = s['size']?.toString() ?? '';
       final dia = s['dia']?.toString() ?? '';
-      final key = "${itemName}_${size}_${dia}_$setNo";
+      final lotNo = s['lotNo']?.toString() ?? '';
+      final key = "${itemName}_${size}_${dia}_${lotNo}_$setNo";
 
       if (!grouped.containsKey(key)) {
         grouped[key] = Map<String, dynamic>.from(s)
@@ -1579,7 +1580,8 @@ class _LotRequirementAllocationScreenState
                     ),
                     decoration: InputDecoration(
                       labelText: 'Dozen Weight (kg)',
-                      suffixIcon: (_enableWeightInput && false) // Hide redundant icon
+                      suffixIcon:
+                          (_enableWeightInput && false) // Hide redundant icon
                           ? IconButton(
                               icon: Icon(
                                 Icons.monitor_weight_outlined,
@@ -1609,7 +1611,8 @@ class _LotRequirementAllocationScreenState
                     ),
                     decoration: InputDecoration(
                       labelText: 'Folding Wt (kg)',
-                      suffixIcon: (_enableWeightInput && false) // Hide redundant icon
+                      suffixIcon:
+                          (_enableWeightInput && false) // Hide redundant icon
                           ? IconButton(
                               icon: Icon(
                                 Icons.monitor_weight_outlined,
@@ -1744,27 +1747,30 @@ class _LotRequirementAllocationScreenState
       );
     }
 
-    // ── Group raw allocations by setNo ──────────────────────────────────────
-    final Map<int, Map<String, dynamic>> bySet = {};
+    // ── Group raw allocations by lot + setNo (do NOT merge across lots) ────
+    final Map<String, Map<String, dynamic>> bySet = {};
     final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
 
     for (var s in _currentSets) {
       final setNo = _toSetNo(s['setNo']);
       if (setNo == 0) continue;
+      final lotNo = s['lotNo']?.toString() ?? '';
+      final dia = s['dia']?.toString() ?? '-';
+      final setKey = '${lotNo}_${dia}_$setNo';
 
-      if (!bySet.containsKey(setNo)) {
-        bySet[setNo] = {
+      if (!bySet.containsKey(setKey)) {
+        bySet[setKey] = {
           'setNo': setNo,
           'lotName': s['lotName']?.toString() ?? '',
-          'lotNo': s['lotNo']?.toString() ?? '',
-          'dia': s['dia']?.toString() ?? '-',
+          'lotNo': lotNo,
+          'dia': dia,
           'racks': <String>{},
           'pallets': <String>{},
           'totalWeight': 0.0,
         };
       }
 
-      final entry = bySet[setNo]!;
+      final entry = bySet[setKey]!;
       final weight = (s['setWeight'] as num?)?.toDouble() ?? 0.0;
       final rack = s['rackName']?.toString() ?? '';
       final pallet = s['palletNumber']?.toString() ?? '';
@@ -1779,10 +1785,17 @@ class _LotRequirementAllocationScreenState
     }
 
     final rows = bySet.values.toList()
-      ..sort((a, b) => a['setNo'].compareTo(b['setNo']));
+      ..sort((a, b) {
+        final lotCompare = a['lotNo'].toString().compareTo(
+          b['lotNo'].toString(),
+        );
+        if (lotCompare != 0) return lotCompare;
+        final diaCompare = a['dia'].toString().compareTo(b['dia'].toString());
+        if (diaCompare != 0) return diaCompare;
+        return (a['setNo'] as int).compareTo(b['setNo'] as int);
+      });
 
     // ── Helper: format set range, e.g. [1,2,3] → "1 TO 3" / [5] → "5" ──────
-   
 
     return Container(
       width: double.infinity,
