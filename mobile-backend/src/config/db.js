@@ -6,11 +6,19 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI);
+        const options = {
+            serverSelectionTimeoutMS: 30000,
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 30000,
+            retryWrites: true,
+            retryReads: true
+        };
+        const conn = await mongoose.connect(process.env.MONGODB_URI, options);
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
         console.error(`Error: ${error.message}`);
-        process.exit(1);
+        // Instead of exiting, try to reconnect or just wait
+        console.log("Could not connect to MongoDB. Please check your internet connection.");
     }
 };
 

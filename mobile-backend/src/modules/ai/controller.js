@@ -2,16 +2,100 @@ import asyncHandler from 'express-async-handler';
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
 import { File as NodeFile } from 'node:buffer';
-import Inward from '../inventory/inwardModel.js';
-import Outward from '../inventory/outwardModel.js';
-import ProductionOrder from '../production/cuttingOrderModel.js';
-import ItemGroup from '../master/itemGroupModel.js';
-import Party from '../master/partyModel.js';
-import Task from '../task/taskModel.js';
-import CuttingOrder from '../production/cuttingOrderModel.js';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import { generateSql } from './queryEngine.js';
+import { formatResults } from '../../utils/resultFormatter.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 dotenv.config();
+
+// Recursive function to cast ISO date strings to Date objects
+const castDates = (obj) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    for (let key in obj) {
+        if (typeof obj[key] === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(obj[key])) {
+            obj[key] = new Date(obj[key]);
+        } else if (typeof obj[key] === 'object') {
+            castDates(obj[key]);
+        }
+    }
+    return obj;
+};
+
+async function askAiAboutData(question, rows, language) {
+    const dataStr = JSON.stringify(rows).substring(0, 2000);
+    const prompt = `The user asked: "${question}". \nHere is the data found in the database: \n${dataStr}\n\nProvide a short, conversational summary of this data in ${language === 'ta' ? 'Tamil' : 'English'}. Be concise and helpful.`;
+
+    if (process.env.OPENAI_API_KEY) {
+        try {
+            const response = await openai.chat.completions.create({
+                model: "gpt-3.5-turbo",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.4,
+                max_tokens: 512,
+            });
+            return response.choices[0].message.content.trim();
+        } catch (e) {
+            console.error('OpenAI Error in askAiAboutData:', e.message);
+        }
+    }
+
+    // Fallback if no OpenAPI Key or if it fails
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (geminiApiKey) {
+        try {
+            const genAI = new GoogleGenerativeAI(geminiApiKey);
+            const model = genAI.getGenerativeModel({
+                model: 'gemini-1.5-flash',
+                generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
+            });
+            const result = await model.generateContent(prompt);
+            return result.response.text().trim();
+        } catch (e) { }
+    }
+    return `I found ${rows.length} records matching your request.`;
+}
+
+async function askAiFreeForm(question, language) {
+    const prompt = `You are the AI ERP assistant for 'Om Vinayaka' Garments. 
+    The user asked: "${question}". 
+    
+    INSTRUCTIONS:
+    - If the user said a greeting ("hi", "hello", "hii", "hey"), reply with a friendly, welcoming message. Introduce yourself as their Om Vinayaka ERP Assistant and ask how you can help them with their data today.
+    - If they asked a general question about how you work, briefly explain you can search their inwards, outwards, lots, and parties.
+    - If it seems they were searching for something specific but you didn't get any data, suggest they try asking about 'available lots', 'recent inwards', or 'list of parties'.
+    
+    Answer concisely in ${language === 'ta' ? 'Tamil' : 'English'}.`;
+
+    if (process.env.OPENAI_API_KEY) {
+        try {
+            const response = await openai.chat.completions.create({
+                model: "gpt-3.5-turbo",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.6,
+                max_tokens: 512,
+            });
+            return response.choices[0].message.content.trim();
+        } catch (e) {
+            console.error('OpenAI Error in askAiFreeForm:', e.message);
+        }
+    }
+
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (geminiApiKey) {
+        try {
+            const genAI = new GoogleGenerativeAI(geminiApiKey);
+            const model = genAI.getGenerativeModel({
+                model: 'gemini-1.5-flash',
+                generationConfig: { temperature: 0.6, maxOutputTokens: 512 }
+            });
+            const result = await model.generateContent(prompt);
+            return result.response.text().trim();
+        } catch (e) { }
+    }
+    return "Hello! I am your Om Vinayaka AI Assistant. Ask me anything about your business data.";
+}
 
 // Compatibility fallback for Node 18 runtimes.
 if (typeof globalThis.File === 'undefined') {
@@ -34,48 +118,48 @@ export const chatWithAI = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: 'Please provide a message' });
     }
 
-    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'dummy_key') {
-        return await handleRuleBasedChat(message, res, language);
-    }
-
     try {
-        // Get context info for the AI - PASS MESSAGE for keyword search
-        const context = await getDBContext(message);
+        // 1. AI Intent/Query Generation
+        const aiResult = await generateSql(message).catch(() => ({ strategy: 'chat' }));
 
-        const prompt = `
-            You are a highly intelligent ERP Assistant for 'Om Vinayaka' Garments. 
-            
-            CRITICAL SEARCH INSTRUCTIONS:
-            1. The user will ask questions about their business data. You MUST search the DATABASE CONTEXT below thoroughly to find the answer.
-            2. Handle spelling mistakes gracefully (e.g., 'availabel' -> 'available', 'qiuestion' -> 'question', 'srecah' -> 'search').
-            3. Search through 'found_specific_data' first if the user asked about a specific Lot, DC, or Party.
-            4. If the user asks for:
-               - "Plans": Search in 'cutting_plans'.
-               - "Tasks": Search in 'active_tasks'.
-               - "Racks": Search in 'available_racks'.
-               - "Parties/Clients": Search in 'party_list'.
-               - "Inwards/Lots": Search in 'recent_inwards' and 'counts'.
-            5. Provide a friendly, detailed answer based ONLY on the data below. Be extremely precise.
-            
-            DATABASE CONTEXT:
-            ${JSON.stringify(context)}
+        let rows = [];
+        if (aiResult.mongoQuery) {
+            try {
+                const { collection, type, query: mQuery, projection } = aiResult.mongoQuery;
+                const db = mongoose.connection.db;
+                const finalQuery = castDates(mQuery);
 
-            USER MESSAGE: "${message}"
-            RESPONSE LANGUAGE: ${language === 'ta' ? 'Tamil' : 'English'}
-        `;
+                if (type === 'find') {
+                    let cursor = db.collection(collection).find(finalQuery);
+                    if (projection && Object.keys(projection).length > 0) {
+                        cursor = cursor.project(projection);
+                    }
+                    rows = await cursor.limit(50).toArray();
+                } else if (type === 'aggregate') {
+                    if (projection && Object.keys(projection).length > 0) {
+                        finalQuery.push({ $project: projection });
+                    }
+                    rows = await db.collection(collection).aggregate(finalQuery).toArray();
+                }
+            } catch (e) {
+                console.error('Data Exec Error:', e.message);
+            }
+        }
 
-        const response = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 800,
-        });
+        // 2. Response Generation
+        let responseText;
+        if (rows.length > 0) {
+            const aiSummary = await askAiAboutData(message, rows, language);
+            responseText = `${aiSummary}\n\n${formatResults(rows)}`;
+        } else {
+            responseText = await askAiFreeForm(message, language);
+        }
 
-        const aiMessage = response.choices[0].message.content;
-        res.json({ text: aiMessage });
+        res.json({ text: responseText, data: rows, strategy: aiResult.strategy });
 
     } catch (error) {
         console.error('AI Error:', error);
-        await handleRuleBasedChat(message, res, language);
+        res.status(500).json({ message: 'AI processing failed' });
     }
 });
 
@@ -117,125 +201,4 @@ export const transcribeAudio = asyncHandler(async (req, res) => {
     }
 });
 
-async function getDBContext(userMessage = "") {
-    try {
-        // Fetch summary stats
-        const [totalInwards, totalOutwards, totalOrders, totalParties, totalTasks] = await Promise.all([
-            Inward.countDocuments(),
-            Outward.countDocuments(),
-            ProductionOrder.countDocuments(),
-            Party.countDocuments(),
-            Task.countDocuments()
-        ]);
-
-        // Smart Search: Look for specific keywords in message
-        let foundSpecificData = {};
-        const upperMsg = userMessage.toUpperCase();
-
-        // 1. Search for Lot Numbers (e.g. LOT-201)
-        const lotMatch = upperMsg.match(/LOT-[\w-]+/);
-        if (lotMatch) {
-            const lotNo = lotMatch[0];
-            const foundInward = await Inward.findOne({ lotNo: { $regex: lotNo, $options: 'i' } });
-            if (foundInward) foundSpecificData.lot_details = foundInward;
-        }
-
-        // 2. Search for DC Numbers (e.g. DC-201)
-        const dcMatch = upperMsg.match(/DC-[\w-]+/);
-        if (dcMatch) {
-            const foundOutward = await Outward.findOne({ dcNo: { $regex: dcMatch[0], $options: 'i' } });
-            if (foundOutward) foundSpecificData.dc_details = foundOutward;
-        }
-
-        // 3. Search for parties
-        const parties = await Party.find({}, 'name process mobileNumber');
-        for (const p of parties) {
-            if (upperMsg.includes(p.name.toUpperCase())) {
-                foundSpecificData.mentioned_party = p;
-                break;
-            }
-        }
-
-        // Get Master Data
-        const itemGroups = await ItemGroup.find({}, 'groupName itemNames colours gsm');
-
-        // Get Plans/Orders
-        const cuttingPlans = await CuttingOrder.find({}, 'planId planName planType planPeriod lotAllocations').limit(10);
-
-        // Extract unique rack names from plans
-        const rackNames = new Set();
-        cuttingPlans.forEach(plan => {
-            plan.lotAllocations.forEach(alloc => {
-                if (alloc.rackName) rackNames.add(alloc.rackName);
-            });
-        });
-
-        // Get Tasks
-        const tasks = await Task.find({}, 'title status priority description assignedTo').limit(10);
-
-        // Get recent activity
-        const recentInwards = await Inward.find({}).sort({ createdAt: -1 }).limit(5);
-
-        return {
-            system: "Om Vinayaka ERP",
-            counts: {
-                inwards: totalInwards,
-                outwards: totalOutwards,
-                production_plans: totalOrders,
-                parties: totalParties,
-                pending_tasks: totalTasks
-            },
-            found_specific_data: foundSpecificData,
-            available_racks: Array.from(rackNames),
-            cutting_plans: cuttingPlans.map(p => ({
-                id: p.planId,
-                name: p.planName,
-                type: p.planType,
-                period: p.planPeriod,
-                racks_used: p.lotAllocations.map(a => a.rackName).filter(Boolean)
-            })),
-            active_tasks: tasks.map(t => ({
-                name: t.title,
-                status: t.status,
-                priority: t.priority
-            })),
-            inventory_summary: itemGroups.map(g => ({
-                category: g.groupName,
-                colors: g.colours,
-                gsm: g.gsm
-            })),
-            party_list: parties.map(p => p.name + ' (' + p.process + ')'),
-            recent_inwards: recentInwards.map(i => i.lotNo + ' from ' + i.fromParty)
-        };
-    } catch (err) {
-        console.error('Context Fetch Error:', err);
-        return { error: "Could not fetch detailed context" };
-    }
-}
-
-async function handleRuleBasedChat(message, res, language) {
-    const lowerMsg = message.toLowerCase();
-    let responseText = "";
-
-    const inwardCount = await Inward.countDocuments().catch(() => 0);
-
-    if (language === 'ta') {
-        if (lowerMsg.includes('வணக்கம்') || lowerMsg.includes('hi') || lowerMsg.includes('hello')) {
-            responseText = "வணக்கம்! நான் உங்கள் ERP உதவியாளர். உங்களுக்கு எப்படி உதவ முடியும்?";
-        } else if (lowerMsg.includes('inward') || lowerMsg.includes('இன்வர்ட்')) {
-            responseText = `மொத்த இன்வர்ட் எண்ணிக்கை: ${inwardCount}.`;
-        } else {
-            responseText = "மன்னிக்கவும், AI சேவை வரம்புக்குட்பட்டது. இன்வர்ட் பற்றி கேளுங்கள்.";
-        }
-    } else {
-        if (lowerMsg.includes('hi') || lowerMsg.includes('hello')) {
-            responseText = "Hello! I am your ERP assistant. How can I help you today?";
-        } else if (lowerMsg.includes('inward')) {
-            responseText = `Total Inwards: ${inwardCount}.`;
-        } else {
-            responseText = "Basic mode active. Try asking 'total inwards'.";
-        }
-    }
-
-    res.json({ text: responseText, note: "Rule-based fallback." });
-}
+// Transcription and other helpers remain as is...
