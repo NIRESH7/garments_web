@@ -1931,11 +1931,23 @@ class _LotRequirementAllocationScreenState
                   ),
                 ),
                 DataCell(
-                  Text(
-                    'Set $setNo',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.teal.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      'Set $setNo',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
                     ),
                   ),
                 ),
@@ -2347,13 +2359,6 @@ class _LotRequirementAllocationScreenState
       return g;
     }
 
-    // ── 3. Helper: "1 TO 3" or "5" ──────────────────────────────────────────
-    String setRange(List<int> nos) {
-      if (nos.isEmpty) return '-';
-      nos.sort();
-      return nos.length == 1 ? '${nos.first}' : '${nos.first} TO ${nos.last}';
-    }
-
     // ── 4. Column header style ───────────────────────────────────────────────
     const hStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 11);
     const dStyle = TextStyle(fontSize: 11);
@@ -2388,7 +2393,7 @@ class _LotRequirementAllocationScreenState
           final dataRows = lots.asMap().entries.map((e) {
             final i = e.key;
             final lot = e.value;
-            final setNos = lot['setNos'] as List<int>;
+            final setNos = (lot['setNos'] as List<int>)..sort();
             final racks = (lot['racks'] as Set<String>).toList()..sort();
             final pallets = (lot['pallets'] as Set<String>).toList()..sort();
             final wt = lot['totalWeight'] as double;
@@ -2443,7 +2448,7 @@ class _LotRequirementAllocationScreenState
                 ),
                 DataCell(
                   Text(
-                    setRange(setNos),
+                    setNos.isEmpty ? '-' : setNos.join(', '),
                     style: dStyle.copyWith(fontWeight: FontWeight.w500),
                   ),
                 ),
