@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:permission_handler/permission_handler.dart';
 import '../../dialogs/signature_pad_dialog.dart';
 import '../../core/storage/storage_service.dart';
 import '../../widgets/custom_dropdown_field.dart';
@@ -76,11 +78,15 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   double _tareOffset = 0.0;
   String? _fifoRecommendedLotNo;
   String? _lastFifoWarnKey;
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  String _selectedVoiceLocale = 'en_US';
 
   @override
   void initState() {
     super.initState();
     _loadUserRole();
+    _initSpeech();
     if (widget.editOutward != null) {
       _isEditMode = true;
       _loadEditData();
@@ -94,6 +100,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   @override
   void dispose() {
     _scannerController?.dispose();
+    _speech.stop();
     _vehicleController.dispose();
     super.dispose();
   }
@@ -101,6 +108,87 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   Future<void> _loadUserRole() async {
     final role = await StorageService().getRole();
     setState(() => _userRole = role);
+  }
+
+  Future<void> _initSpeech() async {
+    await _speech.initialize(
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          if (mounted) setState(() => _isListening = false);
+        }
+      },
+      onError: (error) {
+        if (mounted) setState(() => _isListening = false);
+      },
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _startVoiceInputForSetWeight(
+    Map<String, dynamic> set,
+    String colour,
+  ) async {
+    if (_isListening) {
+      _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    var status = await Permission.microphone.status;
+    if (!status.isGranted) {
+      status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        _showError('Microphone permission is required for voice input.');
+        return;
+      }
+    }
+
+    if (!_speech.isAvailable) {
+      _showError('Voice recognition not available on this device.');
+      return;
+    }
+
+    setState(() => _isListening = true);
+
+    _speech.listen(
+      onResult: (result) {
+        final words = result.recognizedWords
+            .toLowerCase()
+            .replaceAll(',', '.')
+            .replaceAll('point', '.')
+            .replaceAll('dot', '.')
+            .replaceAll('decimal', '.')
+            .replaceAll('புள்ளி', '.');
+
+        final regExp = RegExp(r'\d+\.?\d*');
+        final match = regExp.firstMatch(words);
+        if (match != null) {
+          final value = match.group(0)!;
+          setState(() {
+            final parsed = double.tryParse(value) ?? 0.0;
+            final target = _ensureSetColourEntry(set, colour);
+            target['weight'] = parsed;
+            target['roll_weight'] = parsed;
+            target['isChecked'] = parsed > 0;
+            final controller =
+                target['controller'] as TextEditingController?;
+            if (controller != null) {
+              controller.text =
+                  parsed == 0 ? '' : _formatGridNumber(parsed);
+            }
+            _recalculateSetTotalWeight(set);
+          });
+        }
+
+        if (result.finalResult) {
+          setState(() => _isListening = false);
+        }
+      },
+      listenFor: const Duration(seconds: 10),
+      pauseFor: const Duration(seconds: 3),
+      partialResults: true,
+      localeId: _selectedVoiceLocale,
+    );
   }
 
   Future<void> _loadInitialData() async {
@@ -1049,6 +1137,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                         final entry = _findSetColourEntry(set, col);
                         final value =
                             (entry?['roll_weight'] as num?)?.toDouble() ?? 0.0;
+                        final controller =
+                            entry?['controller'] as TextEditingController?;
 
                         return _buildSetWeightInput(
                           value,
@@ -1059,23 +1149,18 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                               target['weight'] = parsed;
                               target['roll_weight'] = parsed;
                               target['isChecked'] = parsed > 0;
+                              (target['controller'] as TextEditingController?)
+                                  ?.text = v;
                               _recalculateSetTotalWeight(set);
                             });
                           },
                           onMicTap: _enableVoiceInput
-                              ? () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Voice fill will be added here.',
-                                      ),
-                                    ),
-                                  );
-                                }
+                              ? () => _startVoiceInputForSetWeight(set, col)
                               : null,
                           onWeightTap: _enableWeightInput
                               ? () => _captureScaleWeightForColour(set, col)
                               : null,
+                          controller: controller,
                         );
                       }),
                       _buildGridValueCell(rowRolls.toString()),
@@ -1148,12 +1233,18 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       if (col is Map<String, dynamic>) {
         final name = col['colour']?.toString().trim().toLowerCase() ?? '';
         if (name == colour.trim().toLowerCase()) {
+          col['controller'] ??= TextEditingController(
+            text: (col['roll_weight'] as num?)?.toString() ?? '',
+          );
           return col;
         }
       } else if (col is Map) {
         final name = col['colour']?.toString().trim().toLowerCase() ?? '';
         if (name == colour.trim().toLowerCase()) {
           final fixed = Map<String, dynamic>.from(col);
+          fixed['controller'] ??= TextEditingController(
+            text: (fixed['roll_weight'] as num?)?.toString() ?? '',
+          );
           setColours[i] = fixed;
           return fixed;
         }
@@ -1166,6 +1257,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       'roll_weight': 0.0,
       'no_of_rolls': 0,
       'isChecked': false,
+      'controller': TextEditingController(),
     };
     setColours.add(newEntry);
     set['colours'] = setColours;
@@ -1349,6 +1441,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     required Function(String) onChanged,
     VoidCallback? onMicTap,
     VoidCallback? onWeightTap,
+    TextEditingController? controller,
   }) {
     return Container(
       padding: const EdgeInsets.all(4),
@@ -1356,7 +1449,10 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         border: Border(right: BorderSide(color: Colors.grey.shade300)),
       ),
       child: TextFormField(
-        initialValue: value == 0 ? '' : _formatGridNumber(value),
+        controller: controller,
+        initialValue: controller == null
+            ? (value == 0 ? '' : _formatGridNumber(value))
+            : null,
         onChanged: onChanged,
         onTap: (_enableWeightInput && onWeightTap != null) ? onWeightTap : null,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
