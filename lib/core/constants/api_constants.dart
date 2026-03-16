@@ -47,6 +47,8 @@ class ApiConstants {
 
   // Production
   static const String assignments = '/production/assignments';
+  static const String cuttingMaster = '/production/cutting-master';
+  static const String accessoriesMaster = '/production/accessories-master';
   static const String cuttingOrders = '/production/cutting-orders';
   static const String fifoAllocation =
       '/production/cutting-orders/fifo-allocation';

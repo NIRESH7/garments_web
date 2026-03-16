@@ -51,7 +51,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
 // @route   POST /api/master/categories/:id/values
 // @access  Private/Admin
 const addCategoryValue = asyncHandler(async (req, res) => {
-    const { name, photo, gsm } = req.body;
+    const { name, photo, gsm, knittingDia, cuttingDia } = req.body;
 
     // Use lean() to get a plain JavaScript object, avoiding Mongoose document validation issues on load
     const category = await Category.findById(req.params.id).lean();
@@ -62,15 +62,13 @@ const addCategoryValue = asyncHandler(async (req, res) => {
         // Migration: Robustly Convert ALL values to objects
         values = values.map(v => {
             if (typeof v === 'string') {
-                return { name: v, photo: null, gsm: null };
+                return { name: v, photo: null, gsm: null, knittingDia: null, cuttingDia: null };
             }
-            // Handle edge case where v might be an object but missing 'name' or be something else
             if (v && typeof v === 'object' && !v.name) {
-                // Try to fallback to string representation if it has meaningful data, else ignore
-                return { name: String(v), photo: null, gsm: null };
+                return { name: String(v), photo: null, gsm: null, knittingDia: null, cuttingDia: null };
             }
             return v;
-        }).filter(v => v && v.name); // Filter out any nulls or invalid objects
+        }).filter(v => v && v.name);
 
         // Case-insensitive check on the cleaned array
         const exists = values.some(v => v.name.toLowerCase() === name.toLowerCase());
@@ -80,7 +78,7 @@ const addCategoryValue = asyncHandler(async (req, res) => {
             throw new Error('Value already exists in this category');
         }
 
-        values.push({ name, photo, gsm });
+        values.push({ name, photo, gsm, knittingDia: knittingDia || null, cuttingDia: cuttingDia || null });
 
         // Update the document directly with the sanitized array
         const updatedCategory = await Category.findByIdAndUpdate(

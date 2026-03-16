@@ -18,6 +18,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   final _api = MobileApiService();
   final _valueController = TextEditingController();
   final _gsmController = TextEditingController();
+  final _knittingDiaController = TextEditingController(); // for Dia category
+  final _cuttingDiaController = TextEditingController(); // for Dia category
   XFile? _selectedXFile;
   final ImagePicker _picker = ImagePicker();
 
@@ -37,6 +39,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     'Rack Name',
     'Pallet No',
     'Accessories',
+    'Accessories Group',
   ];
 
   String? _selectedCategoryId;
@@ -70,6 +73,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         'Efficiency': ['Efficiency', 'Eff', 'efficiency'],
         'Rack Name': ['Rack Name', 'Rack', 'racks'],
         'Pallet No': ['Pallet No', 'Pallet', 'pallets'],
+        'Accessories Group': ['Accessories Group', 'Accessory Group', 'accessories group', 'accessory group'],
       };
 
       for (var name in _staticCategoryNames) {
@@ -215,14 +219,18 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
       final success = await _api.addCategoryValue(
         categoryId,
-        _valueController.text,
+        _valueController.text.trim(),
         photo: photoUrl,
-        gsm: _isColoursCategory ? _gsmController.text : null,
+        gsm: _isColoursCategory ? _gsmController.text.trim() : null,
+        knittingDia: _isDiaCategory ? _knittingDiaController.text.trim() : null,
+        cuttingDia: _isDiaCategory ? _cuttingDiaController.text.trim() : null,
       );
 
       if (success) {
         _valueController.clear();
         _gsmController.clear();
+        _knittingDiaController.clear();
+        _cuttingDiaController.clear();
         setState(() => _selectedXFile = null);
         await _loadCategories();
         _loadValues();
@@ -294,9 +302,9 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _valueController,
-                    decoration: const InputDecoration(
-                      labelText: 'New Value',
-                      hintText: 'Enter value to add',
+                    decoration: InputDecoration(
+                      labelText: _isDiaCategory ? 'Dia Name' : 'New Value',
+                      hintText: _isDiaCategory ? 'Enter Dia (e.g. 60)' : 'Enter value to add',
                     ),
                   ),
                   if (_isColoursCategory || _isAccessoriesCategory) ...[
@@ -351,6 +359,26 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                           label: const Text('Pick/Take Photo'),
                         ),
                       ],
+                    ),
+                  ],
+                  if (_isDiaCategory) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _knittingDiaController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Knitting Dia',
+                        hintText: 'Enter Knitting Dia (e.g. 60)',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _cuttingDiaController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Cutting Dia',
+                        hintText: 'Enter Cutting Dia (e.g. 62)',
+                      ),
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -422,11 +450,29 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                                       ? _colorCircle(valueName)
                                       : const Icon(Icons.inventory_2, color: Colors.blueGrey)
                             : null,
-                        title: Text(valueName),
+                        title: Text(_isDiaCategory ? 'Dia: $valueName' : valueName),
                         subtitle:
                             (isColoursCategory && gsm != null && gsm.isNotEmpty)
                             ? Text('GSM: $gsm')
-                            : null,
+                            : (() {
+                                final dynamic kDiaRaw = valueData is Map
+                                    ? valueData['knittingDia']
+                                    : null;
+                                final dynamic cDiaRaw = valueData is Map
+                                    ? valueData['cuttingDia']
+                                    : null;
+                                final String kDia = kDiaRaw?.toString() ?? '';
+                                final String cDia = cDiaRaw?.toString() ?? '';
+                                
+                                List<String> details = [];
+                                if (kDia.isNotEmpty) details.add('K.Dia: $kDia');
+                                if (cDia.isNotEmpty) details.add('C.Dia: $cDia');
+                                
+                                if (details.isNotEmpty) {
+                                  return Text(details.join(' | '));
+                                }
+                                return null;
+                              })(),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _delete(valueName),
@@ -466,6 +512,11 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       orElse: () => {'name': ''},
     );
     return cat['name'] as String? ?? '';
+  }
+
+  bool get _isDiaCategory {
+    final name = _selectedCategoryName.toLowerCase().trim();
+    return name == 'dia';
   }
 
   bool get _isColoursCategory {

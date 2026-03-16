@@ -19,6 +19,20 @@ import {
     deleteLotAllocation,
     updateLotAllocation,
 } from './cuttingOrderController.js';
+import {
+    createCuttingMaster,
+    getCuttingMasters,
+    getCuttingMasterById,
+    updateCuttingMaster,
+    deleteCuttingMaster,
+} from './cuttingMasterController.js';
+import {
+    createAccessoriesMaster,
+    getAccessoriesMasters,
+    getAccessoriesMasterById,
+    updateAccessoriesMaster,
+    deleteAccessoriesMaster,
+} from './accessoriesMasterController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -53,6 +67,30 @@ router
     .put(protect, updateCuttingOrder)
     .delete(protect, deleteCuttingOrder);
 
+
+// Cutting Master routes
+router
+    .route('/cutting-master')
+    .post(protect, ...createCuttingMaster)
+    .get(protect, getCuttingMasters);
+
+router
+    .route('/cutting-master/:id')
+    .get(protect, getCuttingMasterById)
+    .put(protect, ...updateCuttingMaster)
+    .delete(protect, deleteCuttingMaster);
+
+// Accessories Master routes
+router
+    .route('/accessories-master')
+    .post(protect, createAccessoriesMaster)
+    .get(protect, getAccessoriesMasters);
+
+router
+    .route('/accessories-master/:id')
+    .get(protect, getAccessoriesMasterById)
+    .put(protect, updateAccessoriesMaster)
+    .delete(protect, deleteAccessoriesMaster);
 
 export default router;
 

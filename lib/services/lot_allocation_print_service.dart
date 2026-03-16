@@ -612,4 +612,92 @@ class LotAllocationPrintService {
       name: 'SetLevel_Allocation_$planId',
     );
   }
+
+  Future<void> printCuttingMasterDetail(Map<String, dynamic> entry) async {
+    final pdf = pw.Document();
+    final font = pw.Font.helvetica();
+    final boldFont = pw.Font.helveticaBold();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            PrintUtils.buildCompanyHeader(boldFont, font),
+            pw.SizedBox(height: 20),
+            pw.Center(
+              child: pw.Text(
+                'CUTTING MASTER DETAIL REPORT',
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 16,
+                  decoration: pw.TextDecoration.underline,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 15),
+            pw.Table(
+              border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey300),
+              children: [
+                _buildTableRow('Item Name', entry['itemName'] ?? '-', boldFont, font),
+                _buildTableRow('Size', entry['size'] ?? '-', boldFont, font),
+                _buildTableRow('Lot Name', entry['lotName'] ?? '-', boldFont, font),
+                _buildTableRow('Dia Name', entry['diaName'] ?? '-', boldFont, font),
+                _buildTableRow('Knitting Dia', entry['knittingDia'] ?? '-', boldFont, font),
+                _buildTableRow('Cutting Dia', entry['cuttingDia'] ?? '-', boldFont, font),
+                _buildTableRow('Dozen Weight', entry['dozenWeight']?.toString() ?? '-', boldFont, font),
+                _buildTableRow('Efficiency %', entry['efficiency']?.toString() ?? '-', boldFont, font),
+                _buildTableRow('Waste %', entry['wastePercentage']?.toString() ?? '-', boldFont, font),
+                _buildTableRow('Folding', entry['folding']?.toString() ?? '-', boldFont, font),
+                _buildTableRow('Lay Pcs', entry['layPcs']?.toString() ?? '-', boldFont, font),
+              ],
+            ),
+            pw.SizedBox(height: 15),
+            pw.Text('Instructions:', style: pw.TextStyle(font: boldFont, fontSize: 12)),
+            pw.SizedBox(height: 4),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400)),
+              child: pw.Text(entry['instructionText'] ?? 'No text instruction provided.', style: pw.TextStyle(font: font, fontSize: 10)),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text('Pattern Details:', style: pw.TextStyle(font: boldFont, fontSize: 12)),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Party Name', 'Front (Mea)', 'Back (Mea)', 'Finishing'],
+              headerStyle: pw.TextStyle(font: boldFont, fontSize: 9),
+              cellStyle: pw.TextStyle(font: font, fontSize: 8),
+              data: (entry['patternDetails'] as List? ?? []).map((p) => [
+                p['partyName'] ?? '-',
+                p['frontMeasurement'] ?? '-',
+                p['backMeasurement'] ?? '-',
+                p['finishingMeasurement'] ?? '-',
+              ]).toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'CuttingMaster_${entry['itemName']}_${DateTime.now().millisecondsSinceEpoch}',
+    );
+  }
+
+  pw.TableRow _buildTableRow(String label, String value, pw.Font labelFont, pw.Font valueFont) {
+    return pw.TableRow(
+      children: [
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(8),
+          child: pw.Text(label, style: pw.TextStyle(font: labelFont, fontSize: 10)),
+        ),
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(8),
+          child: pw.Text(value, style: pw.TextStyle(font: valueFont, fontSize: 10)),
+        ),
+      ],
+    );
+  }
 }

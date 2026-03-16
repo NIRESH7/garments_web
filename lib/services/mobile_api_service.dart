@@ -617,6 +617,180 @@ class MobileApiService {
     }
   }
 
+  // --- Cutting Master ---
+  Future<List<dynamic>> getCuttingMasters() async {
+    try {
+      final response = await _client.get(ApiConstants.cuttingMaster);
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCuttingMasterById(String id) async {
+    try {
+      final response = await _client.get('${ApiConstants.cuttingMaster}/$id');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> createCuttingMaster(
+      Map<String, dynamic> data) async {
+    try {
+      final formData = FormData();
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          final String fName = file.name ?? '';
+          final String fileName = fName.isNotEmpty
+              ? fName
+              : (file.path ?? '').split('/').last;
+          formData.files.add(MapEntry(
+            entry.key,
+            MultipartFile.fromBytes(
+              bytes,
+              filename: fileName,
+              contentType: _inferMediaType(fileName),
+            ),
+          ));
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields
+              .add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          final value = entry.value.toString();
+          if (_isMediaField(entry.key) && _looksLikeLocalFilePath(value)) {
+            continue;
+          }
+          formData.fields.add(MapEntry(entry.key, value));
+        }
+      }
+      final response = await _client.post(
+        ApiConstants.cuttingMaster,
+        data: formData,
+      );
+      if (response.statusCode == 201) return response.data;
+      return null;
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data != null && e.response?.data is Map
+          ? (e.response?.data['message'] ?? e.message)
+          : e.message;
+      throw Exception(errorMsg);
+    } catch (e) {
+      throw Exception('Failed to create cutting master: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateCuttingMaster(
+      String id, Map<String, dynamic> data) async {
+    try {
+      final formData = FormData();
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          final fileName = file.name.isNotEmpty
+              ? file.name
+              : file.path.split('/').last;
+          formData.files.add(MapEntry(
+            entry.key,
+            MultipartFile.fromBytes(
+              bytes,
+              filename: fileName,
+              contentType: _inferMediaType(fileName),
+            ),
+          ));
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields
+              .add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          final value = entry.value.toString();
+          if (_isMediaField(entry.key) && _looksLikeLocalFilePath(value)) {
+            continue;
+          }
+          formData.fields.add(MapEntry(entry.key, value));
+        }
+      }
+      final response = await _client.put(
+        '${ApiConstants.cuttingMaster}/$id',
+        data: formData,
+      );
+      if (response.statusCode == 200) return response.data;
+      return null;
+    } on DioException catch (e) {
+      final errorMsg = e.response?.data != null && e.response?.data is Map
+          ? (e.response?.data['message'] ?? e.message)
+          : e.message;
+      throw Exception(errorMsg);
+    } catch (e) {
+      throw Exception('Failed to update cutting master: $e');
+    }
+  }
+
+  Future<bool> deleteCuttingMaster(String id) async {
+    try {
+      final response =
+          await _client.delete('${ApiConstants.cuttingMaster}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // --- Accessories Master ---
+  Future<List<dynamic>> getAccessoriesMasters() async {
+    try {
+      final response = await _client.get(ApiConstants.accessoriesMaster);
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAccessoriesMasterById(String id) async {
+    try {
+      final response = await _client.get('${ApiConstants.accessoriesMaster}/$id');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> createAccessoriesMaster(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(
+        ApiConstants.accessoriesMaster,
+        data: data,
+      );
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> updateAccessoriesMaster(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.accessoriesMaster}/$id',
+        data: data,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteAccessoriesMaster(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.accessoriesMaster}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // --- Master ---
   Future<List<dynamic>> getParties() async {
     try {
@@ -701,11 +875,19 @@ class MobileApiService {
     String name, {
     String? photo,
     String? gsm,
+    String? knittingDia,
+    String? cuttingDia,
   }) async {
     try {
       final response = await _client.post(
         '${ApiConstants.categories}/$categoryId/values',
-        data: {'name': name, 'photo': photo, 'gsm': gsm},
+        data: {
+          'name': name,
+          'photo': photo,
+          'gsm': gsm,
+          'knittingDia': knittingDia,
+          'cuttingDia': cuttingDia,
+        },
       );
       return response.statusCode == 201;
     } on DioException catch (e) {
