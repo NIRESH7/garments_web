@@ -400,7 +400,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
               Expanded(
                 child: _buildSmallInfo(
                   'Del. Wt',
-                  '${FormatUtils.formatWeight(entry['delWt'])} Kg', // Corrected key
+                  '${FormatUtils.formatWeight(entry['delivWt'])} Kg', // Corrected key
                 ),
               ),
               Expanded(
@@ -462,6 +462,7 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
                       ...rows.map((r) {
                         final rMap = r as Map<String, dynamic>;
                         final colour = rMap['colour']?.toString() ?? '-';
+                        final stickerRollNo = rMap['rollNo']?.toString() ?? '';
                         final weights =
                             (rMap['setWeights'] as List<dynamic>? ?? [])
                                 .where(
@@ -475,10 +476,13 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
                             ? '-'
                             : weights.join(', ');
                         final totalWt = rMap['totalWeight']?.toString() ?? '-';
+                        final displayLabel = stickerRollNo.isNotEmpty 
+                            ? 'Roll $stickerRollNo - $colour ($totalWt)'
+                            : 'Colour $colour ($totalWt)';
                         return Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: _buildSmallInfo(
-                            'Colour $colour ($totalWt)',
+                            displayLabel,
                             weightsText,
                           ),
                         );

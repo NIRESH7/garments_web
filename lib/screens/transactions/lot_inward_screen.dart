@@ -511,6 +511,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             diaData.rows = (storage['rows'] as List).map((r) {
               final sRow = StickerRow();
               sRow.colour = r['colour'];
+              sRow.rollNo = r['rollNo'] ?? '';
               sRow.gsm = r['gsm']?.toString();
               sRow.setWeights = List<String>.from(r['setWeights'] ?? []);
               final labels = List<String>.from(r['setLabels'] ?? []);
@@ -520,7 +521,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     ? labels[i].trim()
                     : (i + 1).toString(),
               );
-              // Initialize controller right away if gsm exists
+              // Initialize controllers
+              sRow.rollNoController = TextEditingController(text: sRow.rollNo);
               if (sRow.gsm != null) {
                 sRow.gsmController = TextEditingController(text: sRow.gsm);
               }
@@ -970,6 +972,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   .map(
                     (r) => {
                       "colour": r.colour,
+                      "rollNo": r.rollNo,
                       "gsm": r.gsm,
                       "setWeights": r.setWeights,
                       "setLabels": _normalizedSetLabels(r),
@@ -3004,6 +3007,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               child: Row(
                 children: [
                   _buildGridCell("S.NO", 50),
+                  _buildGridCell("Roll No", 100),
                   _buildGridCell("Colour", 120),
                   _buildGridCell("GSM", 80),
                   ...List.generate(
@@ -3034,6 +3038,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 child: Row(
                   children: [
                     _buildGridCell('${idx + 1}', 50),
+                    _buildGridCell(
+                      "",
+                      100,
+                      child: _buildTableInputText(r.rollNoController, (v) {
+                        r.rollNo = v;
+                      }),
+                    ),
                     _buildGridCell(
                       "",
                       120,
@@ -3850,11 +3861,17 @@ class InwardRow {
 class StickerRow {
   String? colour;
   String? gsm;
+  String rollNo = "";
   List<String> setWeights = [];
   List<String> setLabels = [];
   List<TextEditingController> controllers = [];
   List<FocusNode> focusNodes = [];
   TextEditingController? gsmController;
+  late TextEditingController rollNoController;
+
+  StickerRow() {
+    rollNoController = TextEditingController();
+  }
 
   double get totalWeight {
     final sum = setWeights.fold(0.0, (sum, w) {
@@ -3872,6 +3889,7 @@ class StickerRow {
       f.dispose();
     }
     gsmController?.dispose();
+    rollNoController.dispose();
   }
 }
 

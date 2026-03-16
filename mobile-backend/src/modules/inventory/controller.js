@@ -638,7 +638,6 @@ const upsertInwardEntry = async ({ userId, body, files }) => {
                     (entry) => entry.dia?.toString().trim() === newEntry.dia?.toString().trim()
                 );
                 if (existingEntry) {
-                    console.log(`  Updating existing DIA: ${newEntry.dia}`);
                     existingEntry.roll = (Number(existingEntry.roll) || 0) + (Number(newEntry.roll) || 0);
                     existingEntry.sets = (Number(existingEntry.sets) || 0) + (Number(newEntry.sets) || 0);
                     existingEntry.delivWt = Number(((Number(existingEntry.delivWt) || 0) + (Number(newEntry.delivWt) || 0)).toFixed(2));
@@ -667,7 +666,9 @@ const upsertInwardEntry = async ({ userId, body, files }) => {
                     if (!existingStorage.rows) existingStorage.rows = [];
                     newStorage.rows.forEach((newRow) => {
                         const existingRow = existingStorage.rows.find(
-                            (row) => row.colour?.toString().trim().toLowerCase() === newRow.colour?.toString().trim().toLowerCase()
+                            (row) => 
+                                row.colour?.toString().trim().toLowerCase() === newRow.colour?.toString().trim().toLowerCase() &&
+                                (newRow.rollNo ? row.rollNo?.toString().trim() === newRow.rollNo?.toString().trim() : true)
                         );
                         if (existingRow) {
                             console.log(`    Appending to existing colour: ${newRow.colour}`);
@@ -1608,6 +1609,7 @@ const getLotDetails = asyncHandler(async (req, res) => {
 
             return {
                 dia: entry.dia,
+                rollNo: entry.rollNo || '',
                 existingRecRolls: entry.recRoll || entry.roll || 0,
                 existingRecWt: entry.recWt || 0,
                 gsm: latestGsm

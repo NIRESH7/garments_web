@@ -7,15 +7,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const s3 = new S3Client({
-    region: process.env.AWS_REGION,
+const isS3Configured = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_BUCKET_NAME;
+
+const s3 = isS3Configured ? new S3Client({
+    region: process.env.AWS_REGION || 'us-east-1',
     credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     }
-});
-
-const isS3Configured = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_BUCKET_NAME;
+}) : null;
 
 const storage = isS3Configured ?
     multerS3({
