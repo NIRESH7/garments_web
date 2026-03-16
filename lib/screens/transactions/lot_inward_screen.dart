@@ -107,6 +107,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   bool _enableVoiceInput = false;
   bool _enableWeightInput = true;
   double _tareOffset = 0.0;
+  bool _useSetBasedEntry = true;
 
   @override
   void initState() {
@@ -950,7 +951,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             (r) => {
               "dia": r.dia ?? "",
               "roll": r.rolls,
-              "sets": r.sets,
+              "sets": _useSetBasedEntry ? r.sets : 0,
               "delivWt": r.deliveredWeight,
               "recRoll": r.recRoll,
               "recWt": r.recWeight,
@@ -1129,6 +1130,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   List<String> _resolveDiaSetLabels(StickerDiaData data, int sets) {
+    if (!_useSetBasedEntry) {
+      return List<String>.filled(sets, 'Weight');
+    }
+
     List<String>? source;
     for (final row in data.rows) {
       if (row.setLabels.isNotEmpty) {
@@ -1143,6 +1148,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           : '';
       return label.isNotEmpty ? label : 'Set-${i + 1}';
     });
+  }
+
+  int _parseSetLabelNumber(String label) {
+    final match = RegExp(r'\d+').firstMatch(label);
+    return int.tryParse(match?.group(0) ?? '') ?? 0;
+  }
+
+  String _nextNoSetLabel(StickerDiaData data) {
+    int maxVal = 0;
+    for (final row in data.rows) {
+      for (final label in row.setLabels) {
+        final parsed = _parseSetLabelNumber(label);
+        if (parsed > maxVal) maxVal = parsed;
+      }
+    }
+    return 'S-${maxVal + 1}';
   }
 
   int _setSortKey(String value) {
@@ -1864,8 +1885,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     final diaData = _stickerData.putIfAbsent(dia, () => StickerDiaData());
     if (diaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
       // First time: create all rows from mapped colours
+      int noSetCounter = 1;
       diaData.rows = _lotMappedColours.map((c) {
         final row = StickerRow()..colour = c;
+        if (!_useSetBasedEntry) {
+          row.setLabels = ['S-$noSetCounter'];
+          noSetCounter += 1;
+        }
         final gsmToUse = _lastStickerGsmMap[c];
         if (gsmToUse != null) {
           row.gsm = gsmToUse;
@@ -2149,6 +2175,31 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => sync(
+                          () => _useSetBasedEntry = !_useSetBasedEntry,
+                        ),
+                        icon: Icon(
+                          _useSetBasedEntry
+                              ? Icons.grid_on
+                              : Icons.grid_off,
+                          size: 16,
+                        ),
+                        label: Text(
+                          _useSetBasedEntry
+                              ? 'Set-wise Entry'
+                              : 'No-Set Entry',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: _useSetBasedEntry
+                              ? null
+                              : Colors.orange.shade50,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
@@ -2377,7 +2428,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           _buildColumnHeader('#', 40),
           _buildColumnHeader('DIA', 100),
           _buildColumnHeader('ROLL', 80),
-          _buildColumnHeader('SETS', 80),
+          if (_useSetBasedEntry) _buildColumnHeader('SETS', 80),
           _buildColumnHeader('DELIV. WT', 100),
           _buildColumnHeader('REC. ROLL', 100),
           _buildColumnHeader('REC. WT', 100),
@@ -2460,22 +2511,29 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             width: 80,
             child: _buildTableInput(row.rollsController, (v) {
               row.rolls = int.tryParse(v) ?? 0;
-              // Auto-Calculate Sets: rolls / 11, rounded
-              row.sets = (row.rolls / 11).round();
-              row.setsController.text = row.sets == 0
-                  ? ''
-                  : row.sets.toString();
+              if (_useSetBasedEntry) {
+                // Auto-Calculate Sets: rolls / 11, rounded
+                row.sets = (row.rolls / 11).round();
+                row.setsController.text = row.sets == 0
+                    ? ''
+                    : row.sets.toString();
+              } else {
+                row.sets = 0;
+                row.setsController.text = '';
+                row.recRoll = row.rolls;
+              }
               _updateRowMath(row);
             }, key: ValueKey('rolls_${row.id}')),
           ),
           // SETS
-          _buildTableCell(
-            width: 80,
-            child: _buildTableInput(row.setsController, (v) {
-              row.sets = int.tryParse(v) ?? 0;
-              _updateRowMath(row);
-            }, key: ValueKey('sets_${row.id}')),
-          ),
+          if (_useSetBasedEntry)
+            _buildTableCell(
+              width: 80,
+              child: _buildTableInput(row.setsController, (v) {
+                row.sets = int.tryParse(v) ?? 0;
+                _updateRowMath(row);
+              }, key: ValueKey('sets_${row.id}')),
+            ),
           // DELIV. WT
           _buildTableCell(
             width: 100,
@@ -2728,12 +2786,25 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Widget _buildStickerPage() {
     final enteredDias = _getDiasWithRolls().toList();
+    InwardRow? selectedRow;
+    if (_selectedStickerDia != null) {
+      for (final r in _rows) {
+        if (r.dia?.trim() == _selectedStickerDia?.trim()) {
+          selectedRow = r;
+          break;
+        }
+      }
+    }
     int setsCount = 0;
     if (_selectedStickerDia != null) {
-      for (var r in _rows) {
-        if (r.dia?.trim() == _selectedStickerDia?.trim()) {
-          setsCount += r.sets;
+      if (_useSetBasedEntry) {
+        for (var r in _rows) {
+          if (r.dia?.trim() == _selectedStickerDia?.trim()) {
+            setsCount += r.sets;
+          }
         }
+      } else {
+        setsCount = 1;
       }
     }
 
@@ -2762,9 +2833,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         ),
         if (_selectedStickerDia != null) ...[
           const SizedBox(height: 16),
+          if (selectedRow != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Delivery Roll: ${selectedRow.rolls}   '
+                'Delivery Wt: ${FormatUtils.formatWeight(selectedRow.deliveredWeight)} kg',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ),
           if (setsCount > 0)
             _buildDynamicSetTable(setsCount, key: ValueKey(_selectedStickerDia))
-          else
+          else if (_useSetBasedEntry)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(20),
@@ -2979,8 +3063,15 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     ),
                     ...List.generate(sets, (i) {
                       if (r.setWeights.length <= i) r.setWeights.add('');
-                      if (r.setLabels.length <= i) {
-                        r.setLabels.add(setHeaders[i]);
+                      if (_useSetBasedEntry) {
+                        if (r.setLabels.length <= i) {
+                          r.setLabels.add(setHeaders[i]);
+                        }
+                      } else {
+                        if (r.setLabels.isEmpty ||
+                            r.setLabels.first.trim().isEmpty) {
+                          r.setLabels = [_nextNoSetLabel(diaData)];
+                        }
                       }
                       if (r.controllers.length <= i) {
                         r.controllers.add(
@@ -3037,8 +3128,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 onPressed: () {
                   setState(() {
                     final row = StickerRow();
-                    row.setWeights = List<String>.filled(sets, '');
-                    row.setLabels = List<String>.from(setHeaders);
+                    row.setWeights =
+                        List<String>.filled(sets, '', growable: true);
+                    row.setLabels = _useSetBasedEntry
+                        ? List<String>.from(setHeaders)
+                        : [_nextNoSetLabel(diaData)];
                     diaData.rows.add(row);
                   });
                 },
@@ -3476,17 +3570,21 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
     // Recalculate sets count for this DIA from the main grid
     int setsCount = 0;
-    for (var r in _rows) {
-      if (r.dia?.trim() == dia) {
-        setsCount += r.sets;
+    if (_useSetBasedEntry) {
+      for (var r in _rows) {
+        if (r.dia?.trim() == dia) {
+          setsCount += r.sets;
+        }
       }
-    }
 
-    if (setsCount <= 0) {
-      _showError(
-        'No sets calculated. Please enter ROLLS/SETS on the first page for this DIA.',
-      );
-      return;
+      if (setsCount <= 0) {
+        _showError(
+          'No sets calculated. Please enter ROLLS/SETS on the first page for this DIA.',
+        );
+        return;
+      }
+    } else {
+      setsCount = 1;
     }
 
     final diaData = _stickerData[dia] ?? StickerDiaData();
@@ -3521,13 +3619,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         int totalRecRolls = 0;
         for (var sRow in diaData.rows) {
           totalRecWeight += sRow.totalWeight;
-          // Count non-empty weights as rolls
-          totalRecRolls += sRow.setWeights
-              .where((w) => w.trim().isNotEmpty)
-              .length;
+          if (_useSetBasedEntry) {
+            // Count non-empty weights as rolls
+            totalRecRolls += sRow.setWeights
+                .where((w) => w.trim().isNotEmpty)
+                .length;
+          }
         }
         mainRow.recWeight = totalRecWeight;
-        mainRow.recRoll = totalRecRolls;
+        mainRow.recRoll =
+            _useSetBasedEntry ? totalRecRolls : mainRow.rolls;
         // Also update other math like difference and loss%
         _updateRowMath(mainRow);
       } catch (e) {
