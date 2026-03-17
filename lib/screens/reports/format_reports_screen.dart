@@ -22,6 +22,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   final _apiService = MobileApiService();
   // Use a getter to ensure we always have an instance
   ReportPrintService get _printService => ReportPrintService();
+  final ScrollController _scrollController = ScrollController();
 
   bool _isLoading = true;
   List<dynamic> _agingData = [];
@@ -58,7 +59,16 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _loadAllData() async {
@@ -183,6 +193,12 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                 ),
               ],
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _scrollToBottom,
+        mini: true,
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
+        child: const Icon(LucideIcons.arrowDown, color: Colors.white),
+      ),
     );
   }
 
@@ -377,6 +393,18 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           '$aging',
         ];
       }).toList(),
+      footerRow: [
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '${_agingData.fold<int>(0, (sum, item) => sum + ((item['rolls'] ?? 0) as num).toInt())}',
+        FormatUtils.formatWeight(
+          _agingData.fold<double>(0.0, (sum, item) => sum + ((item['weight'] ?? 0) as num)),
+        ),
+        '',
+      ],
     );
   }
 
@@ -427,6 +455,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           'Pending',
         ];
       }).toList(),
+      footerRow: [
+        'TOTAL',
+        '',
+        '${summary.values.fold<int>(0, (sum, v) => sum + ((v['rolls'] ?? 0) as num).toInt())}',
+        '${FormatUtils.formatWeight(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num)))} Kg',
+        '',
+      ],
     );
   }
 
@@ -468,6 +503,25 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Val',
       ],
       rows: rows,
+      footerRow: [
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '${rows.fold<int>(0, (sum, r) => sum + (double.tryParse(r[7]) ?? 0).toInt())}',
+        FormatUtils.formatWeight(
+          rows.fold<double>(0.0, (sum, r) => sum + (double.tryParse(r[8]) ?? 0.0)),
+        ),
+        FormatUtils.formatCurrency(
+          rows.fold<double>(
+            0.0,
+            (sum, r) => sum + (double.tryParse(r[9].replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0),
+          ),
+        ),
+      ],
     );
   }
 
@@ -505,6 +559,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             '${FormatUtils.formatWeight(e.value['weight'])}',
           ];
         }).toList(),
+        footerRow: [
+          'TOTAL',
+          '',
+          '${summary.values.fold<int>(0, (sum, v) => sum + ((v['rolls'] ?? 0) as num).toInt())}',
+          FormatUtils.formatWeight(
+            summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num)),
+          ),
+        ],
       );
     }
 
@@ -538,6 +600,24 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           FormatUtils.formatWeight(weight),
         ];
       }).toList(),
+      footerRow: [
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '${_outwardData.fold<int>(0, (sum, out) => sum + (out['items'] as List).length)}',
+        FormatUtils.formatWeight(
+          _outwardData.fold<double>(
+            0.0,
+            (sum, out) =>
+                sum +
+                (out['items'] as List).fold<double>(0.0, (s, i) => s + ((i['total_weight'] ?? 0) as num).toDouble()),
+          ),
+        ),
+      ],
     );
   }
 
@@ -568,6 +648,23 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           item['status'] ?? '-',
         ];
       }).toList(),
+      footerRow: [
+        'TOTAL',
+        '',
+        '${_closingData.fold<int>(0, (sum, item) => sum + ((item['rec_rolls'] ?? 0) as num).toInt())}',
+        FormatUtils.formatWeight(
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['rec_weight'] ?? 0) as num)),
+        ),
+        '${_closingData.fold<int>(0, (sum, item) => sum + ((item['deliv_rolls'] ?? 0) as num).toInt())}',
+        FormatUtils.formatWeight(
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['deliv_weight'] ?? 0) as num)),
+        ),
+        '${_closingData.fold<int>(0, (sum, item) => sum + ((item['balance_rolls'] ?? 0) as num).toInt())}',
+        FormatUtils.formatWeight(
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['balance_weight'] ?? 0) as num)),
+        ),
+        '',
+      ],
     );
   }
 
@@ -576,6 +673,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   Widget _buildReportTable({
     required List<String> headers,
     required List<List<String>> rows,
+    List<String>? footerRow,
   }) {
     if (rows.isEmpty) return const Center(child: Text('No data found'));
 
@@ -583,6 +681,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       thickness: 8,
       radius: const Radius.circular(4),
       child: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(8),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -612,34 +711,51 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                     ),
                   )
                   .toList(),
-              rows: rows.map((row) {
-                return DataRow(
-                  cells: row.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final cell = entry.value;
-                    final columnHeader = headers[index];
+              rows: [
+                ...rows.map((row) {
+                  return DataRow(
+                    cells: row.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final cell = entry.value;
+                      final columnHeader = headers[index];
 
-                    Color? textColor;
-                    if (columnHeader == 'Status') {
-                      if (cell == 'Completed') textColor = Colors.green;
-                      if (cell == 'Pending') textColor = Colors.red;
-                    }
+                      Color? textColor;
+                      if (columnHeader == 'Status') {
+                        if (cell == 'Completed') textColor = Colors.green;
+                        if (cell == 'Pending') textColor = Colors.red;
+                      }
 
-                    return DataCell(
-                      Text(
-                        cell,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: textColor,
-                          fontWeight: textColor != null
-                              ? FontWeight.bold
-                              : null,
+                      return DataCell(
+                        Text(
+                          cell,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: textColor,
+                            fontWeight:
+                                textColor != null ? FontWeight.bold : null,
+                          ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                );
-              }).toList(),
+                      );
+                    }).toList(),
+                  );
+                }),
+                if (footerRow != null)
+                  DataRow(
+                    color: WidgetStateProperty.all(Colors.grey.shade100),
+                    cells: footerRow.map((cell) {
+                      return DataCell(
+                        Text(
+                          cell,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
             ),
           ),
         ),
