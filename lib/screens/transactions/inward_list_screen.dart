@@ -3,6 +3,7 @@ import '../../services/mobile_api_service.dart';
 import '../../core/constants/api_constants.dart';
 import 'package:intl/intl.dart';
 import 'inward_detail_screen.dart';
+import 'lot_inward_screen.dart';
 
 class InwardListScreen extends StatefulWidget {
   const InwardListScreen({super.key});
@@ -37,7 +38,23 @@ class _InwardListScreenState extends State<InwardListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Inward List')),
+      appBar: AppBar(
+        title: const Text('Inward List'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LotInwardScreen(),
+                ),
+              );
+              _fetchInwards();
+            },
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _fetchInwards,
         child: _isLoading

@@ -237,7 +237,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     try {
       if (index == 0) {
         // Aging
-        _agingData = await _apiService.getLotAgingReport(
+        final data = await _apiService.getLotAgingReport(
           lotNo: filters['lotNo'],
           lotName: filters['lotName'],
           colour: filters['colour'],
@@ -245,6 +245,21 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           startDate: filters['startDate'],
           endDate: filters['endDate'],
         );
+        // Local Exact Match Filter
+        _agingData = data.where((item) {
+          if (filters['lotName'] != null &&
+              item['lot_name'] != filters['lotName'])
+            return false;
+          if (filters['lotNo'] != null &&
+              item['lot_number'] != filters['lotNo'])
+            return false;
+          if (filters['colour'] != null && item['colour'] != filters['colour'])
+            return false;
+          if (filters['dia'] != null &&
+              item['dia']?.toString() != filters['dia'].toString())
+            return false;
+          return true;
+        }).toList();
       } else if (index == 1) {
         // Aging Summary
         // Note: Summary is usually derived from Details.
@@ -255,43 +270,80 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Let's assume filtering the *source* list (which we already do via Aging Report API) is enough,
         // unless we want to filter the *summary view* locally.
         // Let's reload Aging Data with filters and then re-summarize.
-        _agingData = await _apiService.getLotAgingReport(
+        final data = await _apiService.getLotAgingReport(
           lotName: filters['lotName'],
-          // Date filter is not standard for "Current Stock" usually, but let's see.
-          // If user wants to see "Stock that came in on Date X", we can add date filter to aging API if needed.
-          // Current API supports: lotNo, lotName, colour, dia.
-          // I will use client-side filtering for Date if needed or just stick to what API supports for now
-          // based on the valid filters request: "date,lotname".
-          // I'll filter locally by date if provided, as API update for date in aging wasn't explicitly added yet (my bad, I missed adding date to getLotAgingReport in backend).
-          // Actually, let's filter the _agingData list locally for date if 'date' filter is present.
         );
+        // Local Exact Match Filter
+        _agingData = data.where((item) {
+          if (filters['lotName'] != null &&
+              item['lot_name'] != filters['lotName'])
+            return false;
+          return true;
+        }).toList();
       } else if (index == 2) {
         // Inward
-        _inwardData = await _apiService.getInwards(
+        final data = await _apiService.getInwards(
           startDate: filters['startDate'],
           endDate: filters['endDate'],
           fromParty: filters['party'],
           lotName: filters['lotName'],
           lotNo: filters['lotNo'],
         );
+        // Local Exact Match Filter
+        _inwardData = data.where((item) {
+          if (filters['lotName'] != null && item['lotNo'] != filters['lotNo']) {
+            // Wait, Inward has lotNo and lotName top level? Let's check structure or just be safe.
+            // Based on _buildInwardReport: inward['lotNo'], inward['lotName']
+          }
+          if (filters['lotName'] != null &&
+              item['lotName'] != filters['lotName'])
+            return false;
+          if (filters['lotNo'] != null && item['lotNo'] != filters['lotNo'])
+            return false;
+          if (filters['party'] != null && item['fromParty'] != filters['party'])
+            return false;
+          return true;
+        }).toList();
       } else if (index == 3) {
         // Outward
-        _outwardData = await _apiService.getOutwards(
+        final data = await _apiService.getOutwards(
           startDate: filters['startDate'],
           endDate: filters['endDate'],
           lotName: filters['lotName'],
           lotNo: filters['lotNo'],
           dia: filters['dia'],
         );
+        // Local Exact Match Filter
+        _outwardData = data.where((item) {
+          if (filters['lotName'] != null &&
+              item['lotName'] != filters['lotName'])
+            return false;
+          if (filters['lotNo'] != null && item['lotNo'] != filters['lotNo'])
+            return false;
+          if (filters['dia'] != null &&
+              item['dia']?.toString() != filters['dia'].toString())
+            return false;
+          return true;
+        }).toList();
       } else if (index == 4) {
         // Closing - Stock Overview
-        _closingData = await _apiService.getOverviewReport(
+        final data = await _apiService.getOverviewReport(
           startDate: filters['startDate'],
           endDate: filters['endDate'],
           lotNo: filters['lotNo'],
           lotName: filters['lotName'],
           status: filters['status'],
         );
+        // Local Exact Match Filter
+        _closingData = data.where((item) {
+          if (filters['lotName'] != null &&
+              item['lot_name'] != filters['lotName'])
+            return false;
+          if (filters['lotNo'] != null &&
+              item['lot_number'] != filters['lotNo'])
+            return false;
+          return true;
+        }).toList();
       }
       setState(() => _isLoading = false);
     } catch (e) {

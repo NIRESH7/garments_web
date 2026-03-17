@@ -33,6 +33,7 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
   List<String> _itemList = [];
   List<String> _sizeList = [];
   List<String> _supplierList = [];
+  List<String> _colorList = [];
 
   // Section 1: Accessories Group Setup Rows
   List<GroupSetupRow> _groupRows = [];
@@ -66,6 +67,7 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
         _accessoryList = _getValues(categories, ['Accessories', 'Accessory']);
         _itemList = _getValues(categories, ['Item Name', 'Item']);
         _sizeList = _getValues(categories, ['Size', 'Sizes']);
+        _colorList = _getValues(categories, ['Colours', 'Colour', 'colour', 'color']);
         _isLoading = false;
       });
     } catch (e) {
@@ -289,7 +291,7 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
               onChanged: (val) {
                 setState(() {
                   row.group = val;
-                  if (val?.toLowerCase() == 'elastic') {
+                  if (val?.toLowerCase().trim() == 'elastic') {
                     row.showColors = true;
                   } else {
                     row.showColors = false;
@@ -303,12 +305,16 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
               items: _accessoryList,
               onChanged: (val) => setState(() => row.accessory = val),
             ),
+            if (row.showColors) ...[
+              CustomDropdownField(
+                label: 'Colour',
+                value: row.color,
+                items: _colorList,
+                onChanged: (val) => setState(() => row.color = val),
+              ),
+            ],
             const SizedBox(height: 8),
             _buildRowTextFields(row),
-            if (row.showColors) ...[
-              const SizedBox(height: 8),
-              _buildColorSelection(row),
-            ],
           ],
         ),
       ),
@@ -580,6 +586,7 @@ class GroupSetupRow {
   String? group;
   String? accessory;
   String? usedIn;
+  String? color;
   bool showColors = false;
   List<String> colors = [];
 
@@ -599,6 +606,7 @@ class GroupSetupRow {
     row.group = map['group'];
     row.accessory = map['accessory'];
     row.usedIn = map['usedIn'];
+    row.color = map['color']?.toString();
     row.colors = List<String>.from(map['colors'] ?? []);
     row.hsnController.text = map['hsnCode'] ?? '';
     row.unitController.text = map['unit'] ?? '';
@@ -626,6 +634,7 @@ class GroupSetupRow {
       'minStock': double.tryParse(minStockController.text) ?? 0,
       'supplier': supplierController.text,
       'productSpec': specController.text,
+      'color': color,
       'colors': colors,
     };
   }

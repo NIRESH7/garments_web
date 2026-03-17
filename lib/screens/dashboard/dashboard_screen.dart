@@ -10,6 +10,8 @@ import '../../services/mobile_api_service.dart';
 import '../masters/masters_dashboard.dart';
 import '../transactions/lot_inward_screen.dart';
 import '../transactions/lot_outward_screen.dart';
+import '../transactions/inward_list_screen.dart';
+import '../transactions/outward_list_screen.dart';
 import '../reports/reports_dashboard.dart';
 import '../auth/login_screen.dart';
 import '../dashboard/notifications_screen.dart';
@@ -155,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const LotInwardScreen(),
+                    builder: (context) => const InwardListScreen(),
                   ),
                 );
               },
@@ -171,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const LotOutwardScreen(),
+                    builder: (context) => const OutwardListScreen(),
                   ),
                 );
               },

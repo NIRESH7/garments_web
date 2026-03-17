@@ -39,6 +39,20 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
       appBar: AppBar(
         title: const Text('Outward List'),
         backgroundColor: Colors.orange,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LotOutwardScreen(),
+                ),
+              );
+              _fetchOutwards();
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _fetchOutwards,
