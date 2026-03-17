@@ -2928,233 +2928,328 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     while (diaData.racks.length < sets) diaData.racks.add(null);
     while (diaData.pallets.length < sets) diaData.pallets.add(null);
 
-    return SingleChildScrollView(
-      key: key,
-      scrollDirection: Axis.horizontal,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row 1: Rack Name
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0).withOpacity(0.3),
-                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-              ),
-              child: Row(
-                children: [
-                  _buildGridCell(
-                    "Rack Name",
-                    170,
-                    alignment: Alignment.centerLeft,
-                    padding: 12,
-                  ),
-                  ...List.generate(
-                    sets,
-                    (i) => _buildGridCell(
-                      "",
-                      100,
-                      child: _buildSmallDropdown(
-                        diaData.racks[i],
-                        _rackNames,
-                        (v) => setState(() => diaData.racks[i] = v),
-                        hint: "Rack",
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Header Row 2: Pallet No
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0).withOpacity(0.3),
-                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-              ),
-              child: Row(
-                children: [
-                  _buildGridCell(
-                    "Pallet No",
-                    170,
-                    alignment: Alignment.centerLeft,
-                    padding: 12,
-                  ),
-                  ...List.generate(
-                    sets,
-                    (i) => _buildGridCell(
-                      "",
-                      100,
-                      child: _buildSmallDropdown(
-                        diaData.pallets[i],
-                        _palletNos,
-                        (v) => setState(() => diaData.pallets[i] = v),
-                        hint: "Pallet",
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Header Row 3: Labels
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0).withOpacity(0.5),
-                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-              ),
-              child: Row(
-                children: [
-                  _buildGridCell("S.NO", 50),
-                  _buildGridCell("Roll No", 100),
-                  _buildGridCell("Colour", 120),
-                  _buildGridCell("GSM", 80),
-                  ...List.generate(
-                    sets,
-                    (i) => _buildGridCell(
-                      setHeaders[i],
-                      125,
-                    ), // Increased from 100
-                  ),
-                  _buildGridCell("TOTAL", 125), // Increased from 100
-                ],
-              ),
-            ),
-            // Data Rows
-            ...rows.asMap().entries.map((e) {
-              final idx = e.key;
-              final r = e.value;
+    // Calculate set-wise totals
+    final List<double> setTotals = List.filled(sets, 0.0);
+    double grandTotal = 0.0;
+    for (var r in rows) {
+      for (int i = 0; i < sets; i++) {
+        if (r.setWeights.length > i) {
+          final val = double.tryParse(r.setWeights[i].replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+          setTotals[i] += val;
+        }
+      }
+      grandTotal += r.totalWeight;
+    }
 
-              // Initialize gsmController if null
-              r.gsmController ??= TextEditingController(text: r.gsm);
-
-              return Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey.shade300),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    _buildGridCell('${idx + 1}', 50),
-                    _buildGridCell(
-                      "",
-                      100,
-                      child: _buildTableInputText(r.rollNoController, (v) {
-                        r.rollNo = v;
-                      }),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          key: key,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Fixed Part (Left)
+              Column(
+                children: [
+                  // Empty space for Rack Name Header
+                  _buildHeaderCell("", 50 + 120 + 80), // Total fixed width
+                  // Empty space for Pallet No Header
+                  _buildHeaderCell("", 50 + 120 + 80),
+                  // Headers for fixed part
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0).withOpacity(0.5),
+                      border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
                     ),
-                    _buildGridCell(
-                      "",
-                      120,
-                      child: _buildSmallDropdown(
-                        r.colour,
-                        _colours,
-                        (v) => setState(() => r.colour = v),
-                        hint: "Colour",
-                        itemImages: _colourImages,
+                    child: Row(
+                      children: [
+                        _buildGridCell("S.NO", 50),
+                        _buildGridCell("Colour", 120),
+                        _buildGridCell("GSM", 80),
+                      ],
+                    ),
+                  ),
+                  // Data Rows for fixed part
+                  ...rows.asMap().entries.map((e) {
+                    final idx = e.key;
+                    final r = e.value;
+                    r.gsmController ??= TextEditingController(text: r.gsm);
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildGridCell('${idx + 1}', 50),
+                          _buildGridCell(
+                            "",
+                            120,
+                            child: _buildSmallDropdown(
+                              r.colour,
+                              _colours,
+                              (v) => setState(() => r.colour = v),
+                              hint: "Colour",
+                              itemImages: _colourImages,
+                            ),
+                          ),
+                          _buildGridCell(
+                            "",
+                            80,
+                            child: _buildTableInputText(r.gsmController!, (v) {
+                              r.gsm = v;
+                              final colour = r.colour;
+                              if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
+                                _lastStickerGsmMap[colour] = v;
+                              }
+                              setState(() {});
+                            }),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  // Footer total label for fixed part
+                  Container(
+                    height: 50,
+                    width: 50 + 120 + 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      "SET TOTAL",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                        fontSize: 14,
                       ),
                     ),
-                    _buildGridCell(
-                      "",
-                      80,
-                      child: _buildTableInputText(r.gsmController!, (v) {
-                        r.gsm = v;
-                        // Only store if colour is known
-                        final colour = r.colour;
-                        if (v.isNotEmpty &&
-                            colour != null &&
-                            colour.isNotEmpty) {
-                          _lastStickerGsmMap[colour] =
-                              v; // Update color-specific session GSM
-                        }
-                        setState(() {});
-                      }),
-                    ),
-                    ...List.generate(sets, (i) {
-                      if (r.setWeights.length <= i) r.setWeights.add('');
-                      if (_useSetBasedEntry) {
-                        if (r.setLabels.length <= i) {
-                          r.setLabels.add(setHeaders[i]);
-                        }
-                      } else {
-                        if (r.setLabels.isEmpty ||
-                            r.setLabels.first.trim().isEmpty) {
-                          r.setLabels = [_nextNoSetLabel(diaData)];
-                        }
-                      }
-                      if (r.controllers.length <= i) {
-                        r.controllers.add(
-                          TextEditingController(text: r.setWeights[i]),
+                  ),
+                ],
+              ),
+              // Scrollable Part (Right)
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header Row 1: Rack Name
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0).withOpacity(0.3),
+                          border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                        ),
+                        child: Row(
+                          children: [
+                            ...List.generate(
+                              sets,
+                              (i) => _buildGridCell(
+                                "",
+                                125,
+                                child: _buildSmallDropdown(
+                                  diaData.racks[i],
+                                  _rackNames,
+                                  (v) => setState(() => diaData.racks[i] = v),
+                                  hint: "Rack",
+                                ),
+                              ),
+                            ),
+                            _buildGridCell("", 100), // Space for Roll No
+                            _buildGridCell("", 125), // Space for TOTAL
+                          ],
+                        ),
+                      ),
+                      // Header Row 2: Pallet No
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0).withOpacity(0.3),
+                          border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                        ),
+                        child: Row(
+                          children: [
+                            ...List.generate(
+                              sets,
+                              (i) => _buildGridCell(
+                                "",
+                                125,
+                                child: _buildSmallDropdown(
+                                  diaData.pallets[i],
+                                  _palletNos,
+                                  (v) => setState(() => diaData.pallets[i] = v),
+                                  hint: "Pallet",
+                                ),
+                              ),
+                            ),
+                            _buildGridCell("", 100), // Space for Roll No
+                            _buildGridCell("", 125), // Space for TOTAL
+                          ],
+                        ),
+                      ),
+                      // Header Row 3: Labels
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0).withOpacity(0.5),
+                          border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                        ),
+                        child: Row(
+                          children: [
+                            ...List.generate(
+                              sets,
+                              (i) => _buildGridCell(
+                                setHeaders[i],
+                                125,
+                              ),
+                            ),
+                            _buildGridCell("Roll No", 100), // Repositioned
+                            _buildGridCell("TOTAL", 125),
+                          ],
+                        ),
+                      ),
+                      // Data Rows
+                      ...rows.asMap().entries.map((e) {
+                        final idx = e.key;
+                        final r = e.value;
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              ...List.generate(sets, (i) {
+                                if (r.setWeights.length <= i) r.setWeights.add('');
+                                if (r.setLabels.length <= i) {
+                                  r.setLabels.add(_useSetBasedEntry ? setHeaders[i] : _nextNoSetLabel(diaData));
+                                }
+                                if (r.controllers.length <= i) {
+                                  r.controllers.add(TextEditingController(text: r.setWeights[i]));
+                                }
+                                if (r.focusNodes.length <= i) {
+                                  r.focusNodes.add(FocusNode());
+                                }
+                                return _buildGridCell(
+                                  "",
+                                  125,
+                                  child: _buildTableInputText(
+                                    r.controllers[i],
+                                    (v) => setState(() => r.setWeights[i] = v),
+                                    onMicTap: _enableVoiceInput ? () => _startVoiceInputForSetWeight(r, idx, i) : null,
+                                    onWeightTap: _enableWeightInput ? () => _captureScaleWeightForSet(r, i) : null,
+                                    isListening: _isListening && _listeningForStickerRowIdx == idx && _listeningForSetIdx == i,
+                                    focusNode: r.focusNodes.length > i ? r.focusNodes[i] : null,
+                                  ),
+                                );
+                              }),
+                              // Roll No Input
+                              _buildGridCell(
+                                "",
+                                100,
+                                child: _buildTableInputText(r.rollNoController, (v) {
+                                  r.rollNo = v;
+                                }),
+                              ),
+                              // Row Total
+                              _buildGridCell(
+                                r.totalWeight.toStringAsFixed(3),
+                                125,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  r.totalWeight.toStringAsFixed(3),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Color(0xFF475569),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         );
-                      }
-                      if (r.focusNodes.length <= i) {
-                        r.focusNodes.add(FocusNode());
-                      }
-                      return _buildGridCell(
-                        "",
-                        125, // Increased from 100
-                        child: _buildTableInputText(
-                          r.controllers[i],
-                          (v) => setState(() => r.setWeights[i] = v),
-                          onMicTap: _enableVoiceInput
-                              ? () => _startVoiceInputForSetWeight(r, idx, i)
-                              : null,
-                          onWeightTap: _enableWeightInput
-                              ? () => _captureScaleWeightForSet(r, i)
-                              : null,
-                          isListening:
-                              _isListening &&
-                              _listeningForStickerRowIdx == idx &&
-                              _listeningForSetIdx == i,
-                          focusNode: r.focusNodes.length > i ? r.focusNodes[i] : null,
+                      }),
+                      // Footer for scrollable part: Set Totals
+                      Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
                         ),
-                      );
-                    }),
-                    _buildGridCell(
-                      r.totalWeight.toStringAsFixed(3),
-                      125,
-                      alignment: Alignment.center,
-                      child: Text(
-                        r.totalWeight.toStringAsFixed(3),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: Color(0xFF475569),
+                        child: Row(
+                          children: [
+                            ...List.generate(
+                              sets,
+                              (i) => _buildGridCell(
+                                FormatUtils.formatWeight(setTotals[i]),
+                                125,
+                                alignment: Alignment.center,
+                              ),
+                            ),
+                            _buildGridCell("", 100), // Space for Roll No
+                            _buildGridCell(
+                              FormatUtils.formatWeight(grandTotal),
+                              125,
+                              alignment: Alignment.center,
+                            ),
+                          ],
                         ),
-                        maxLines: 2,
-                        softWrap: true,
                       ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-            // Add row button
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    final row = StickerRow();
-                    row.setWeights =
-                        List<String>.filled(sets, '', growable: true);
-                    row.setLabels = _useSetBasedEntry
-                        ? List<String>.from(setHeaders)
-                        : [_nextNoSetLabel(diaData)];
-                    diaData.rows.add(row);
-                  });
-                },
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text("Add Row"),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).primaryColor,
+                    ],
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
+        // Add row button
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextButton.icon(
+            onPressed: () {
+              setState(() {
+                final row = StickerRow();
+                row.setWeights = List<String>.filled(sets, '', growable: true);
+                row.setLabels = _useSetBasedEntry
+                    ? List<String>.from(setHeaders)
+                    : [_nextNoSetLabel(diaData)];
+                diaData.rows.add(row);
+              });
+            },
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text("Add Row"),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).primaryColor,
             ),
-          ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeaderCell(String label, double width) {
+    return Container(
+      width: width,
+      height: 65,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2E8F0).withOpacity(0.3),
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300),
+          right: BorderSide(color: Colors.grey.shade300),
+        ),
+      ),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+          color: Color(0xFF475569),
         ),
       ),
     );
