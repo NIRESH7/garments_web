@@ -46,6 +46,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   String? _lotName;
   String? _knittingDia;
   String? _knittingDiaSpecific;
+  String? _selectedDiaName; // Separated from _itemName
   String? _cuttingDia; // auto-filled
   final _efficiencyController = TextEditingController();
   final _lotWastePctController = TextEditingController(); // auto-filled
@@ -149,10 +150,14 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         } else if (name == 'party name') {
           final catParties = vals.map((v) => v['name'].toString()).toList();
           _partyList.addAll(catParties);
+        } else if (name == 'lot name' || name == 'lot') {
+          final catLots = vals.map((v) => v['name'].toString()).toList();
+          _lotList.addAll(catLots);
         }
       }
 
-      _lotList = lots.map((l) => l['lotNumber'].toString()).toList();
+      _lotList.addAll(lots.map((l) => l['lotNumber'].toString()).toList());
+      _lotList = _lotList.toSet().toList(); // unique
       _partyList.addAll(parties.map((p) => p['name'].toString()).toList());
       _partyList = _partyList.toSet().toList(); // unique
 
@@ -174,7 +179,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         _layPcsController.text = (data['layPcs'] ?? 0).toString();
 
         _lotName = data['lotName'];
-        _itemName = data['diaName'] ?? data['knittingDia']; 
+        _selectedDiaName = data['diaName']; 
         _knittingDiaSpecific = data['knittingDia'];
         _knittingDia = data['knittingDia']; 
         _cuttingDia = data['cuttingDia'];
@@ -256,7 +261,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         'dozenWeight': _dozenWeightController.text,
         'layPcs': _layPcsController.text,
         'lotName': _lotName,
-        'diaName': _itemName,
+        'diaName': _selectedDiaName,
         'knittingDia': _knittingDiaSpecific ?? '',
         'cuttingDia': _cuttingDia,
         'efficiency': _efficiencyController.text,
@@ -462,10 +467,10 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                   CustomDropdownField(
                     label: 'Dia',
                     items: _diaNames,
-                    value: _knittingDia,
+                    value: _selectedDiaName,
                     onChanged: (v) {
                       setState(() {
-                        _itemName = v; // Using _itemName as the Dia Name anchor
+                        _selectedDiaName = v;
                         _knittingDia = null;
                         _cuttingDia = null;
                         _knittingDiaSpecific = null;
@@ -473,18 +478,18 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  if (_itemName != null)
+                  if (_selectedDiaName != null)
                     CustomDropdownField(
                       label: 'Knitting Dia',
                       items: _diaObjects
-                          .where((d) => d['name'] == _itemName)
+                          .where((d) => d['name'] == _selectedDiaName)
                           .map((d) => d['knittingDia']?.toString() ?? '')
                           .where((s) => s.isNotEmpty)
                           .toList(),
                       value: _knittingDiaSpecific,
                       onChanged: (v) {
                         final diaObj = _diaObjects.firstWhere(
-                          (d) => d['name'] == _itemName && d['knittingDia']?.toString() == v,
+                          (d) => d['name'] == _selectedDiaName && d['knittingDia']?.toString() == v,
                           orElse: () => {},
                         );
                         setState(() {
@@ -634,13 +639,42 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Voice Instruction', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ColorPalette.textPrimary)),
-            if (hasAudio)
-              IconButton(
-                icon: const Icon(Icons.play_circle_fill, color: Colors.green, size: 32),
-                onPressed: () => _playAudio(_instructionAudioUrl, _instructionAudioFile),
-              ),
           ],
         ),
+        if (hasAudio) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.audiotrack, color: Colors.green),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Recording Ready to Play',
+                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _playAudio(_instructionAudioUrl, _instructionAudioFile),
+                  icon: const Icon(Icons.play_arrow, size: 20),
+                  label: const Text('Play / Listen'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
