@@ -39,8 +39,9 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   XFile? _itemImageFile;
   String? _itemImageUrl;
   final _dozenWeightController = TextEditingController();
-  final _wastePctController = TextEditingController(); // used for auto-calc
+  final _wastePctController = TextEditingController(); 
   final _layPcsController = TextEditingController();
+  final _timeToCompleteController = TextEditingController();
 
   // ─── Section 2: Lot Details ───
   String? _lotName;
@@ -49,7 +50,6 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   String? _selectedDiaName; // Separated from _itemName
   String? _cuttingDia; // auto-filled
   final _efficiencyController = TextEditingController();
-  final _lotWastePctController = TextEditingController(); // auto-filled
   final _foldingController = TextEditingController();
   final _layLengthController = TextEditingController();
 
@@ -92,40 +92,59 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
       _addPatternRow();
     }
 
-    _wastePctController.addListener(_updateEfficiencyPctSection1);
-    _efficiencyController.addListener(_updateWastePctSection2);
+    _efficiencyController.addListener(_updateWasteFromEfficiency);
+    _wastePctController.addListener(_updateEfficiencyFromWaste);
   }
 
   @override
   void dispose() {
     _recorder.dispose();
     _dozenWeightController.dispose();
-    _wastePctController.removeListener(_updateEfficiencyPctSection1);
+    _wastePctController.removeListener(_updateEfficiencyFromWaste);
     _wastePctController.dispose();
     _layPcsController.dispose();
-    _efficiencyController.removeListener(_updateWastePctSection2);
+    _timeToCompleteController.dispose();
+    _efficiencyController.removeListener(_updateWasteFromEfficiency);
     _efficiencyController.dispose();
-    _lotWastePctController.dispose();
     _foldingController.dispose();
     _layLengthController.dispose();
     _instructionTextController.dispose();
     _audioPlayer.dispose();
     for (var p in _patterns) {
-      p.frontController.dispose();
-      p.backController.dispose();
+      p.patternMeasurementController.dispose();
       p.finishingController.dispose();
     }
     super.dispose();
   }
 
-  void _updateEfficiencyPctSection1() {
-    setState(() {}); // trigger rebuild to show 100 - waste
+  bool _isCalculating = false;
+
+  void _updateWasteFromEfficiency() {
+    if (_isCalculating) return;
+    _isCalculating = true;
+    try {
+      final eff = double.tryParse(_efficiencyController.text) ?? 0;
+      final wasteVal = (100 - eff).toStringAsFixed(2);
+      if (_wastePctController.text != wasteVal) {
+        _wastePctController.text = wasteVal;
+      }
+    } finally {
+      _isCalculating = false;
+    }
   }
 
-  void _updateWastePctSection2() {
-    final eff = double.tryParse(_efficiencyController.text) ?? 0;
-    _lotWastePctController.text = (100 - eff).toStringAsFixed(2);
-    setState(() {});
+  void _updateEfficiencyFromWaste() {
+    if (_isCalculating) return;
+    _isCalculating = true;
+    try {
+      final waste = double.tryParse(_wastePctController.text) ?? 0;
+      final effVal = (100 - waste).toStringAsFixed(2);
+      if (_efficiencyController.text != effVal) {
+        _efficiencyController.text = effVal;
+      }
+    } finally {
+      _isCalculating = false;
+    }
   }
 
   Future<void> _loadDropdowns() async {
@@ -184,16 +203,16 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         _knittingDia = data['knittingDia']; 
         _cuttingDia = data['cuttingDia'];
         _efficiencyController.text = (data['efficiency'] ?? 0).toString();
-        _lotWastePctController.text = (data['wastePercentage'] ?? 0).toString();
+        _wastePctController.text = (data['wastePercentage'] ?? 0).toString();
         _foldingController.text = (data['folding'] ?? 0).toString();
         _layLengthController.text = (data['layLengthMeter'] ?? 0).toString();
+        _timeToCompleteController.text = data['timeToComplete'] ?? '';
 
         final pats = data['patternDetails'] as List? ?? [];
         _patterns = pats.map((p) => PatternRowData(
           partyName: p['partyName'],
           imageUrl: p['patternImage'],
-          frontController: TextEditingController(text: (p['frontMeasurement'] ?? '').toString()),
-          backController: TextEditingController(text: (p['backMeasurement'] ?? '').toString()),
+          patternMeasurementController: TextEditingController(text: (p['patternMeasurement'] ?? '').toString()),
           finishingController: TextEditingController(text: (p['finishingMeasurement'] ?? '').toString()),
         )).toList();
 
@@ -208,8 +227,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   void _addPatternRow() {
     setState(() {
       _patterns.add(PatternRowData(
-        frontController: TextEditingController(),
-        backController: TextEditingController(),
+        patternMeasurementController: TextEditingController(),
         finishingController: TextEditingController(),
       ));
     });
@@ -265,9 +283,10 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         'knittingDia': _knittingDiaSpecific ?? '',
         'cuttingDia': _cuttingDia,
         'efficiency': _efficiencyController.text,
-        'wastePercentage': _lotWastePctController.text,
+        'wastePercentage': _wastePctController.text,
         'folding': _foldingController.text,
         'layLengthMeter': _layLengthController.text,
+        'timeToComplete': _timeToCompleteController.text,
         'instructionText': _instructionTextController.text,
       };
 
@@ -281,8 +300,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         final p = _patterns[i];
         patternRows.add({
           'partyName': p.partyName ?? '',
-          'frontMeasurement': p.frontController.text,
-          'backMeasurement': p.backController.text,
+          'patternMeasurement': p.patternMeasurementController.text,
           'finishingMeasurement': p.finishingController.text,
           'patternImage': p.imageUrl ?? '',
         });
@@ -386,13 +404,20 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    final waste1 = double.tryParse(_wastePctController.text) ?? 0;
-    final eff1 = (100 - waste1).toStringAsFixed(2);
-
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: Text(widget.entryId == null ? 'New Cutting Master' : 'Edit Cutting Master'),
         elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        centerTitle: true,
+        titleTextStyle: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F172A),
+          letterSpacing: -0.8,
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -401,13 +426,14 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
           child: Column(
             children: [
               _buildSection(
-                title: 'Item Details',
-                icon: Icons.info_outline,
+                title: 'Item & Lot Details',
+                icon: Icons.inventory_2_outlined,
                 children: [
                   CustomDropdownField(
                     label: 'Item Name',
                     items: _itemList,
                     value: _itemName,
+                    prefixIcon: Icons.shopping_bag_outlined,
                     onChanged: (v) => setState(() => _itemName = v),
                     validator: (v) => v == null ? 'Required' : null,
                   ),
@@ -416,51 +442,18 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                     label: 'Size',
                     items: _sizeList,
                     value: _size,
+                    prefixIcon: Icons.straighten_outlined,
                     onChanged: (v) => setState(() => _size = v),
                     validator: (v) => v == null ? 'Required' : null,
                   ),
                   const SizedBox(height: 16),
-                  _buildImagePreview('Item Image', _itemImageFile, _itemImageUrl, () => _pickImage(true)),
+                  _buildImagePreview('Image', _itemImageFile, _itemImageUrl, () => _pickImage(true)),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _dozenWeightController,
-                    decoration: const InputDecoration(labelText: 'Dozen Weight', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _wastePctController,
-                    decoration: const InputDecoration(labelText: 'Waste Percentage (%)', border: OutlineInputBorder(), hintText: 'Enter waste to calc efficiency'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      children: [
-                        const Expanded(child: Text('Efficiency Percentage:', style: TextStyle(fontWeight: FontWeight.bold))),
-                        Text('$eff1%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _layPcsController,
-                    decoration: const InputDecoration(labelText: 'Lay Pieces', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildSection(
-                title: 'Lot Details',
-                icon: Icons.layers_outlined,
-                children: [
                   CustomDropdownField(
                     label: 'Lot Name',
                     items: _lotList,
                     value: _lotName,
+                    prefixIcon: Icons.label_outline,
                     onChanged: (v) => setState(() => _lotName = v),
                   ),
                   const SizedBox(height: 16),
@@ -468,6 +461,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                     label: 'Dia',
                     items: _diaNames,
                     value: _selectedDiaName,
+                    prefixIcon: Icons.adjust_outlined,
                     onChanged: (v) {
                       setState(() {
                         _selectedDiaName = v;
@@ -487,6 +481,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                           .where((s) => s.isNotEmpty)
                           .toList(),
                       value: _knittingDiaSpecific,
+                      prefixIcon: Icons.circle_outlined,
                       onChanged: (v) {
                         final diaObj = _diaObjects.firstWhere(
                           (d) => d['name'] == _selectedDiaName && d['knittingDia']?.toString() == v,
@@ -494,7 +489,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                         );
                         setState(() {
                           _knittingDiaSpecific = v;
-                          _knittingDia = v; // legacy field fallback
+                          _knittingDia = v;
                           _cuttingDia = diaObj['cuttingDia']?.toString();
                         });
                       },
@@ -505,20 +500,201 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                       initialValue: _cuttingDia,
                       key: Key('cutting_dia_$_cuttingDia'),
                       readOnly: true,
-                      decoration: const InputDecoration(labelText: 'Cutting Dia (Auto)', fillColor: Color(0xFFF5F5F5), filled: true, border: OutlineInputBorder()),
+                    decoration: InputDecoration(
+                      labelText: 'Cutting Dia (Auto)',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.auto_fix_high_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
                     ),
                   ],
                   const SizedBox(height: 16),
                   TextFormField(
+                    controller: _dozenWeightController,
+                    decoration: InputDecoration(
+                      labelText: 'Dozen weight',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.scale_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
                     controller: _foldingController,
-                    decoration: const InputDecoration(labelText: 'Folding', border: OutlineInputBorder()),
+                    decoration: InputDecoration(
+                      labelText: 'Folding weight',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.monitor_weight_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _efficiencyController,
+                    decoration: InputDecoration(
+                      labelText: 'Cadd efficiency (%)',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.speed_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _wastePctController,
+                    decoration: InputDecoration(
+                      labelText: 'Waste percentage (%)',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.delete_outline, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _layLengthController,
-                    decoration: const InputDecoration(labelText: 'Lay Length in Meter', border: OutlineInputBorder()),
+                    decoration: InputDecoration(
+                      labelText: 'Lay length in meter',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.square_foot_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
                     keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _layPcsController,
+                    decoration: InputDecoration(
+                      labelText: 'Lay pcs',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.view_comfortable_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _timeToCompleteController,
+                    decoration: InputDecoration(
+                      labelText: 'Time take to complete/Lay',
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                      prefixIcon: const Icon(Icons.timer_outlined, color: Color(0xFF3B82F6)),
+                      fillColor: Colors.white,
+                      filled: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -532,8 +708,11 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                   OutlinedButton.icon(
                     onPressed: _addPatternRow,
                     icon: const Icon(Icons.add),
-                    label: const Text('Add Row'),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    label: const Text('Add Pattern Row'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ],
               ),
@@ -542,7 +721,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                 title: 'CAD File Upload',
                 icon: Icons.upload_file_outlined,
                 children: [
-                  _buildFilePicker('CAD File', _cadFile, _cadFileUrl, () => _pickFile(true)),
+                  _buildFilePicker('Cadd file upload', _cadFile, _cadFileUrl, () => _pickFile(true)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -556,15 +735,40 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                 ],
               ),
               const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: _isSaving ? null : _save,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(60),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).primaryColor.withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).primaryColor,
+                      Theme.of(context).primaryColor.withBlue(255),
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
                 ),
-                child: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text('Save Cutting Master', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(62),
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  ),
+                  child: _isSaving
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Save Cutting Master',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white),
+                        ),
+                ),
               ),
               const SizedBox(height: 40),
             ],
@@ -722,10 +926,24 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         TextFormField(
           controller: _instructionTextController,
           maxLines: 3,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Instruction Text (Auto-converted)',
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
             hintText: 'Voice will be converted to text here...',
-            border: OutlineInputBorder(),
+            fillColor: Colors.white,
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+            ),
             alignLabelWithHint: true,
           ),
         ),
@@ -735,19 +953,53 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 
   Widget _buildSection({required String title, required List<Widget> children, IconData? icon}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: ColorPalette.softShadow),
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        shape: const RoundedRectangleBorder(side: BorderSide.none),
-        leading: icon != null ? Icon(icon, color: Colors.blue) : null,
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.04),
+            blurRadius: 25,
+            offset: const Offset(0, 12),
           ),
         ],
+      ),
+      child: Theme(
+        data: ThemeData().copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          maintainState: true,
+          shape: const RoundedRectangleBorder(side: BorderSide.none),
+          collapsedShape: const RoundedRectangleBorder(side: BorderSide.none),
+          leading: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B82F6).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: const Color(0xFF3B82F6), size: 24),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              fontSize: 18,
+              letterSpacing: -0.6,
+            ),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -760,11 +1012,15 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         const SizedBox(height: 8),
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            height: 150,
+            height: 160,
             width: double.infinity,
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12), color: Colors.grey.shade50),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFFF8FAFC),
+            ),
             child: file != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
@@ -783,36 +1039,65 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 
   Widget _buildPatternRow(int index, PatternRowData data) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade100), borderRadius: BorderRadius.circular(12), color: Colors.grey.shade50.withOpacity(0.5)),
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9).withOpacity(0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Pattern Detail Row ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
-              IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20), onPressed: () => setState(() => _patterns.removeAt(index))),
+              Text(
+                'Pattern Detail Row ${index + 1}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF64748B), letterSpacing: -0.3),
+              ),
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFEF4444), size: 22),
+                onPressed: () => setState(() => _patterns.removeAt(index)),
+              ),
             ],
           ),
+          const SizedBox(height: 8),
           CustomDropdownField(
             label: 'Party Name',
             items: _partyList,
             value: data.partyName,
             onChanged: (v) => setState(() => data.partyName = v),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildImagePreview('Pattern Image', data.imageFile, data.imageUrl, () => _pickImage(false, patternIndex: index)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: TextFormField(controller: data.frontController, decoration: const InputDecoration(labelText: 'Front (Mea)', border: OutlineInputBorder()))),
-              const SizedBox(width: 8),
-              Expanded(child: TextFormField(controller: data.backController, decoration: const InputDecoration(labelText: 'Back (Mea)', border: OutlineInputBorder()))),
-            ],
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: data.patternMeasurementController,
+            decoration: InputDecoration(
+              labelText: 'Pattern measurement',
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              prefixIcon: const Icon(Icons.architecture_outlined, color: Color(0xFF3B82F6)),
+              fillColor: Colors.white,
+              filled: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
+            ),
           ),
-          const SizedBox(height: 8),
-          TextFormField(controller: data.finishingController, decoration: const InputDecoration(labelText: 'Finishing Measurement', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: data.finishingController,
+            decoration: InputDecoration(
+              labelText: 'Finishing Measurement',
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              prefixIcon: const Icon(Icons.check_box_outlined, color: Color(0xFF3B82F6)),
+              fillColor: Colors.white,
+              filled: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
+            ),
+          ),
         ],
       ),
     );
@@ -823,14 +1108,41 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        ListTile(
-          shape: RoundedRectangleBorder(side: BorderSide(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12)),
-          tileColor: Colors.grey.shade50,
-          leading: const Icon(Icons.insert_drive_file_outlined, color: Colors.orange),
-          title: Text(name ?? 'No file selected', style: TextStyle(color: name == null ? Colors.grey : Colors.black, fontSize: 13)),
-          trailing: OutlinedButton(onPressed: onTap, style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('Pick File', style: TextStyle(fontSize: 12))),
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A), letterSpacing: -0.3)),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.insert_drive_file_outlined, color: Colors.orange, size: 20),
+            ),
+            title: Text(name ?? 'No file selected', style: TextStyle(color: name == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w600)),
+            trailing: ElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Pick File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ),
       ],
     );
@@ -841,16 +1153,14 @@ class PatternRowData {
   String? partyName;
   XFile? imageFile;
   String? imageUrl;
-  final TextEditingController frontController;
-  final TextEditingController backController;
+  final TextEditingController patternMeasurementController;
   final TextEditingController finishingController;
 
   PatternRowData({
     this.partyName,
     this.imageFile,
     this.imageUrl,
-    required this.frontController,
-    required this.backController,
+    required this.patternMeasurementController,
     required this.finishingController,
   });
 }

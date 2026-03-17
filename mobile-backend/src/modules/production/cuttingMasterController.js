@@ -95,6 +95,7 @@ const createCuttingMaster = [
             layLengthMeter,
             patternDetails,
             instructionText,
+            timeToComplete,
         } = req.body;
 
         // Parse patternDetails JSON string
@@ -138,6 +139,7 @@ const createCuttingMaster = [
             cadFile: resolveFilePath(req.files?.cadFile?.[0]),
             instructionAudio: resolveFilePath(req.files?.instructionAudio?.[0]),
             instructionText: instructionText || '',
+            timeToComplete: timeToComplete || '',
             instructionDoc: resolveFilePath(req.files?.instructionDoc?.[0]),
         });
 
@@ -208,6 +210,7 @@ const updateCuttingMaster = [
             layLengthMeter,
             patternDetails,
             instructionText,
+            timeToComplete,
         } = req.body;
 
         let parsedPatterns = [];
@@ -257,6 +260,7 @@ const updateCuttingMaster = [
             ? resolveFilePath(req.files.instructionAudio[0])
             : entry.instructionAudio;
         entry.instructionText = instructionText ?? entry.instructionText;
+        entry.timeToComplete = timeToComplete ?? entry.timeToComplete;
         entry.instructionDoc = req.files?.instructionDoc?.[0]
             ? resolveFilePath(req.files.instructionDoc[0])
             : entry.instructionDoc;

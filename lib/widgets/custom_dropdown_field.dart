@@ -58,18 +58,18 @@ class CustomDropdownField extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: state.hasError
                             ? ColorPalette.error
-                            : Colors.grey.shade200,
+                            : const Color(0xFFE2E8F0),
                         width: 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                          color: const Color(0xFF0F172A).withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -108,8 +108,8 @@ class CustomDropdownField extends StatelessWidget {
                         ),
                         const Icon(
                           LucideIcons.chevronDown,
-                          size: 18,
-                          color: ColorPalette.textMuted,
+                          size: 20,
+                          color: Color(0xFF64748B),
                         ),
                       ],
                     ),

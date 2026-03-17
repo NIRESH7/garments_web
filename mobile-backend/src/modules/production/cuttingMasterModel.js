@@ -4,8 +4,7 @@ import mongoose from 'mongoose';
 const patternRowSchema = new mongoose.Schema({
     partyName: { type: String, default: '' },
     patternImage: { type: String, default: '' },
-    frontMeasurement: { type: String, default: '' },
-    backMeasurement: { type: String, default: '' },
+    patternMeasurement: { type: String, default: '' },
     finishingMeasurement: { type: String, default: '' },
 }, { _id: true });
 
@@ -35,6 +34,7 @@ const cuttingMasterSchema = new mongoose.Schema(
         wastePercentage: { type: Number, default: 0 }, // auto: 100 - efficiency
         folding: { type: Number, default: 0 },
         layLengthMeter: { type: Number, default: 0 },
+        timeToComplete: { type: String, default: '' },
 
         // ─── Section 3: Pattern Details ────────────────────────────────────
         patternDetails: { type: [patternRowSchema], default: [] },
