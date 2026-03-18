@@ -735,39 +735,42 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                 ],
               ),
               const SizedBox(height: 40),
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context).primaryColor.withOpacity(0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).primaryColor,
-                      Theme.of(context).primaryColor.withBlue(255),
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).primaryColor.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
+                      ),
                     ],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).primaryColor,
+                        Theme.of(context).primaryColor.withBlue(255),
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
                   ),
-                ),
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(62),
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(62),
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    ),
+                    child: _isSaving
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            'Save Cutting Master',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white),
+                          ),
                   ),
-                  child: _isSaving
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Save Cutting Master',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white),
-                        ),
                 ),
               ),
               const SizedBox(height: 40),
@@ -855,24 +858,37 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
               border: Border.all(color: Colors.green.withOpacity(0.3)),
             ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.audiotrack, color: Colors.green),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Recording Ready to Play',
-                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                const Flexible(
+                  child: Row(
+                    children: [
+                      Icon(Icons.audiotrack, color: Colors.green),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Recording Ready to Play',
+                          style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _playAudio(_instructionAudioUrl, _instructionAudioFile),
-                  icon: const Icon(Icons.play_arrow, size: 20),
-                  label: const Text('Play / Listen'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 36,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _playAudio(_instructionAudioUrl, _instructionAudioFile),
+                    icon: const Icon(Icons.play_arrow, size: 20),
+                    label: const Text('Play / Listen'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
                   ),
                 ),
               ],
@@ -1131,16 +1147,19 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
               child: const Icon(Icons.insert_drive_file_outlined, color: Colors.orange, size: 20),
             ),
             title: Text(name ?? 'No file selected', style: TextStyle(color: name == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w600)),
-            trailing: ElevatedButton(
-              onPressed: onTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            trailing: SizedBox(
+              width: 100,
+              child: ElevatedButton(
+                onPressed: onTap,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Pick File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
-              child: const Text('Pick File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           ),
         ),

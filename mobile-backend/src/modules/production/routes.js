@@ -35,6 +35,45 @@ import {
 } from './accessoriesMasterController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
+// ─── NEW MODULE IMPORTS ──────────────────────────────────────────────────────
+import {
+    createCuttingEntry,
+    getCuttingEntries,
+    getCuttingEntryById,
+    updateCuttingEntry,
+    deleteCuttingEntry,
+    saveCuttingEntryPage2,
+    getCuttingEntryPage2,
+    getCutStockReport,
+    getCuttingEntryReport,
+} from './cuttingEntryController.js';
+
+import {
+    createStitchingDelivery,
+    getStitchingDeliveries,
+    getStitchingDeliveryById,
+    updateStitchingDelivery,
+    deleteStitchingDelivery,
+    createCuttingDailyPlan,
+    getCuttingDailyPlans,
+    getCuttingDailyPlanById,
+    updateCuttingDailyPlan,
+    createStitchingGrn,
+    getStitchingGrns,
+    getStitchingGrnById,
+    updateStitchingGrn,
+    createIronPackingDc,
+    getIronPackingDcs,
+    getIronPackingDcById,
+    updateIronPackingDc,
+    createAccessoriesItemAssign,
+    getAccessoriesItemAssigns,
+    getAccessoriesItemAssignById,
+    updateAccessoriesItemAssign,
+    deleteAccessoriesItemAssign,
+} from './newModulesController.js';
+// ─────────────────────────────────────────────────────────────────────────────
+
 const router = express.Router();
 
 router
@@ -92,6 +131,66 @@ router
     .put(protect, updateAccessoriesMaster)
     .delete(protect, deleteAccessoriesMaster);
 
+// ─── NEW MODULE ROUTES ────────────────────────────────────────────────────────
+
+// Report routes (must come before /:id pattern)
+router.get('/cutting-entry/reports/cut-stock', protect, getCutStockReport);
+router.get('/cutting-entry/reports/entry-report', protect, getCuttingEntryReport);
+
+// Cutting Entry (Page 1)
+router.route('/cutting-entry')
+    .post(protect, createCuttingEntry)
+    .get(protect, getCuttingEntries);
+router.route('/cutting-entry/:id')
+    .get(protect, getCuttingEntryById)
+    .put(protect, updateCuttingEntry)
+    .delete(protect, deleteCuttingEntry);
+
+// Cutting Entry Page 2
+router.route('/cutting-entry/:id/page2')
+    .post(protect, saveCuttingEntryPage2)
+    .get(protect, getCuttingEntryPage2);
+
+// Stitching Delivery DC
+router.route('/stitching-delivery')
+    .post(protect, createStitchingDelivery)
+    .get(protect, getStitchingDeliveries);
+router.route('/stitching-delivery/:id')
+    .get(protect, getStitchingDeliveryById)
+    .put(protect, updateStitchingDelivery)
+    .delete(protect, deleteStitchingDelivery);
+
+// Cutting Daily Plan
+router.route('/cutting-daily-plan')
+    .post(protect, createCuttingDailyPlan)
+    .get(protect, getCuttingDailyPlans);
+router.route('/cutting-daily-plan/:id')
+    .get(protect, getCuttingDailyPlanById)
+    .put(protect, updateCuttingDailyPlan);
+
+// Stitching GRN
+router.route('/stitching-grn')
+    .post(protect, createStitchingGrn)
+    .get(protect, getStitchingGrns);
+router.route('/stitching-grn/:id')
+    .get(protect, getStitchingGrnById)
+    .put(protect, updateStitchingGrn);
+
+// Iron & Packing DC
+router.route('/iron-packing-dc')
+    .post(protect, createIronPackingDc)
+    .get(protect, getIronPackingDcs);
+router.route('/iron-packing-dc/:id')
+    .get(protect, getIronPackingDcById)
+    .put(protect, updateIronPackingDc);
+
+// Accessories Item Assignment
+router.route('/accessories-item-assign')
+    .post(protect, createAccessoriesItemAssign)
+    .get(protect, getAccessoriesItemAssigns);
+router.route('/accessories-item-assign/:id')
+    .get(protect, getAccessoriesItemAssignById)
+    .put(protect, updateAccessoriesItemAssign)
+    .delete(protect, deleteAccessoriesItemAssign);
+
 export default router;
-
-

@@ -1545,4 +1545,309 @@ class MobileApiService {
       return false;
     }
   }
+
+  // ─── NEW MODULE API METHODS ─────────────────────────────────────────────────
+
+  // Cutting Entry (Page 1)
+  Future<bool> createCuttingEntry(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(ApiConstants.cuttingEntry, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getCuttingEntries({
+    String? startDate,
+    String? endDate,
+    String? itemName,
+    String? size,
+    String? cutNo,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.cuttingEntry,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (itemName != null) 'itemName': itemName,
+          if (size != null) 'size': size,
+          if (cutNo != null) 'cutNo': cutNo,
+        },
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCuttingEntryById(String id) async {
+    try {
+      final response = await _client.get('${ApiConstants.cuttingEntry}/$id');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> updateCuttingEntry(String id, Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.put('${ApiConstants.cuttingEntry}/$id', data: data);
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteCuttingEntry(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.cuttingEntry}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Cutting Entry Page 2
+  Future<bool> saveCuttingEntryPage2(String entryId, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(
+          '${ApiConstants.cuttingEntry}/$entryId/page2',
+          data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCuttingEntryPage2(String entryId) async {
+    try {
+      final response = await _client
+          .get('${ApiConstants.cuttingEntry}/$entryId/page2');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Cut Stock Report
+  Future<List<dynamic>> getCutStockReport({
+    String? startDate,
+    String? endDate,
+    String? itemName,
+    String? size,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.cuttingEntryReportCutStock,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (itemName != null) 'itemName': itemName,
+          if (size != null) 'size': size,
+        },
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Cutting Entry Report
+  Future<List<dynamic>> getCuttingEntryReport({
+    String? startDate,
+    String? endDate,
+    String? cutNo,
+    String? itemName,
+    String? size,
+    String? colour,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.cuttingEntryReportList,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (cutNo != null) 'cutNo': cutNo,
+          if (itemName != null) 'itemName': itemName,
+          if (size != null) 'size': size,
+          if (colour != null) 'colour': colour,
+        },
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Stitching Delivery
+  Future<bool> createStitchingDelivery(Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.post(ApiConstants.stitchingDelivery, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getStitchingDeliveries({
+    String? startDate,
+    String? endDate,
+    String? itemName,
+    String? cutNo,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.stitchingDelivery,
+        queryParameters: {
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+          if (itemName != null) 'itemName': itemName,
+          if (cutNo != null) 'cutNo': cutNo,
+        },
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getStitchingDeliveryById(String id) async {
+    try {
+      final response =
+          await _client.get('${ApiConstants.stitchingDelivery}/$id');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> updateStitchingDelivery(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put('${ApiConstants.stitchingDelivery}/$id',
+          data: data);
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Cutting Daily Plan
+  Future<bool> createCuttingDailyPlan(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(ApiConstants.cuttingDailyPlan, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getCuttingDailyPlans({String? date}) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.cuttingDailyPlan,
+        queryParameters: {if (date != null) 'date': date},
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> updateCuttingDailyPlan(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client
+          .put('${ApiConstants.cuttingDailyPlan}/$id', data: data);
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Stitching GRN
+  Future<bool> createStitchingGrn(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.post(ApiConstants.stitchingGrn, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getStitchingGrns({
+    String? type,
+    String? startDate,
+    String? endDate,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.stitchingGrn,
+        queryParameters: {
+          if (type != null) 'type': type,
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+        },
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Iron & Packing DC
+  Future<bool> createIronPackingDc(Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.post(ApiConstants.ironPackingDc, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getIronPackingDcs({
+    String? type,
+    String? startDate,
+    String? endDate,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.ironPackingDc,
+        queryParameters: {
+          if (type != null) 'type': type,
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+        },
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Accessories Item Assignment
+  Future<bool> saveAccessoriesItemAssign(Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.post(ApiConstants.accessoriesItemAssign, data: data);
+      return response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getAccessoriesItemAssigns({String? itemName}) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.accessoriesItemAssign,
+        queryParameters: {if (itemName != null) 'itemName': itemName},
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
 }

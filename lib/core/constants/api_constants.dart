@@ -3,11 +3,11 @@ class ApiConstants {
   // flutter build apk --release --dart-define=API_BASE_URL=http://your-server:5001/api --dart-define=SERVER_URL=http://your-server:5001
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:5001/api',
+    defaultValue: 'http://13.220.94.83:5001/api',
   );
   static const String serverUrl = String.fromEnvironment(
     'SERVER_URL',
-    defaultValue: 'http://localhost:5001',
+    defaultValue: 'http://13.220.94.83:5001',
   );
   static const String s3BaseUrl =
       'https://garments-app-storage.s3.us-east-1.amazonaws.com';
@@ -45,7 +45,6 @@ class ApiConstants {
   static const String rackPalletStockReport = '/inventory/reports/rack-pallet';
   static const String aiTranscribe = '/ai/transcribe';
 
-  // Production
   static const String assignments = '/production/assignments';
   static const String cuttingMaster = '/production/cutting-master';
   static const String accessoriesMaster = '/production/accessories-master';
@@ -57,6 +56,19 @@ class ApiConstants {
   static const String previousPlanningEntries =
       '/production/cutting-orders/previous-entries';
   static const String cuttingPlanReport = '/production/cutting-orders/report';
+
+  // New Module API Constants (Additive Only)
+  static const String cuttingEntry = '/production/cutting-entry';
+  static const String cuttingEntryReportCutStock =
+      '/production/cutting-entry/reports/cut-stock';
+  static const String cuttingEntryReportList =
+      '/production/cutting-entry/reports/entry-report';
+  static const String stitchingDelivery = '/production/stitching-delivery';
+  static const String cuttingDailyPlan = '/production/cutting-daily-plan';
+  static const String stitchingGrn = '/production/stitching-grn';
+  static const String ironPackingDc = '/production/iron-packing-dc';
+  static const String accessoriesItemAssign =
+      '/production/accessories-item-assign';
 
   // User
   static const String profile = '/users/profile';

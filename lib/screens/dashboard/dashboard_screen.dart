@@ -22,6 +22,15 @@ import '../transactions/lot_requirement_allocation_screen.dart';
 import '../tasks/worker_task_dashboard_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
+// ── New Module Imports ──────────────────────────────────────────────────
+import '../cutting_entry/cutting_entry_list_screen.dart';
+import '../cutting_entry/cutting_daily_plan_screen.dart';
+import '../stitching/stitching_delivery_screen.dart';
+import '../packing/iron_packing_dc_screen.dart';
+import '../assessment/accessories_item_assign_screen.dart';
+import '../reports/cut_stock_report_screen.dart';
+import '../reports/cutting_entry_report_screen.dart';
+// ────────────────────────────────────────────────────────────────────────
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -120,131 +129,252 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(2),
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Stock Transactions',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: ColorPalette.textPrimary,
+              const SizedBox(height: 24),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  children: [
+                    const Text(
+                      'Stock Transactions',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: ColorPalette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    _TransactionTile(
+                      title: 'Lot Inward',
+                      subtitle: 'Add new rolls to inventory',
+                      icon: LucideIcons.download,
+                      color: ColorPalette.success,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const InwardListScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _TransactionTile(
+                      title: 'Lot Outward',
+                      subtitle: 'Dispatch items and create DC',
+                      icon: LucideIcons.upload,
+                      color: ColorPalette.error,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const OutwardListScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _TransactionTile(
+                      title: 'Complaint Solution',
+                      subtitle: 'Resolve and clear quality issues',
+                      icon: LucideIcons.shieldCheck,
+                      color: Theme.of(context).primaryColor,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LotComplaintSolutionScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _TransactionTile(
+                      title: 'Cutting Planning',
+                      subtitle: 'Create monthly/yearly plans',
+                      icon: LucideIcons.calendar,
+                      color: Colors.indigo,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CuttingOrderPlanningScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _TransactionTile(
+                      title: 'Lot Requirement',
+                      subtitle: 'FIFO Lot Assignment',
+                      icon: LucideIcons.layoutGrid,
+                      color: Colors.orange,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const LotRequirementAllocationScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _TransactionTile(
+                      title: 'Task Management',
+                      subtitle: 'Assign & track lab/factory tasks',
+                      icon: LucideIcons.checkSquare,
+                      color: Colors.purple,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const WorkerTaskDashboardScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    // ── NEW PRODUCTION MODULE TILES ─────────────────────────
+                    const Padding(
+                      padding: EdgeInsets.only(top: 24, bottom: 8),
+                      child: Text('Production Modules',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2)),
+                    ),
+                    _TransactionTile(
+                      title: 'Cutting Entry',
+                      subtitle: 'Colour-wise lay & weight tracking',
+                      icon: LucideIcons.scissors,
+                      color: Colors.teal,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const CuttingEntryListScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _TransactionTile(
+                      title: 'Cutting Daily Plan',
+                      subtitle: 'Daily cutting schedule board',
+                      icon: LucideIcons.calendarDays,
+                      color: Colors.indigo,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const CuttingDailyPlanScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _TransactionTile(
+                      title: 'Stitching Delivery DC',
+                      subtitle: 'DC for cut pieces to stitching',
+                      icon: LucideIcons.truck,
+                      color: Colors.cyan.shade700,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const StitchingDeliveryScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _TransactionTile(
+                      title: 'Iron & Packing DC',
+                      subtitle: 'Packing outward DC / inward GRN',
+                      icon: LucideIcons.box,
+                      color: Colors.orange,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const IronPackingDcScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _TransactionTile(
+                      title: 'Accessories Assignment',
+                      subtitle: 'Link accessories to items',
+                      icon: LucideIcons.link2,
+                      color: Colors.pink,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const AccessoriesItemAssignScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _TransactionTile(
+                      title: 'Cut Stock Report',
+                      subtitle: 'Size-wise cut dozen inventory',
+                      icon: LucideIcons.barChart2,
+                      color: Colors.green.shade700,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const CutStockReportScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _TransactionTile(
+                      title: 'Cutting Entry Report',
+                      subtitle: 'Detailed cut colour-wise report',
+                      icon: LucideIcons.fileText,
+                      color: Colors.indigo.shade400,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const CuttingEntryReportScreen()));
+                      },
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            _TransactionTile(
-              title: 'Lot Inward',
-              subtitle: 'Add new rolls to inventory',
-              icon: LucideIcons.download,
-              color: ColorPalette.success,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const InwardListScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _TransactionTile(
-              title: 'Lot Outward',
-              subtitle: 'Dispatch items and create DC',
-              icon: LucideIcons.upload,
-              color: ColorPalette.error,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const OutwardListScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _TransactionTile(
-              title: 'Complaint Solution',
-              subtitle: 'Resolve and clear quality issues',
-              icon: LucideIcons.shieldCheck,
-              color: Theme.of(context).primaryColor,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const LotComplaintSolutionScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _TransactionTile(
-              title: 'Cutting Planning',
-              subtitle: 'Create monthly/yearly plans',
-              icon: LucideIcons.calendar,
-              color: Colors.indigo,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CuttingOrderPlanningScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _TransactionTile(
-              title: 'Lot Requirement',
-              subtitle: 'FIFO Lot Assignment',
-              icon: LucideIcons.layoutGrid,
-              color: Colors.orange,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        const LotRequirementAllocationScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _TransactionTile(
-              title: 'Task Management',
-              subtitle: 'Assign & track lab/factory tasks',
-              icon: LucideIcons.checkSquare,
-              color: Colors.purple,
-              onTap: () {
-                Navigator.pop(context);
-                // For simplicity, we navigate to the task list view which can branch
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const WorkerTaskDashboardScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
