@@ -33,17 +33,19 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final cuttingRes = await _api.getCuttingMasters();
       final accessoriesRes = await _api.getAccessoriesMasters();
+      if (!mounted) return;
       setState(() {
         _cuttingMasters = cuttingRes ?? [];
         _accessoriesMasters = accessoriesRes ?? [];
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -70,23 +70,21 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
           colourRows = page1['colourRows'];
         }
 
-        debugPrint('Colour rows count: ${colourRows.length}');
-
         double totalRollWT = 0;
         double totalFolding = 0;
         double totalEndBit = 0;
         double totalMistake = 0;
         int totalDoz = 0;
+        double totalPcs = 0;
 
         for (var r in colourRows) {
           if (r is Map) {
             totalRollWT += double.tryParse(r['rollWT']?.toString() ?? '0') ?? 0;
-            totalFolding +=
-                double.tryParse(r['actualFolding']?.toString() ?? '0') ?? 0;
+            totalFolding += double.tryParse(r['actualFolding']?.toString() ?? '0') ?? 0;
             totalEndBit += double.tryParse(r['endBit']?.toString() ?? '0') ?? 0;
-            totalMistake +=
-                double.tryParse(r['mistake']?.toString() ?? '0') ?? 0;
+            totalMistake += double.tryParse(r['mistake']?.toString() ?? '0') ?? 0;
             totalDoz += int.tryParse(r['doz']?.toString() ?? '0') ?? 0;
+            totalPcs += double.tryParse(r['totalPcs']?.toString() ?? '0') ?? 0;
           }
         }
 
@@ -95,32 +93,22 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
         double dozenPerWT = noOfDoz > 0 ? totalDozWT / noOfDoz : 0;
         double layWeight = totalDozWT - (totalEndBit + totalMistake);
 
-        // Ensure we have some base values even if page2 is null or empty
         final isPage2Valid = page2 != null && page2.isNotEmpty;
 
         Map<String, dynamic> newSummary = {
           'totalRollWeight': totalRollWT,
           'totalFoldingWT': totalFolding,
-          'layBalanceWT':
-              double.tryParse((isPage2Valid ? page2['layBalanceWT'] : 0)?.toString() ?? '0') ?? 0,
           'totalDozenWT': totalDozWT,
           'noOfDoz': noOfDoz,
           'dozenPerWT': dozenPerWT,
           'endBit': totalEndBit,
           'adas': totalMistake,
           'layWeight': layWeight,
-          'cutWeight':
-              double.tryParse((isPage2Valid ? page2['cutWeight'] : 0)?.toString() ?? '0') ?? 0,
-          'cadWastePercent': double.tryParse(
-                  (isPage2Valid ? (page2['cadWastePercent'] ?? page1['cadEff'] ?? 0) : (page1['cadEff'] ?? 0))
-                      .toString()) ??
-              0,
-          'totalWasteWT': 0.0,
-          'wastePercent': 0.0,
-          'difference': 0.0,
+          'totalPcs': totalPcs,
+          'fixedGSM': double.tryParse(page1['fixedGSM']?.toString() ?? '0') ?? 0,
+          'cadWastePercent': double.tryParse((page1['cadEff'] ?? 0).toString()) ?? 0,
+          'stickerNo': page1['stickerNo'] ?? 'PENDING',
         };
-
-        debugPrint('Summary prepared: $newSummary');
 
         _cutterWasteCtrl.text = (isPage2Valid ? (page2['cutterWasteWT'] ?? 0) : 0).toString();
         _offPatternCtrl.text = (isPage2Valid ? (page2['offPatternWaste'] ?? 0) : 0).toString();
@@ -142,24 +130,10 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
           _summary = newSummary;
         });
 
-        _recalcSummary(); // Ensure initial calculations are done
-      } else {
-        debugPrint('Page 1 data IS NULL (or timed out)');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Could not load data. Request may have timed out.')));
-        }
-        setState(() {
-          _summary = {};
-        });
+        _recalcSummary();
       }
-    } catch (e, stack) {
+    } catch (e) {
       debugPrint('Error loading Page 2: $e');
-      debugPrint('Stack trace: $stack');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error loading data: $e')));
-      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -242,65 +216,66 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
   }
 
   Widget _buildSummaryRow(String label, dynamic value,
-      {bool editable = false, TextEditingController? ctrl}) {
+      {bool editable = false, TextEditingController? ctrl, bool isBold = false, Color? color}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Fixed width label to avoid Expanded/Flexible constraints issues on web
-          SizedBox(
-            width: 140,
+          Expanded(
+            flex: 3,
             child: Text(
               label,
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isBold ? Colors.black87 : Colors.grey.shade700,
+                fontSize: 13,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          // Bounded container for the value area
+          const SizedBox(width: 8),
           Expanded(
+            flex: 2,
             child: editable && ctrl != null
                 ? SizedBox(
-                    height: 36,
+                    height: 38,
                     child: TextFormField(
                       controller: ctrl,
                       textAlign: TextAlign.right,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => _recalcSummary(),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                       decoration: InputDecoration(
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 8),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         fillColor: Colors.white,
                         filled: true,
                       ),
                     ),
                   )
                 : Container(
-                    height: 36,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(6),
+                      color: isBold ? Colors.blue.shade50 : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: isBold ? Border.all(color: Colors.blue.shade100) : null,
                     ),
                     child: Text(
                       () {
                         if (value is double) {
-                          if (value.isNaN) return '0.000';
+                          if (value.isNaN) return '0.00';
                           if (value.isInfinite) return 'Inf';
-                          return value.toStringAsFixed(3);
+                          return value.toStringAsFixed(2);
                         }
                         return value?.toString() ?? '-';
                       }(),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13),
+                      style: TextStyle(
+                        fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                        fontSize: 13,
+                        color: color ?? (isBold ? Colors.blue.shade900 : Colors.black87),
+                      ),
                       textAlign: TextAlign.right,
                     ),
                   ),
@@ -353,7 +328,7 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
                 child: Row(
                   children: [
                     Text('Row ${ri + 1}: ', style: const TextStyle(fontSize: 12)),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       flex: 2,
                       child: TextFormField(
@@ -375,7 +350,7 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
                         },
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       flex: 2,
                       child: TextFormField(
@@ -452,7 +427,7 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
           key: _formKey,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 120),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -463,7 +438,7 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -492,21 +467,25 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
                             'Dozen Per WT', _summary['dozenPerWT']),
                         _buildSummaryRow('End Bit', _summary['endBit']),
                         _buildSummaryRow('Adas (Mistake)', _summary['adas']),
+                        const Divider(),
                         _buildSummaryRow('Lay Weight', _summary['layWeight']),
                         _buildSummaryRow(
-                            'Cut Weight (from Parts)', _summary['cutWeight'] ?? 0.0),
-                        _buildSummaryRow('Cutter Waste WT', null,
+                            'Cut Weight (Parts)', _summary['cutWeight'] ?? 0.0),
+                        _buildSummaryRow('Cutter Waste', null,
                             editable: true, ctrl: _cutterWasteCtrl),
                         _buildSummaryRow('Off Pattern Waste', null,
                             editable: true, ctrl: _offPatternCtrl),
                         _buildSummaryRow(
-                            'Total Waste WT', _summary['totalWasteWT'] ?? 0.0),
+                            'Total Waste WT', _summary['totalWasteWT'] ?? 0.0, isBold: true),
                         _buildSummaryRow(
-                            'Waste %', _summary['wastePercent'] ?? 0.0),
+                            'Waste %', _summary['wastePercent'] ?? 0.0, isBold: true),
                         _buildSummaryRow(
-                            'CAD Waste %', _summary['cadWastePercent'] ?? 0.0),
+                            'CAD Efficiency %', _summary['cadWastePercent'] ?? 0.0),
                         _buildSummaryRow(
-                            'Difference', _summary['difference'] ?? 0.0),
+                            'Eff Difference', _summary['difference'] ?? 0.0, isBold: true, 
+                            color: ((_summary['difference'] ?? 0) as num) < 0 ? Colors.red : Colors.green),
+                        const Divider(),
+                        _buildSummaryRow('Sticker No', _summary['stickerNo'] ?? '-', isBold: true),
                       ],
                     ),
                   ),
@@ -517,7 +496,7 @@ class _CuttingEntryPage2ScreenState extends State<CuttingEntryPage2Screen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

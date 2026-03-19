@@ -103,10 +103,14 @@ export const saveCuttingEntryPage2 = asyncHandler(async (req, res) => {
     page2 = await CuttingEntryPage2.create(data);
   }
 
-  // Mark entry weightDate when page 2 is saved
+  // Mark entry weightDate when page 2 is saved and sync global metrics
   await CuttingEntry.findByIdAndUpdate(req.params.id, {
     weightDate: new Date(),
     status: 'Completed',
+    cutterWasteWT: data.cutterWasteWT || 0,
+    offPatternWaste: data.offPatternWaste || 0,
+    totalWasteWT: data.totalWasteWT || 0,
+    wastePercent: data.wastePercent || 0,
   });
   res.status(201).json(page2);
 });
@@ -133,10 +137,13 @@ export const getCuttingEntryPage2 = asyncHandler(async (req, res) => {
 // @desc Get Cut Stock Report (item vs size-wise dozen count)
 // @route GET /api/production/cutting-entry/reports/cut-stock
 export const getCutStockReport = asyncHandler(async (req, res) => {
-  const { startDate, endDate, itemName, size } = req.query;
+  const { startDate, endDate, itemName, size, cutNo, lotNo, lotName } = req.query;
   const filter = {};
   if (itemName) filter.itemName = { $regex: itemName, $options: 'i' };
   if (size) filter.size = size;
+  if (cutNo) filter.cutNo = { $regex: cutNo, $options: 'i' };
+  if (lotNo) filter.lotNo = lotNo;
+  if (lotName) filter.lotName = { $regex: lotName, $options: 'i' };
   if (startDate || endDate) {
     filter.cuttingDate = {};
     if (startDate) filter.cuttingDate.$gte = new Date(startDate);
@@ -179,6 +186,7 @@ export const getCuttingEntryReport = asyncHandler(async (req, res) => {
   if (itemName) filter.itemName = { $regex: itemName, $options: 'i' };
   if (size) filter.size = size;
   if (lotNo) filter.lotNo = lotNo;
+  if (lotName) filter.lotName = { $regex: lotName, $options: 'i' };
   if (startDate || endDate) {
     filter.cuttingDate = {};
     if (startDate) filter.cuttingDate.$gte = new Date(startDate);
@@ -198,7 +206,7 @@ export const getCuttingEntryReport = asyncHandler(async (req, res) => {
         size: entry.size,
         colour: row.colour,
         lotNo: entry.lotNo,
-        lotName: entry.lotNo,
+        lotName: entry.lotName,
         pcs: row.totalPcs,
         doz: row.doz,
         cuttingDate: entry.cuttingDate,

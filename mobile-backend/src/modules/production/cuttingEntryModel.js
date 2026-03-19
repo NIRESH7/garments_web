@@ -8,7 +8,7 @@ const colourRowSchema = new mongoose.Schema({
   totalPcs: { type: Number, default: 0 },
   doz: { type: Number, default: 0 },
   balancePcs: { type: Number, default: 0 },
-  complaintInRoll: { type: Number, default: 0 },
+  complaintInRoll: { type: String, default: '' }, // Changed to string for Manual/Audio/Image info
   complaintAudio: String,
   complaintImage: String,
   returnWT: { type: Number, default: 0 },
@@ -27,6 +27,12 @@ const colourRowSchema = new mongoose.Schema({
   offWaste: { type: Number, default: 0 },
   totalWaste: { type: Number, default: 0 },
   cutWt: { type: Number, default: 0 },
+  dozWeight: { type: Number, default: 0 },
+  costingWeight: { type: Number, default: 0 },
+  weightDifference: { type: Number, default: 0 },
+  cadEff: { type: Number, default: 0 },
+  actualEff: { type: Number, default: 0 },
+  effDifference: { type: Number, default: 0 },
   finalBal: { type: Number, default: 0 },
   differ: { type: Number, default: 0 },
 });
@@ -65,21 +71,57 @@ const cuttingEntrySchema = new mongoose.Schema(
       enum: ['Pending', 'In Progress', 'Completed'],
       default: 'Pending',
     },
+    lotName: { type: String },
+    slipCheckedBy: { type: String },
+    enteredBy: { type: String },
+    enteredDate: { type: Date },
+    authorizedSign: { type: String },
+    inchargeSign: { type: String },
+    stickerNo: { type: String },
+    cutterWasteWT: { type: Number, default: 0 },
+    offPatternWaste: { type: Number, default: 0 },
+    totalWasteWT: { type: Number, default: 0 },
+    wastePercent: { type: Number, default: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
 
-// Auto-generate cutNo before saving
-cuttingEntrySchema.pre('save', async function () {
-  if (!this.cutNo) {
-    const count = await mongoose.model('CuttingEntry').countDocuments();
-    const year = new Date().getFullYear();
-    const shortYear = String(year).slice(2);
-    const nextYear = String(year + 1).slice(2);
-    this.fiscalYear = `${shortYear}-${nextYear}`;
-    this.cutNo = String(count + 1).padStart(4, '0');
+// Auto-generate cutNo, trnNo, and stickerNo before saving
+cuttingEntrySchema.pre('save', async function (next) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  
+  const shortYear = String(year).slice(2);
+  const nextYearValue = String(year + 1).slice(2);
+  const currentFiscal = `${shortYear}-${nextYearValue}`;
+
+  if (!this.cutNo || this.cutNo.trim() === '') {
+    // Count for current month
+    const monthStart = new Date(year, now.getMonth(), 1);
+    const monthEnd = new Date(year, now.getMonth() + 1, 0);
+    const count = await mongoose.model('CuttingEntry').countDocuments({ 
+      cuttingDate: { $gte: monthStart, $lte: monthEnd } 
+    });
+    this.cutNo = `${year}/${month}/${count + 1}`;
+    this.fiscalYear = currentFiscal;
   }
+
+  if (!this.trnNo || this.trnNo.trim() === '') {
+    const count = await mongoose.model('CuttingEntry').countDocuments({ 
+      trnNo: { $regex: `^TRN/${year}/` } 
+    });
+    this.trnNo = `TRN/${year}/${count + 1}`;
+  }
+
+  if (!this.stickerNo) {
+    const count = await mongoose.model('CuttingEntry').countDocuments({ 
+      stickerNo: { $regex: `^STK/${year}/` } 
+    });
+    this.stickerNo = `STK/${year}/${count + 1}`;
+  }
+  next();
 });
 
 const CuttingEntry = mongoose.model('CuttingEntry', cuttingEntrySchema);

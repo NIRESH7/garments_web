@@ -1551,7 +1551,25 @@ class MobileApiService {
   // Cutting Entry (Page 1)
   Future<bool> createCuttingEntry(Map<String, dynamic> data) async {
     try {
-      final response = await _client.post(ApiConstants.cuttingEntry, data: data);
+      final formData = FormData();
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          formData.files.add(
+            MapEntry(
+              entry.key,
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ),
+          );
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+        }
+      }
+      final response =
+          await _client.post(ApiConstants.cuttingEntry, data: formData);
       return response.statusCode == 201;
     } catch (e) {
       return false;
@@ -1593,8 +1611,27 @@ class MobileApiService {
 
   Future<bool> updateCuttingEntry(String id, Map<String, dynamic> data) async {
     try {
-      final response =
-          await _client.put('${ApiConstants.cuttingEntry}/$id', data: data);
+      final formData = FormData();
+      for (var entry in data.entries) {
+        if (entry.value is XFile) {
+          final file = entry.value as XFile;
+          final bytes = await file.readAsBytes();
+          formData.files.add(
+            MapEntry(
+              entry.key,
+              MultipartFile.fromBytes(bytes, filename: file.name),
+            ),
+          );
+        } else if (entry.value is List || entry.value is Map) {
+          formData.fields.add(MapEntry(entry.key, jsonEncode(entry.value)));
+        } else if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+        }
+      }
+      final response = await _client.put(
+        '${ApiConstants.cuttingEntry}/$id',
+        data: formData,
+      );
       return response.statusCode == 200;
     } catch (e) {
       return false;
@@ -1851,3 +1888,4 @@ class MobileApiService {
     }
   }
 }
+

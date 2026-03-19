@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "dev": "npm run dev --prefix mobile-backend",
+    "dev:mobile": "npm run dev --prefix mobile-backend",
+    "dev:chatbot": "nodemon server.js",
     "lint": "eslint ."
   },
   "engines": {
