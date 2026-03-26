@@ -10,7 +10,13 @@ import '../../services/report_print_service.dart';
 import '../../widgets/custom_dropdown_field.dart';
 
 class FormatReportsScreen extends StatefulWidget {
-  const FormatReportsScreen({super.key});
+  final int initialIndex;
+  final Map<String, dynamic>? initialFilters;
+  const FormatReportsScreen({
+    super.key,
+    this.initialIndex = 0,
+    this.initialFilters,
+  });
 
   @override
   State<FormatReportsScreen> createState() => _FormatReportsScreenState();
@@ -40,7 +46,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: widget.initialIndex,
+    );
+    if (widget.initialFilters != null) {
+      _filters[widget.initialIndex] = widget.initialFilters!;
+    }
     _tabController.addListener(_handleTabChange);
     _loadAllData();
   }

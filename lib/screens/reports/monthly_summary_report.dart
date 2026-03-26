@@ -3,8 +3,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
+import 'package:intl/intl.dart';
 
 import '../../widgets/custom_dropdown_field.dart';
+import 'format_reports_screen.dart';
 
 class MonthlySummaryReportScreen extends StatefulWidget {
   const MonthlySummaryReportScreen({super.key});
@@ -65,6 +67,7 @@ class _MonthlySummaryReportScreenState
                     _reports[_selectedIndex]['opening_balance_rolls'] ?? 0,
                     _reports[_selectedIndex]['opening_balance'] ?? 0,
                     Colors.blue,
+                    onTap: () => _navigateToDetails(0),
                   ),
                   const SizedBox(height: 16),
                   _buildSummarySection(
@@ -72,6 +75,7 @@ class _MonthlySummaryReportScreenState
                     _reports[_selectedIndex]['inward_rolls'] ?? 0,
                     _reports[_selectedIndex]['inward_weight'] ?? 0,
                     ColorPalette.success,
+                    onTap: () => _navigateToDetails(2),
                   ),
                   const SizedBox(height: 16),
                   _buildSummarySection(
@@ -79,6 +83,7 @@ class _MonthlySummaryReportScreenState
                     _reports[_selectedIndex]['outward_rolls'] ?? 0,
                     _reports[_selectedIndex]['outward_weight'] ?? 0,
                     ColorPalette.error,
+                    onTap: () => _navigateToDetails(3),
                   ),
                   const Divider(height: 48),
                   _buildSummarySection(
@@ -91,10 +96,34 @@ class _MonthlySummaryReportScreenState
                         (_reports[_selectedIndex]['outward_weight'] ?? 0.0),
                     ColorPalette.primary,
                     isBold: true,
+                    onTap: () => _navigateToDetails(4),
                   ),
                 ],
               ),
             ),
+    );
+  }
+
+  void _navigateToDetails(int tabIndex) {
+    final monthStr = _reports[_selectedIndex]['month'] as String; // "2026-03"
+    final parts = monthStr.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+
+    final startDate = DateTime(year, month, 1);
+    final endDate = DateTime(year, month + 1, 0);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FormatReportsScreen(
+          initialIndex: tabIndex,
+          initialFilters: {
+            'startDate': DateFormat('yyyy-MM-dd').format(startDate),
+            'endDate': DateFormat('yyyy-MM-dd').format(endDate),
+          },
+        ),
+      ),
     );
   }
 
@@ -121,47 +150,51 @@ class _MonthlySummaryReportScreenState
     dynamic weight,
     Color color, {
     bool isBold = false,
+    VoidCallback? onTap,
   }) {
     final numRolls = (rolls ?? 0) as num;
     final numWeight = (weight ?? 0.0) as num;
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isBold ? color.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: ColorPalette.softShadow,
-        border: isBold ? Border.all(color: color.withOpacity(0.1)) : null,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(fontWeight: FontWeight.bold, color: color),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${FormatUtils.formatQuantity(numRolls)} Rolls',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: isBold ? color.withOpacity(0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: ColorPalette.softShadow,
+          border: isBold ? Border.all(color: color.withOpacity(0.1)) : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontWeight: FontWeight.bold, color: color),
                 ),
-              ),
-            ],
-          ),
-          Text(
-            '${FormatUtils.formatWeight(numWeight)} Kg',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
+                const SizedBox(height: 4),
+                Text(
+                  '${FormatUtils.formatQuantity(numRolls)} Rolls',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            Text(
+              '${FormatUtils.formatWeight(numWeight)} Kg',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

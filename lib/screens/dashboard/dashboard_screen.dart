@@ -22,6 +22,7 @@ import '../transactions/lot_requirement_allocation_screen.dart';
 import '../tasks/worker_task_dashboard_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
+import '../reports/monthly_summary_report.dart';
 // ── New Module Imports ──────────────────────────────────────────────────
 import '../cutting_entry/cutting_entry_list_screen.dart';
 import '../cutting_entry/cutting_daily_plan_screen.dart';
@@ -762,6 +763,14 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
           rolls: _summary['opening']['rolls'],
           color: Theme.of(context).primaryColor,
           icon: LucideIcons.box,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MonthlySummaryReportScreen(),
+              ),
+            );
+          },
         ),
         _StockCard(
           title: 'Inward',
@@ -769,6 +778,14 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
           rolls: _summary['inward']['rolls'],
           color: ColorPalette.success,
           icon: LucideIcons.arrowDownCircle,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => InwardListScreen(),
+              ),
+            );
+          },
         ),
         _StockCard(
           title: 'Outward',
@@ -776,6 +793,14 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
           rolls: _summary['outward']['rolls'],
           color: ColorPalette.error,
           icon: LucideIcons.arrowUpCircle,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => OutwardListScreen(),
+              ),
+            );
+          },
         ),
         _StockCard(
           title: 'Closing Stock',
@@ -783,6 +808,14 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
           rolls: _summary['closing']['rolls'],
           color: Theme.of(context).primaryColor.withOpacity(0.8),
           icon: LucideIcons.layers,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MonthlySummaryReportScreen(),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -929,6 +962,7 @@ class _StockCard extends StatelessWidget {
   final dynamic rolls;
   final Color color;
   final IconData icon;
+  final VoidCallback onTap;
 
   const _StockCard({
     required this.title,
@@ -936,74 +970,78 @@ class _StockCard extends StatelessWidget {
     required this.rolls,
     required this.color,
     required this.icon,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: ColorPalette.softShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              Expanded(
-                child: Text(
-                  title.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade400,
-                    letterSpacing: 0.5,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: ColorPalette.softShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  textAlign: TextAlign.right,
-                  overflow: TextOverflow.ellipsis,
+                  child: Icon(icon, color: color, size: 18),
                 ),
+                Expanded(
+                  child: Text(
+                    title.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade400,
+                      letterSpacing: 0.5,
+                    ),
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              '${FormatUtils.formatWeight(weight)} Kg',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: ColorPalette.textPrimary,
               ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            '${FormatUtils.formatWeight(weight)} Kg',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: ColorPalette.textPrimary,
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${FormatUtils.formatQuantity(rolls)} Rolls',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: color,
+            const SizedBox(height: 4),
+            Text(
+              '${FormatUtils.formatQuantity(rolls)} Rolls',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w500,
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
