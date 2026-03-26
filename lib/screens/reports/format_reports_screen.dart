@@ -378,18 +378,22 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Colour',
         'Rolls',
         'Wt',
+        'Val', // ADDED
         'Days',
       ],
       rows: _agingData.map((item) {
         final aging = _calculateAging(item['inward_date']);
+        final weight = (item['weight'] ?? 0) as num;
+        final rate = (item['rate'] ?? item['Rate'] ?? 0) as num;
         return <String>[
           _formatDate(item['inward_date']),
           item['lot_number'] ?? 'N/A',
           item['lot_name'] ?? 'N/A',
           item['dia']?.toString() ?? '-',
-          item['colour']?.toString() ?? '-', // New Column
+          item['colour']?.toString() ?? '-', 
           item['rolls']?.toString() ?? '0',
           '${FormatUtils.formatWeight(item['weight'])}',
+          '${FormatUtils.formatCurrency(weight * rate)}', // ADDED
           '$aging',
         ];
       }).toList(),
@@ -401,8 +405,11 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         '',
         '${_agingData.fold<int>(0, (sum, item) => sum + ((item['rolls'] ?? 0) as num).toInt())}',
         FormatUtils.formatWeight(
-          _agingData.fold<double>(0.0, (sum, item) => sum + ((item['weight'] ?? 0) as num)),
+          _agingData.fold<double>(0.0, (sum, item) => sum + ((item['weight'] ?? 0) as num).toDouble()),
         ),
+        FormatUtils.formatCurrency(
+          _agingData.fold<double>(0.0, (sum, item) => sum + (((item['weight'] ?? 0) as num) * ((item['rate'] ?? 0) as num)).toDouble()),
+        ), // ADDED
         '',
       ],
     );
@@ -432,10 +439,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           'lotName': lotName,
           'rolls': 0,
           'weight': 0.0,
+          'value': 0.0, // ADDED
         };
       }
       summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
-      summary[lotNo]['weight'] += (item['weight'] ?? 0.0) as num;
+      final weight = (item['weight'] ?? 0.0) as num;
+      final rate = (item['rate'] ?? item['Rate'] ?? 0.0) as num;
+      summary[lotNo]['weight'] += weight;
+      summary[lotNo]['value'] += (weight * rate); // ADDED
     }
 
     return _buildReportTable(
@@ -444,6 +455,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Lot Name',
         'Total Rolls',
         'Total Weight',
+        'Total Value', // ADDED
         'Status',
       ],
       rows: summary.values.map((v) {
@@ -452,6 +464,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           v['lotName'],
           '${v['rolls']}',
           '${FormatUtils.formatWeight(v['weight'])} Kg',
+          '${FormatUtils.formatCurrency(v['value'] ?? 0)}', // ADDED
           'Pending',
         ];
       }).toList(),
@@ -459,7 +472,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'TOTAL',
         '',
         '${summary.values.fold<int>(0, (sum, v) => sum + ((v['rolls'] ?? 0) as num).toInt())}',
-        '${FormatUtils.formatWeight(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num)))} Kg',
+        '${FormatUtils.formatWeight(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num).toDouble()))} Kg',
+        '${FormatUtils.formatCurrency(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['value'] ?? 0) as num).toDouble()))}', // ADDED
         '',
       ],
     );
@@ -581,6 +595,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Process',
         'Rolls',
         'Wt',
+        'Val', // ADDED
       ],
       rows: _outwardData.map((out) {
         final items = out['items'] as List? ?? [];
@@ -588,6 +603,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           0.0,
           (sum, i) => sum + (i['total_weight'] ?? 0),
         );
+        final rate = (out['rate'] ?? out['Rate'] ?? 0) as num; // ADDED
         return <String>[
           out['partyName'] ?? '-',
           out['lotName'] ?? '-',
@@ -598,6 +614,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           out['process'] ?? '-',
           '${items.length}',
           FormatUtils.formatWeight(weight),
+          FormatUtils.formatCurrency(weight * rate), // ADDED
         ];
       }).toList(),
       footerRow: [
@@ -617,6 +634,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                 (out['items'] as List).fold<double>(0.0, (s, i) => s + ((i['total_weight'] ?? 0) as num).toDouble()),
           ),
         ),
+        FormatUtils.formatCurrency(
+          _outwardData.fold<double>(
+            0.0,
+            (sum, out) =>
+                sum +
+                ((out['items'] as List).fold<double>(0.0, (s, i) => s + ((i['total_weight'] ?? 0) as num).toDouble()) * ((out['rate'] ?? 0) as num).toDouble()),
+          ),
+        ), // ADDED
       ],
     );
   }
@@ -629,10 +654,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Lot Name',
         'In Roll',
         'In Wt',
+        'In Val', // ADDED
         'Out Roll',
         'Out Wt',
+        'Out Val', // ADDED
         'Bal Roll',
         'Bal Wt',
+        'Bal Val', // ADDED
         'Status',
       ],
       rows: _closingData.map((item) {
@@ -641,10 +669,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           item['lot_name'] ?? '-',
           '${item['rec_rolls'] ?? 0}',
           '${FormatUtils.formatWeight(item['rec_weight'])}',
+          '${FormatUtils.formatCurrency(item['rec_value'] ?? 0)}', // ADDED
           '${item['deliv_rolls'] ?? 0}',
           '${FormatUtils.formatWeight(item['deliv_weight'])}',
+          '${FormatUtils.formatCurrency(item['deliv_value'] ?? 0)}', // ADDED
           '${item['balance_rolls'] ?? 0}',
           '${FormatUtils.formatWeight(item['balance_weight'])}',
+          '${FormatUtils.formatCurrency(item['balance_value'] ?? 0)}', // ADDED
           item['status'] ?? '-',
         ];
       }).toList(),
@@ -653,16 +684,25 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         '',
         '${_closingData.fold<int>(0, (sum, item) => sum + ((item['rec_rolls'] ?? 0) as num).toInt())}',
         FormatUtils.formatWeight(
-          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['rec_weight'] ?? 0) as num)),
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['rec_weight'] ?? 0) as num).toDouble()),
         ),
+        FormatUtils.formatCurrency(
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['rec_value'] ?? 0) as num).toDouble()),
+        ), // ADDED
         '${_closingData.fold<int>(0, (sum, item) => sum + ((item['deliv_rolls'] ?? 0) as num).toInt())}',
         FormatUtils.formatWeight(
-          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['deliv_weight'] ?? 0) as num)),
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['deliv_weight'] ?? 0) as num).toDouble()),
         ),
+        FormatUtils.formatCurrency(
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['deliv_value'] ?? 0) as num).toDouble()),
+        ), // ADDED
         '${_closingData.fold<int>(0, (sum, item) => sum + ((item['balance_rolls'] ?? 0) as num).toInt())}',
         FormatUtils.formatWeight(
-          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['balance_weight'] ?? 0) as num)),
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['balance_weight'] ?? 0) as num).toDouble()),
         ),
+        FormatUtils.formatCurrency(
+          _closingData.fold<double>(0.0, (sum, item) => sum + ((item['balance_value'] ?? 0) as num).toDouble()),
+        ), // ADDED
         '',
       ],
     );
@@ -916,10 +956,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           'Colour',
           'Rolls',
           'Wt',
+          'Val', // ADDED
           'Days',
         ];
         rows = _agingData.map((item) {
           final aging = _calculateAging(item['inward_date']);
+          final weight = (item['weight'] as num?) ?? 0;
+          final rate = (item['rate'] ?? item['Rate'] ?? 0) as num;
           return <String>[
             _formatDate(item['inward_date']),
             item['lot_number'] ?? 'N/A',
@@ -927,7 +970,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             item['dia']?.toString() ?? '-',
             item['colour']?.toString() ?? '-',
             item['rolls']?.toString() ?? '0',
-            '${(item['weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+            '${weight.toStringAsFixed(1)}',
+            '${(weight * rate).toStringAsFixed(0)}', // ADDED
             '$aging',
           ];
         }).toList();
@@ -961,11 +1005,24 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               'lotName': lotName,
               'rolls': 0,
               'weight': 0.0,
+              'value': 0.0, // ADDED
             };
           }
           summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
-          summary[lotNo]['weight'] += (item['weight'] ?? 0.0) as num;
+          final weight = (item['weight'] ?? 0.0) as num;
+          final rate = (item['rate'] ?? item['Rate'] ?? 0.0) as num;
+          summary[lotNo]['weight'] += weight;
+          summary[lotNo]['value'] += (weight * rate);
         }
+
+        headers = [
+          'Lot Number',
+          'Lot Name',
+          'Total Rolls',
+          'Total Weight',
+          'Total Val', // ADDED
+          'Status',
+        ];
 
         rows = summary.values.map((v) {
           return <String>[
@@ -973,6 +1030,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             v['lotName'],
             '${v['rolls']}',
             '${v['weight'].toStringAsFixed(1)} Kg',
+            '${(v['value'] as num).toStringAsFixed(0)}', // ADDED
             'Pending',
           ];
         }).toList();
@@ -1054,6 +1112,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             'Process',
             'Rolls',
             'Wt',
+            'Val', // ADDED
           ];
           rows = _outwardData.map((out) {
             final items = out['items'] as List? ?? [];
@@ -1061,6 +1120,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               0.0,
               (sum, i) => sum + (i['total_weight'] ?? 0),
             );
+            final rate = (out['rate'] as num?) ?? 0; // ADDED
             return <String>[
               out['partyName'] ?? '-',
               out['lotName'] ?? '-',
@@ -1071,6 +1131,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               out['process'] ?? '-',
               '${items.length}',
               weight.toStringAsFixed(1),
+              (weight * ((out['rate'] ?? out['Rate'] ?? 0) as num)).toStringAsFixed(0),
             ];
           }).toList();
         }
@@ -1082,10 +1143,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           'Lot Name',
           'In Roll',
           'In Wt',
+          'In Val', // ADDED
           'Out Roll',
           'Out Wt',
+          'Out Val', // ADDED
           'Bal Roll',
           'Bal Wt',
+          'Bal Val', // ADDED
           'Status',
         ];
         rows = _closingData.map((item) {
@@ -1094,10 +1158,13 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             item['lot_name'] ?? '-',
             '${item['rec_rolls'] ?? 0}',
             '${(item['rec_weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+            '${(item['rec_value'] as num?)?.toStringAsFixed(0) ?? "0"}', // ADDED
             '${item['deliv_rolls'] ?? 0}',
             '${(item['deliv_weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+            '${(item['deliv_value'] as num?)?.toStringAsFixed(0) ?? "0"}', // ADDED
             '${item['balance_rolls'] ?? 0}',
             '${(item['balance_weight'] as num?)?.toStringAsFixed(1) ?? "0"}',
+            '${(item['balance_value'] as num?)?.toStringAsFixed(0) ?? "0"}', // ADDED
             item['status'] ?? '-',
           ];
         }).toList();

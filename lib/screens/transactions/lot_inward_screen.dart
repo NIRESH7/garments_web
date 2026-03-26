@@ -38,7 +38,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   final _scaleService = ScaleService.instance;
   final _formKey = GlobalKey<FormState>();
 
-  final DateTime _inwardDate = DateTime.now();
+  DateTime _inwardDate = DateTime.now();
   late String _inTime;
   String? _outTime;
 
@@ -534,6 +534,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         }
       }
     }
+    // inwardDate
+    if (data['inwardDate'] != null) {
+      try {
+        _inwardDate = DateTime.parse(data['inwardDate']);
+      } catch (e) {
+        print('Error parsing inwardDate: $e');
+      }
+    }
   }
 
   List<String> _getValues(List<dynamic> categories, dynamic nameOrNames) {
@@ -810,6 +818,32 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _inwardDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).primaryColor,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _inwardDate) {
+      setState(() {
+        _inwardDate = picked;
+      });
+    }
   }
 
   Future<void> _shareToWhatsApp(Map<String, dynamic> data) async {
@@ -2271,9 +2305,20 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _buildReadOnly(
-                    "Inward Date",
-                    DateFormat('dd-MM-yyyy').format(_inwardDate),
+                  child: InkWell(
+                    onTap: () => _selectDate(context),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: "Inward Date",
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.all(8),
+                        suffixIcon: Icon(Icons.calendar_today, size: 20),
+                      ),
+                      child: Text(
+                        DateFormat('dd-MM-yyyy').format(_inwardDate),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
                   ),
                 ),
               ],

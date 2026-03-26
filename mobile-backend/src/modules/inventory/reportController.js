@@ -32,12 +32,24 @@ const getOverviewReport = asyncHandler(async (req, res) => {
                 party_name: i.fromParty,
                 rec_rolls: 0,
                 rec_weight: 0,
+                rec_value: 0, // ADDED
                 deliv_rolls: 0,
                 deliv_weight: 0,
+                deliv_value: 0, // ADDED
+                rate: i.rate || 0, // ADDED
             };
         }
+        let recWt = 0;
+        let recVal = 0;
+        i.diaEntries.forEach(entry => {
+            const entryWt = (entry.recWt || 0);
+            recWt += entryWt;
+            recVal += entryWt * (entry.rate || i.rate || 0);
+        });
+        
         stockMap[i.lotNo].rec_rolls += i.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
-        stockMap[i.lotNo].rec_weight += i.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
+        stockMap[i.lotNo].rec_weight += recWt;
+        stockMap[i.lotNo].rec_value += recVal;
     });
 
     outwards.forEach(o => {
@@ -45,8 +57,10 @@ const getOverviewReport = asyncHandler(async (req, res) => {
         if (stockMap[o.lotNo]) {
             o.items.forEach(item => {
                 // Sum up rolls and weight for all colors in the set
+                const delivWt = item.total_weight || 0;
                 stockMap[o.lotNo].deliv_rolls += item.colours.reduce((acc, curr) => acc + (curr.no_of_rolls || 0), 0);
-                stockMap[o.lotNo].deliv_weight += item.total_weight || 0;
+                stockMap[o.lotNo].deliv_weight += delivWt;
+                stockMap[o.lotNo].deliv_value += delivWt * (stockMap[o.lotNo].rate || 0); // ADDED
             });
         } else {
             // Handle case where outward exists but inward doesn't (shouldn't happen ideally)
@@ -63,6 +77,7 @@ const getOverviewReport = asyncHandler(async (req, res) => {
             ...s,
             balance_rolls: bal_rolls,
             balance_weight: bal_weight,
+            balance_value: s.rec_value - s.deliv_value, // ADDED
             status: statusVal
         };
     });
@@ -226,8 +241,12 @@ const getClientFormatReport = asyncHandler(async (req, res) => {
 
     const report = inwards.map(i => {
         const totalInWeight = i.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
+        const totalInValue = i.diaEntries.reduce((acc, curr) => acc + ((curr.recWt || 0) * (curr.rate || i.rate || 0)), 0);
+        const avgRate = totalInWeight > 0 ? (totalInValue / totalInWeight) : (i.rate || 0);
+
         const totalOutWeight = outwardMap[i.lotNo] || 0;
         const balanceWeight = Math.max(0, totalInWeight - totalOutWeight);
+        const balanceValue = balanceWeight * avgRate;
         const status = balanceWeight > 0.1 ? 'In Stock' : 'Dispatched';
 
         return {
@@ -237,7 +256,10 @@ const getClientFormatReport = asyncHandler(async (req, res) => {
             fromParty: i.fromParty,
             inwardDate: i.inwardDate,
             totalWeight: totalInWeight,
+            rate: avgRate, 
+            value: totalInValue,
             balanceWeight: balanceWeight,
+            balanceValue: balanceValue,
             status: status,
             qualityStatus: i.qualityStatus || 'N/A',
             vehicleNo: i.vehicleNo || 'N/A'

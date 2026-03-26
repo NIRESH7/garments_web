@@ -1340,7 +1340,31 @@ const getOutwards = asyncHandler(async (req, res) => {
     if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
     if (dia) query.dia = { $regex: new RegExp(dia, 'i') };
 
-    const outwards = await Outward.find(query).sort({ dateTime: -1 });
+    const outwards = await Outward.find(query).sort({ dateTime: -1 }).lean();
+    
+    // Enrich with rate from Inward
+    for (let out of outwards) {
+        if (out.lotNo) {
+            // Try partial match for lotNo too if needed, but usually strict is safer if data is clean
+            const inward = await Inward.findOne({ 
+                $or: [
+                    { lotNo: out.lotNo },
+                    { lotNo: { $regex: new RegExp(`^${out.lotNo.trim()}$`, 'i') } }
+                ]
+            }).select('rate diaEntries').lean();
+
+            if (inward) {
+                // Try to find rate for this specific dia if available
+                const diaEntry = (inward.diaEntries || []).find(e => e.dia === out.dia);
+                out.rate = diaEntry ? diaEntry.rate : (inward.rate || 0);
+            } else {
+                out.rate = 0;
+            }
+        } else {
+            out.rate = 0;
+        }
+    }
+    
     res.json(outwards);
 });
 
@@ -1485,6 +1509,9 @@ const getLotAgingReport = asyncHandler(async (req, res) => {
                     const totalWt = setWeights.reduce((a, b) => a + b, 0);
                     const totalRolls = setWeights.length; // Approximate if sets=rolls
 
+                    // Find rate for this dia
+                    const diaRate = (inward.diaEntries.find(e => e.dia === sd.dia)?.rate) || inward.rate || 0;
+
                     if (totalWt > 0) {
                         report.push({
                             lot_number: inward.lotNo,
@@ -1494,6 +1521,7 @@ const getLotAgingReport = asyncHandler(async (req, res) => {
                             colour: row.colour, // THE NEW FIELD
                             rolls: totalRolls,
                             weight: totalWt,
+                            rate: diaRate, // UPDATED
                             age: Math.ceil((new Date() - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
                         });
                     }
@@ -1510,6 +1538,7 @@ const getLotAgingReport = asyncHandler(async (req, res) => {
                     colour: 'N/A',
                     rolls: entry.recRoll,
                     weight: entry.recWt,
+                    rate: entry.rate || inward.rate || 0, // ADDED
                     age: Math.ceil((new Date() - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
                 });
             });
