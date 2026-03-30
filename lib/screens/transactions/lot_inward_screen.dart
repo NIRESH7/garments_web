@@ -2867,6 +2867,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Widget _buildStickerPage() {
     final enteredDias = _getDiasWithRolls().toList();
     InwardRow? selectedRow;
+    final diaData = _selectedStickerDia != null ? _stickerData[_selectedStickerDia!] : null;
     if (_selectedStickerDia != null) {
       for (final r in _rows) {
         if (r.dia?.trim() == _selectedStickerDia?.trim()) {
@@ -2877,7 +2878,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
     int setsCount = 0;
     if (_selectedStickerDia != null) {
-      if (_useSetBasedEntry) {
+      if (diaData != null && diaData.setsOverride != null) {
+        setsCount = diaData.setsOverride!;
+      } else if (_useSetBasedEntry) {
         for (var r in _rows) {
           if (r.dia?.trim() == _selectedStickerDia?.trim()) {
             setsCount += r.sets;
@@ -2911,11 +2914,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             }
           }),
         ),
-        if (_selectedStickerDia != null) ...[
-          const SizedBox(height: 12),
-          Builder(builder: (context) {
-            final diaData = _stickerData[_selectedStickerDia!];
-            if (diaData == null) return const SizedBox.shrink();
+          if (_selectedStickerDia != null) ...[
+            const SizedBox(height: 12),
+            Builder(builder: (context) {
+              if (diaData == null) return const SizedBox.shrink();
             final isMissing = diaData.cuttingDia == null || diaData.cuttingDia!.trim().isEmpty;
 
             return Column(
@@ -2949,18 +2951,35 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
             );
           }),
           const SizedBox(height: 16),
-          if (selectedRow != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Delivery Roll: ${selectedRow.rolls}   '
-                'Delivery Wt: ${FormatUtils.formatWeight(selectedRow.deliveredWeight)} kg',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF475569),
+          if (selectedRow != null && diaData != null)
+            Row(
+              children: [
+                Text(
+                  'Delivery Roll: ${selectedRow.rolls}   '
+                  'Delivery Wt: ${FormatUtils.formatWeight(selectedRow.deliveredWeight)} kg',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
                 ),
-              ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => _removeSet(diaData),
+                  icon: const Icon(Icons.remove_circle, color: Colors.red, size: 24),
+                  tooltip: 'Remove Set',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  onPressed: () => _addSet(diaData),
+                  icon: const Icon(Icons.add_circle, color: Colors.blue, size: 24),
+                  tooltip: 'Add Set',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ),
           if (setsCount > 0)
             _buildDynamicSetTable(setsCount, key: ValueKey(_selectedStickerDia))
@@ -3041,11 +3060,76 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
   }
 
+  void _addSet(StickerDiaData diaData) {
+    setState(() {
+      int currentSets = diaData.setsOverride ?? _getSetsForDia(_selectedStickerDia!);
+      diaData.setsOverride = currentSets + 1;
+    });
+  }
+
+  void _removeSet(StickerDiaData diaData) {
+    int currentSets = diaData.setsOverride ?? _getSetsForDia(_selectedStickerDia!);
+    if (currentSets <= 1) return;
+    setState(() {
+      diaData.setsOverride = currentSets - 1;
+      // Cleanup data
+      if (diaData.racks.length > diaData.setsOverride!) diaData.racks.removeLast();
+      if (diaData.pallets.length > diaData.setsOverride!) diaData.pallets.removeLast();
+      for (var row in diaData.rows) {
+        if (row.setWeights.length > diaData.setsOverride!) row.setWeights.removeLast();
+        if (row.setLabels.length > diaData.setsOverride!) row.setLabels.removeLast();
+        if (row.controllers.length > diaData.setsOverride!) {
+          row.controllers.last.dispose();
+          row.controllers.removeLast();
+        }
+        if (row.focusNodes.length > diaData.setsOverride!) {
+          row.focusNodes.last.dispose();
+          row.focusNodes.removeLast();
+        }
+      }
+    });
+  }
+
+  int _getSetsForDia(String dia) {
+    if (!_useSetBasedEntry) return 1;
+    final diaData = _stickerData[dia];
+    if (diaData != null && diaData.setsOverride != null) {
+      return diaData.setsOverride!;
+    }
+    int totalSets = 0;
+    for (var r in _rows) {
+      if (r.dia?.trim() == dia) {
+        totalSets += r.sets;
+      }
+    }
+    return totalSets;
+  }
+
   Widget _buildDynamicSetTable(int sets, {Key? key}) {
     final dia = _selectedStickerDia!;
     final diaData = _stickerData[dia] ?? StickerDiaData();
     final rows = diaData.rows;
     final setHeaders = _resolveDiaSetLabels(diaData, sets);
+
+    // Responsive Widths
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
+    // Fixed parts (Left columns: Drag, Colour)
+    final dWidth = isMobile ? 30.0 : 40.0;
+    final cWidth = isMobile ? 95.0 : 120.0;
+    final fixedPartWidth = dWidth + cWidth;
+
+    // Scrollable identifiers (Moveable columns: S.NO, GSM)
+    final sWidth = isMobile ? 35.0 : 50.0;
+    final gWidth = isMobile ? 55.0 : 80.0;
+
+    // Scrollable parts (Weights, Roll No, Total)
+    final cellWidth = isMobile ? 85.0 : 125.0;
+    final rollWidth = isMobile ? 65.0 : 100.0;
+    final totWidth = isMobile ? 85.0 : 125.0;
+
+    final totalTableWidth = fixedPartWidth + sWidth + gWidth + (sets * cellWidth) + rollWidth + totWidth;
 
     // Ensure rack and pallet lists are sized correctly
     while (diaData.racks.length < sets) diaData.racks.add(null);
@@ -3080,7 +3164,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 children: [
                   // Scrollable Header Content
                   Padding(
-                    padding: const EdgeInsets.only(left: 350),
+                    padding: EdgeInsets.only(left: fixedPartWidth),
                     child: Column(
                       children: [
                         // Header Row 1: Rack Name
@@ -3091,11 +3175,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           ),
                           child: Row(
                             children: [
+                              _buildGridCell("", sWidth),
+                              _buildGridCell("", gWidth),
                               ...List.generate(
                                 sets,
                                 (i) => _buildGridCell(
                                   "",
-                                  125,
+                                  cellWidth,
                                   child: _buildSmallDropdown(
                                     diaData.racks[i],
                                     _rackNames,
@@ -3104,8 +3190,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                   ),
                                 ),
                               ),
-                              _buildGridCell("", 100),
-                              _buildGridCell("", 125),
+                              _buildGridCell("", rollWidth),
+                              _buildGridCell("", totWidth),
                             ],
                           ),
                         ),
@@ -3117,11 +3203,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           ),
                           child: Row(
                             children: [
+                              _buildGridCell("", sWidth),
+                              _buildGridCell("", gWidth),
                               ...List.generate(
                                 sets,
                                 (i) => _buildGridCell(
                                   "",
-                                  125,
+                                  cellWidth,
                                   child: _buildSmallDropdown(
                                     diaData.pallets[i],
                                     _palletNos,
@@ -3130,8 +3218,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                   ),
                                 ),
                               ),
-                              _buildGridCell("", 100),
-                              _buildGridCell("", 125),
+                              _buildGridCell("", rollWidth),
+                              _buildGridCell("", totWidth),
                             ],
                           ),
                         ),
@@ -3143,15 +3231,48 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           ),
                           child: Row(
                             children: [
+                              _buildGridCell("S.NO", sWidth, isMobile: isMobile),
+                              _buildGridCell("GSM", gWidth, isMobile: isMobile),
                               ...List.generate(
                                 sets,
                                 (i) => _buildGridCell(
-                                  setHeaders[i],
-                                  125,
+                                  "",
+                                  cellWidth,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        setHeaders[i],
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: isMobile ? 10 : 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              _buildGridCell("Roll No", 100),
-                              _buildGridCell("TOTAL", 125),
+                              _buildGridCell(
+                                "",
+                                rollWidth,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Roll No",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: isMobile ? 10 : 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _buildGridCell(
+                                "TOTAL",
+                                totWidth,
+                                isMobile: isMobile,
+                              ),
                             ],
                           ),
                         ),
@@ -3162,12 +3283,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   Transform.translate(
                     offset: Offset(_hScrollOffset, 0),
                     child: Container(
-                      width: 350,
+                      width: fixedPartWidth,
                       color: Colors.white,
                       child: Column(
                         children: [
-                          _buildHeaderCell("", 350),
-                          _buildHeaderCell("", 350),
+                          _buildHeaderCell("", fixedPartWidth),
+                          _buildHeaderCell("", fixedPartWidth),
                           Container(
                             height: 65,
                             decoration: BoxDecoration(
@@ -3179,11 +3300,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                             ),
                             child: Row(
                               children: [
-                                _buildGridCell("", 40),
-                                _buildGridCell("S.NO", 50),
-                                _buildGridCell("Colour", 120),
-                                _buildGridCell("GSM", 80),
-                                _buildGridCell("ACTION", 60),
+                                _buildGridCell("", dWidth),
+                                _buildGridCell("Colour", cWidth, isMobile: isMobile),
                               ],
                             ),
                           ),
@@ -3196,7 +3314,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
               // BODY SECTION (Reorderable Rows)
               SizedBox(
-                width: 350 + (sets * 125) + 100 + 125, // Total table width
+                width: totalTableWidth,
                 child: ReorderableListView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -3214,9 +3332,26 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         children: [
                           // All cells (Scrollable part offset by fixed width)
                           Padding(
-                            padding: const EdgeInsets.only(left: 350),
+                            padding: EdgeInsets.only(left: fixedPartWidth),
                             child: Row(
                               children: [
+                                _buildGridCell('${idx + 1}', sWidth, isMobile: isMobile),
+                                _buildGridCell(
+                                  "",
+                                  gWidth,
+                                  child: _buildTableInputText(
+                                    r.gsmController!,
+                                    (v) {
+                                      r.gsm = v;
+                                      final colour = r.colour;
+                                      if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
+                                        _lastStickerGsmMap[colour] = v;
+                                      }
+                                      setState(() {});
+                                    },
+                                    isMobile: isMobile,
+                                  ),
+                                ),
                                 ...List.generate(sets, (i) {
                                   if (r.setWeights.length <= i) r.setWeights.add('');
                                   if (r.setLabels.length <= i) {
@@ -3230,7 +3365,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                   }
                                   return _buildGridCell(
                                     "",
-                                    125,
+                                    cellWidth,
                                     child: _buildTableInputText(
                                       r.controllers[i],
                                       (v) {
@@ -3250,29 +3385,35 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                       onWeightTap: _enableWeightInput ? () => _captureScaleWeightForSet(r, i) : null,
                                       isListening: _isListening && _listeningForStickerRowIdx == idx && _listeningForSetIdx == i,
                                       focusNode: r.focusNodes.length > i ? r.focusNodes[i] : null,
+                                      isMobile: isMobile,
                                     ),
                                   );
                                 }),
                                 // Roll No Input
                                 _buildGridCell(
                                   "",
-                                  100,
-                                  child: _buildTableInputText(r.rollNoController, (v) {
-                                    r.rollNo = v;
-                                  }),
+                                  rollWidth,
+                                  child: _buildTableInputText(
+                                    r.rollNoController,
+                                    (v) {
+                                      r.rollNo = v;
+                                    },
+                                    isMobile: isMobile,
+                                  ),
                                 ),
                                 // Row Total
                                 _buildGridCell(
                                   r.totalWeight.toStringAsFixed(3),
-                                  125,
+                                  totWidth,
                                   alignment: Alignment.center,
+                                  isMobile: isMobile,
                                   child: Text(
                                     r.totalWeight.toStringAsFixed(3),
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      color: Color(0xFF475569),
+                                      fontSize: isMobile ? 10 : 12,
+                                      color: const Color(0xFF475569),
                                     ),
                                   ),
                                 ),
@@ -3283,22 +3424,25 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           Transform.translate(
                             offset: Offset(_hScrollOffset, 0),
                             child: Container(
-                              width: 350,
+                              width: fixedPartWidth,
                               color: Colors.white.withOpacity(0.9), // Slightly opaque for drag clarity
                               child: Row(
                                 children: [
                                   _buildGridCell(
                                     "",
-                                    40,
+                                    dWidth,
                                     child: ReorderableDragStartListener(
                                       index: idx,
-                                      child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
+                                      child: Icon(
+                                        Icons.drag_handle,
+                                        color: Colors.grey,
+                                        size: isMobile ? 16 : 20,
+                                      ),
                                     ),
                                   ),
-                                  _buildGridCell('${idx + 1}', 50),
                                   _buildGridCell(
                                     "",
-                                    120,
+                                    cWidth,
                                     child: _buildSmallDropdown(
                                       r.colour,
                                       _colours,
@@ -3306,32 +3450,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                       hint: "Colour",
                                       itemImages: _colourImages,
                                       onDoubleTap: r.colour != null ? () => _showColorPreview(r.colour!, _colourImages[r.colour!]) : null,
-                                    ),
-                                  ),
-                                  _buildGridCell(
-                                    "",
-                                    80,
-                                    child: _buildTableInputText(r.gsmController!, (v) {
-                                      r.gsm = v;
-                                      final colour = r.colour;
-                                      if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
-                                        _lastStickerGsmMap[colour] = v;
-                                      }
-                                      setState(() {});
-                                    }),
-                                  ),
-                                  _buildGridCell(
-                                    "",
-                                    60,
-                                    child: IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                      onPressed: () {
-                                        setState(() {
-                                          diaData.rows.removeAt(idx);
-                                        });
-                                      },
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
                                     ),
                                   ),
                                 ],
@@ -3350,39 +3468,44 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 children: [
                   // Scrollable Footer Content
                   Padding(
-                    padding: const EdgeInsets.only(left: 350),
+                    padding: EdgeInsets.only(left: fixedPartWidth),
                     child: Container(
                       height: 50,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF1F5F9),
                       ),
                       child: Row(
                         children: [
+                          _buildGridCell("", sWidth),
+                          _buildGridCell("", gWidth),
                           ...List.generate(
                             sets,
                             (i) => _buildGridCell(
                               FormatUtils.formatWeight(setTotals[i]),
-                              125,
+                              cellWidth,
                               alignment: Alignment.center,
+                              isMobile: isMobile,
                             ),
                           ),
                           _buildGridCell(
                             totalRolls.toString(),
-                            100,
+                            rollWidth,
                             alignment: Alignment.center,
+                            isMobile: isMobile,
                             child: Text(
                               totalRolls.toString(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Color(0xFF1E293B),
+                                fontSize: isMobile ? 11 : 13,
+                                color: const Color(0xFF1E293B),
                               ),
                             ),
                           ),
                           _buildGridCell(
                             FormatUtils.formatWeight(grandTotal),
-                            125,
+                            totWidth,
                             alignment: Alignment.center,
+                            isMobile: isMobile,
                           ),
                         ],
                       ),
@@ -3393,7 +3516,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     offset: Offset(_hScrollOffset, 0),
                     child: Container(
                       height: 50,
-                      width: 350,
+                      width: fixedPartWidth,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
                         border: Border(
@@ -3402,12 +3525,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: const Text(
+                      child: Text(
                         "SET TOTAL",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                          fontSize: 14,
+                          color: const Color(0xFF1E293B),
+                          fontSize: isMobile ? 11 : 14,
                         ),
                       ),
                     ),
@@ -3443,7 +3566,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildHeaderCell(String label, double width) {
+  Widget _buildHeaderCell(String label, double width, {bool isMobile = false}) {
     return Container(
       width: width,
       height: 65,
@@ -3455,13 +3578,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         ),
       ),
       alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 6 : 12),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
-          fontSize: 12,
-          color: Color(0xFF475569),
+          fontSize: isMobile ? 10 : 12,
+          color: const Color(0xFF475569),
         ),
       ),
     );
@@ -3472,24 +3595,24 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     double width, {
     Widget? child,
     Alignment alignment = Alignment.center,
-    double padding = 4,
+    double? padding,
+    bool isMobile = false,
   }) {
     return Container(
       width: width,
       height: 65, // Increased from 50 to allow wrapping
-      padding: EdgeInsets.symmetric(horizontal: padding),
+      padding: EdgeInsets.symmetric(horizontal: padding ?? (isMobile ? 2 : 4)),
       decoration: BoxDecoration(
         border: Border(right: BorderSide(color: Colors.grey.shade300)),
       ),
       alignment: alignment,
-      child:
-          child ??
+      child: child ??
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 12,
-              color: Color(0xFF475569),
+              fontSize: isMobile ? 10 : 12,
+              color: const Color(0xFF475569),
             ),
           ),
     );
@@ -3502,6 +3625,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     VoidCallback? onWeightTap,
     bool isListening = false,
     FocusNode? focusNode,
+    bool isMobile = false,
   }) {
     return TextFormField(
       controller: controller,
@@ -3511,12 +3635,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
       ],
-      style: const TextStyle(
-        fontSize: 12,
+      style: TextStyle(
+        fontSize: isMobile ? 10 : 12,
         fontWeight: FontWeight.bold,
       ), // Reduced from 13
       textAlign: TextAlign.center,
-      maxLines: 2, // Allow wrapping
+      maxLines: isMobile ? 1 : 2, // Allow wrapping
       minLines: 1,
       decoration: InputDecoration(
         hintText: '-',
@@ -4361,6 +4485,7 @@ class StickerDiaData {
   List<StickerRow> rows = []; // Start empty so it can be auto-filled correctly
   String? cuttingDia;
   TextEditingController? cuttingDiaController;
+  int? setsOverride;
 
   void dispose() {
     cuttingDiaController?.dispose();
