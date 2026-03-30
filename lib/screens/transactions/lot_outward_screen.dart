@@ -587,6 +587,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
       if (!mounted) return;
 
+      // Prevent duplicate selection
+      if (_selectedSets.any((s) => s['set_no'].toString() == setNo)) return;
+
       setState(() {
         // Find existing stock entries for this set
         final setStock = _availableSets
@@ -597,7 +600,6 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         double setTotalWeight = 0;
 
         // Use ONLY Lot Specific Colours (_currentLotColours)
-        // Fallback: If _currentLotColours is empty, extract from setStock
         final lotColours = _currentLotColours.isNotEmpty
             ? _currentLotColours
             : setStock
@@ -626,7 +628,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           });
         }
 
-        // If for some reason _currentLotColours is empty, fall back to stock entries
+        // If for some reason colours list is still empty, fall back to stock entries
         if (colours.isEmpty) {
           for (var entry in setStock) {
             final w = (entry['weight'] as num?)?.toDouble() ?? 0.0;
@@ -681,10 +683,12 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     for (var set in _selectedSets) {
       final colours = set['colours'] as List;
       for (var col in colours) {
-        final name = col['colour'].toString().trim().isEmpty
-            ? 'N/A'
-            : col['colour'].toString();
-        totals[name] = (totals[name] ?? 0) + (col['weight'] as double);
+        if (col['isChecked'] == true) { // Filter only checked colors
+          final name = col['colour'].toString().trim().isEmpty
+              ? 'N/A'
+              : col['colour'].toString();
+          totals[name] = (totals[name] ?? 0) + (col['weight'] as double);
+        }
       }
     }
     return totals;
@@ -702,7 +706,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     for (var set in _selectedSets) {
       final colours = set['colours'] as List;
       for (var col in colours) {
-        total += (col['roll_weight'] as double);
+        if (col['isChecked'] == true) { // Filter only checked colors
+          total += (col['roll_weight'] as double);
+        }
       }
     }
     return total;
@@ -812,12 +818,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       'outTime': _outTime,
       'items': _selectedSets
           .map(
-            (set) => {
-              'set_no': set['set_no'],
-              'total_weight': set['total_weight'],
-              'rack_name': set['rack_name'],
-              'pallet_number': set['pallet_number'],
-              'colours': (set['colours'] as List)
+            (set) {
+              final checkedColours = (set['colours'] as List)
+                  .where((col) => col['isChecked'] == true)
                   .map(
                     (col) => {
                       'colour': col['colour'],
@@ -826,9 +829,17 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                       'no_of_rolls': col['no_of_rolls'],
                     },
                   )
-                  .toList(),
+                  .toList();
+              return {
+                'set_no': set['set_no'],
+                'total_weight': set['total_weight'], // Already recalculated correctly
+                'rack_name': set['rack_name'],
+                'pallet_number': set['pallet_number'],
+                'colours': checkedColours,
+              };
             },
           )
+          .where((set) => (set['colours'] as List).isNotEmpty) // Only save sets with at least one color checked
           .toList(),
       'lotInchargeSignature': _lotInchargeSignature,
       'authorizedSignature': _authorizedSignature,
@@ -1268,10 +1279,12 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     final setColours = set['colours'] as List? ?? [];
     double total = 0.0;
     for (final col in setColours) {
-      if (col is Map<String, dynamic>) {
-        total += (col['weight'] as num?)?.toDouble() ?? 0.0;
-      } else if (col is Map) {
-        total += (col['weight'] as num?)?.toDouble() ?? 0.0;
+      if (col['isChecked'] == true) { // Filter only checked colors
+        if (col is Map<String, dynamic>) {
+          total += (col['weight'] as num?)?.toDouble() ?? 0.0;
+        } else if (col is Map) {
+          total += (col['weight'] as num?)?.toDouble() ?? 0.0;
+        }
       }
     }
     set['total_weight'] = total;
@@ -1400,6 +1413,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 setState(() {
                   final target = _ensureSetColourEntry(activeSet, colour);
                   target['isChecked'] = val ?? false;
+                  _recalculateSetTotalWeight(activeSet); // Trigger recalculation
                 });
               },
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

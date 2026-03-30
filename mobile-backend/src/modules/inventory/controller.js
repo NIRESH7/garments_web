@@ -12,6 +12,31 @@ const COLOUR_CATEGORY_REGEX = /^(colou?r|colou?rs|color|colors)$/i;
 
 const normalizeText = (value) => value?.toString().trim() ?? '';
 
+// Ultra-robust key canonicalization for matching
+// Removes "set" prefix, all spaces, and special characters. 
+// E.g. "Set-1", "Set 1", "  1  ", "Set-01" all become "1"
+const canonicalSet = (s) => {
+    const normalized = normalizeText(s).toLowerCase().replace(/^set/i, '');
+    const numericPart = normalized.replace(/[^0-9]/g, '');
+    // If it's a number, return it without leading zeros
+    if (numericPart && !isNaN(numericPart)) {
+        return parseInt(numericPart, 10).toString();
+    }
+    // Otherwise return alphanumeric version
+    return normalized.replace(/[^a-z0-9]/g, '');
+};
+
+// Removes all spaces and special characters from color name
+const canonicalColour = (c) => {
+    return normalizeText(c)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+};
+
+const canonicalKey = (setNo, colour) => {
+    return `${canonicalSet(setNo)}|${canonicalColour(colour)}`;
+};
+
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const extractColoursFromStorageDetails = (storageDetails) => {
@@ -994,47 +1019,91 @@ const getLotsFifo = asyncHandler(async (req, res) => {
 // @route   GET /api/inventory/inward/balanced-sets
 const getBalancedSets = asyncHandler(async (req, res) => {
     const { lotNo, dia } = req.query;
-    const inwards = await Inward.find({ lotNo, 'diaEntries.dia': dia });
+    
+    // Normalize query params
+    const normalizedLotNo = normalizeText(lotNo);
+    const normalizedDia = normalizeText(dia);
 
-    // Aggregate all possible sets from storageDetails (Inwards)
-    let allSets = [];
-    inwards.forEach(inward => {
-        if (inward.storageDetails && inward.storageDetails.length > 0) {
-            inward.storageDetails.forEach(sd => {
-                if (sd.dia === dia) {
-                    sd.rows.forEach(row => {
-                        row.setWeights.forEach((wt, idx) => {
-                            allSets.push({
-                                set_no: getSetIdentifierFromRow(row, idx),
+    // Case-insensitive search for Lot and Dia with optional surrounding whitespace
+    const lotRegex = new RegExp(`^\\s*${escapeRegex(normalizedLotNo)}\\s*$`, 'i');
+    const diaRegex = new RegExp(`^\\s*${escapeRegex(normalizedDia)}\\s*$`, 'i');
+
+    const inwards = await Inward.find({ 
+        lotNo: lotRegex, 
+        'diaEntries.dia': diaRegex
+    });
+    
+    const outwards = await Outward.find({ 
+        lotNo: lotRegex, 
+        dia: diaRegex 
+    });
+
+    console.log(`\n--- Balancing Logic [Lot: ${normalizedLotNo}, Dia: ${normalizedDia}] ---`);
+    console.log(`[Diagnostic] Found ${inwards.length} Inward docs and ${outwards.length} Outward docs for lot matching: ${normalizedLotNo}`);
+
+    // Map to track balance per canonicalKey
+    const balanceMap = {};
+
+    inwards.forEach(inw => {
+        if (inw.storageDetails && Array.isArray(inw.storageDetails)) {
+            inw.storageDetails.forEach(row => {
+                // Robust Dia check: If document matched, we only filter row-level dia if it's explicitly different
+                const rowDia = normalizeText(row.dia);
+                const diaMismatch = rowDia && !new RegExp(`^\\s*${escapeRegex(normalizedDia)}\\s*$`, 'i').test(rowDia);
+                if (diaMismatch) return; 
+
+                const rawColour = normalizeText(row.colour);
+                if (row.stickerDetails && Array.isArray(row.stickerDetails)) {
+                    row.stickerDetails.forEach((weight, idx) => {
+                        const inWeight = parseFloat(weight) || 0;
+                        if (inWeight <= 0) return;
+
+                        const rawSetNo = getSetIdentifierFromRow(row, idx);
+                        const key = canonicalKey(rawSetNo, rawColour);
+
+                        if (!balanceMap[key]) {
+                            balanceMap[key] = {
+                                set_no: rawSetNo,
                                 colour: row.colour,
-                                weight: parseFloat(wt) || 0,
-                                rack_name: sd.racks && sd.racks[idx] ? sd.racks[idx] : 'Not Assigned',
-                                pallet_number: sd.pallets && sd.pallets[idx] ? sd.pallets[idx] : 'Not Assigned'
-                            });
-                        });
+                                weight: 0,
+                                rack_name: normalizeText(row.rackName),
+                                pallet_number: normalizeText(row.palletNumber),
+                            };
+                        }
+                        balanceMap[key].weight += inWeight;
                     });
                 }
             });
         }
     });
 
-    // Find all set_no already used in Outwards for this Lot + Dia
-    const outwards = await Outward.find({ lotNo, dia });
-    const usedSetNumbers = new Set();
-    outwards.forEach(outward => {
-        if (outward.items) {
-            outward.items.forEach(item => {
-                if (item.set_no) {
-                    usedSetNumbers.add(item.set_no.toString());
+    // Subtraction logic
+    outwards.forEach(out => {
+        if (out.items && Array.isArray(out.items)) {
+            out.items.forEach(item => {
+                const rawSetNo = normalizeText(item.set_no);
+                if (item.colours && Array.isArray(item.colours)) {
+                    item.colours.forEach(c => {
+                        const rawColour = normalizeText(c.colour);
+                        const outWeight = parseFloat(c.weight) || 0;
+                        if (outWeight <= 0) return;
+
+                        const key = canonicalKey(rawSetNo, rawColour);
+                        if (balanceMap[key]) {
+                            const oldWeight = balanceMap[key].weight;
+                            balanceMap[key].weight = Math.max(0, balanceMap[key].weight - outWeight);
+                            console.log(`[Diagnostic] Subtraction: Key=${key}, DC=${out.dcNo}, -${outWeight}kg (Result: ${balanceMap[key].weight})`);
+                        }
+                    });
                 }
             });
         }
     });
 
-    // Filter out ANY set that has already been dispatched (even if partial color was used, though standard should be full set)
-    // The requirement is: "Already used Set Numbers must NOT appear again"
-    const balancedSets = allSets.filter(s => !usedSetNumbers.has(s.set_no.toString()));
-
+    // Extract results above practically zero
+    const balancedSets = Object.values(balanceMap).filter(item => item.weight > 0.01);
+    console.log(`[Diagnostic] Returning ${balancedSets.length} unique set-color pairs.`);
+    
     res.json(balancedSets);
 });
 
@@ -1250,12 +1319,31 @@ const createOutward = asyncHandler(async (req, res) => {
         }
     }
 
-    // CHECK FOR DUPLICATE SET NUMBERS (Validation Rule: Lot + Dia + Set must be unique)
+    // CHECK FOR DUPLICATE SET-COLOR COMBINATIONS
     const existingOutwards = await Outward.find({ lotNo, dia });
-    const usedSetNumbers = new Set();
+    const usedSetColours = new Set();
     existingOutwards.forEach(out => {
-        out.items.forEach(item => usedSetNumbers.add(item.set_no.toString()));
+        out.items.forEach(item => {
+            if (item.colours) {
+                item.colours.forEach(c => {
+                    usedSetColours.add(`${normalizeText(item.set_no)}|${normalizeText(c.colour)}`);
+                });
+            }
+        });
     });
+
+    // Check if any requested color in a set is already used
+    for (const item of items) {
+        if (item.colours) {
+            for (const c of item.colours) {
+                const compositeKey = `${normalizeText(item.set_no)}|${normalizeText(c.colour)}`;
+                if (usedSetColours.has(compositeKey)) {
+                    res.status(400);
+                    throw new Error(`Set Number ${item.set_no} with colour ${c.colour} is already delivered for Lot ${lotNo} and DIA ${dia}`);
+                }
+            }
+        }
+    }
 
     // Handle file uploads for signatures
     let finalLotInchargeSignature = req.body.lotInchargeSignature;
@@ -1274,13 +1362,6 @@ const createOutward = asyncHandler(async (req, res) => {
         }
     }
 
-    const requestedSetNumbers = items.map(item => item.set_no.toString());
-    const duplicates = requestedSetNumbers.filter(setNo => usedSetNumbers.has(setNo));
-
-    if (duplicates.length > 0) {
-        res.status(400);
-        throw new Error(`Set Number(s) ${duplicates.join(', ')} already delivered for Lot ${lotNo} and DIA ${dia}`);
-    }
 
     const outward = await Outward.create({
         user: req.user._id,

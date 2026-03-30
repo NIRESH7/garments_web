@@ -1034,12 +1034,17 @@ class MobileApiService {
 
   Future<List<Map<String, dynamic>>> getBalancedSets(
     String lotNo,
-    String dia,
-  ) async {
+    String dia, {
+    String? excludeId,
+  }) async {
     try {
       final response = await _client.get(
         '${ApiConstants.inward}/balanced-sets',
-        queryParameters: {'lotNo': lotNo, 'dia': dia},
+        queryParameters: {
+          'lotNo': lotNo,
+          'dia': dia,
+          if (excludeId != null) 'excludeId': excludeId,
+        },
       );
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
