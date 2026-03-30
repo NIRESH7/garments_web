@@ -12,6 +12,8 @@ class CustomDropdownField extends StatelessWidget {
   final String hint;
   final IconData? prefixIcon;
   final Map<String, String>? itemImages;
+  final VoidCallback? onDoubleTap;
+  final Color? Function(String)? resolveColor;
 
   const CustomDropdownField({
     super.key,
@@ -23,6 +25,8 @@ class CustomDropdownField extends StatelessWidget {
     this.hint = 'Select an option',
     this.prefixIcon,
     this.itemImages,
+    this.onDoubleTap,
+    this.resolveColor,
   });
 
   @override
@@ -43,6 +47,7 @@ class CustomDropdownField extends StatelessWidget {
         ],
         GestureDetector(
           onTap: () => _showSelectionDialog(context),
+          onDoubleTap: onDoubleTap,
           child: FormField<String>(
             key: ValueKey(value),
             validator: validator,
@@ -83,11 +88,30 @@ class CustomDropdownField extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                         ],
-                        if (value != null &&
-                            itemImages != null &&
-                            itemImages!.containsKey(value)) ...[
-                          _buildImagePreview(itemImages![value]!),
-                          const SizedBox(width: 10),
+                        if (value != null) ...[
+                          (() {
+                            final rColor = resolveColor?.call(value!);
+                            final imgPath = itemImages?[value!];
+
+                            if (rColor != null) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildColorCircle(rColor),
+                                  const SizedBox(width: 10),
+                                ],
+                              );
+                            } else if (imgPath != null) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildImagePreview(imgPath),
+                                  const SizedBox(width: 10),
+                                ],
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          })(),
                         ],
                         Expanded(
                           child: Text(
@@ -142,10 +166,23 @@ class CustomDropdownField extends StatelessWidget {
         items: items,
         initialValue: value,
         itemImages: itemImages,
+        resolveColor: resolveColor,
         onSelected: (val) {
           onChanged(val);
           Navigator.pop(context);
         },
+      ),
+    );
+  }
+
+  Widget _buildColorCircle(Color color) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.grey.shade300, width: 1),
       ),
     );
   }
@@ -175,6 +212,7 @@ class _SearchableListDialog extends StatefulWidget {
   final List<String> items;
   final String? initialValue;
   final Map<String, String>? itemImages;
+  final Color? Function(String)? resolveColor;
   final Function(String) onSelected;
 
   const _SearchableListDialog({
@@ -182,6 +220,7 @@ class _SearchableListDialog extends StatefulWidget {
     required this.items,
     this.initialValue,
     this.itemImages,
+    this.resolveColor,
     required this.onSelected,
   });
 
@@ -302,25 +341,44 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
 
                         return ListTile(
                           onTap: () => widget.onSelected(item),
-                          leading: imagePath != null
-                              ? Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                    image: DecorationImage(
-                                      image: imagePath.startsWith('http')
-                                          ? NetworkImage(imagePath)
-                                                as ImageProvider
-                                          : FileImage(File(imagePath)),
-                                      fit: BoxFit.cover,
-                                    ),
+                          leading: (() {
+                            final rColor = widget.resolveColor?.call(item);
+                            final imagePath = widget.itemImages?[item];
+
+                            if (rColor != null) {
+                              return Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: rColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                    width: 1,
                                   ),
-                                )
-                              : null,
+                                ),
+                              );
+                            } else if (imagePath != null) {
+                              return Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                  image: DecorationImage(
+                                    image: imagePath.startsWith('http')
+                                        ? NetworkImage(imagePath)
+                                              as ImageProvider
+                                        : FileImage(File(imagePath)),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            }
+                            return null;
+                          })(),
                           title: Text(
                             item.contains(' (#') ? item.split(' (#')[0] : item,
                             style: TextStyle(

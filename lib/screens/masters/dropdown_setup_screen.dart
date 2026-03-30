@@ -429,7 +429,13 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
 
                       final isColoursCategory = _isColoursCategory;
 
-                      return ListTile(
+                      return GestureDetector(
+                        onDoubleTap: () {
+                          if (isColoursCategory) {
+                            _showColorPreview(valueName, photoUrl);
+                          }
+                        },
+                        child: ListTile(
                         leading: (isColoursCategory || _isAccessoriesCategory)
                             ? (photoUrl != null && photoUrl.isNotEmpty)
                                   ? ClipRRect(
@@ -477,8 +483,9 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _delete(valueName),
                         ),
-                      );
-                    },
+                      ),
+                    );
+                  },
                   ),
           ),
         ],
@@ -486,17 +493,74 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     );
   }
 
+  void _showColorPreview(String valueName, String? photoUrl) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(valueName, textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (photoUrl != null && photoUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    ApiConstants.getImageUrl(photoUrl),
+                    width: 150,
+                    height: 150,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _largeColorCircle(valueName),
+                  ),
+                )
+              else
+                _largeColorCircle(valueName),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _largeColorCircle(String value) {
+    final color = _resolveColor(value) ?? const Color(0xFFBDBDBD);
+    return Container(
+      width: 150,
+      height: 150,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.grey.shade300, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _colorCircle(String value) {
+    final color = _resolveColor(value) ?? const Color(0xFFBDBDBD);
     return Container(
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: _resolveColor(value),
+        color: color,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.grey.shade300, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: _resolveColor(value).withOpacity(0.4),
+            color: color.withOpacity(0.4),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -532,7 +596,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     return name == 'accessories';
   }
 
-  Color _resolveColor(String name) {
+  Color? _resolveColor(String name) {
     final lower = name.toLowerCase().trim();
     const colorMap = <String, Color>{
       'red': Color(0xFFE53935),
@@ -621,11 +685,15 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     if (colorMap.containsKey(lower)) return colorMap[lower]!;
 
     // Partial match — check if any key is contained in the color name
-    for (final entry in colorMap.entries) {
-      if (lower.contains(entry.key)) return entry.value;
+    // Sort keys by length descending to match more specific colors first (e.g. "Dark Blue" before "Blue")
+    final sortedKeys = colorMap.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final key in sortedKeys) {
+      if (lower.contains(key)) return colorMap[key];
     }
 
-    // Default grey for unknown colors
-    return const Color(0xFFBDBDBD);
+    // Default null for unknown colors
+    return null;
   }
 }
