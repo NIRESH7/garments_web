@@ -79,6 +79,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Map<String, StickerDiaData> _stickerData = {};
   Map<String, String> _colourGsmMap = {}; // Maps Colour Name -> GSM
   Map<String, String> _colourImages = {}; // Maps Colour Name -> Image URL/Path
+  Map<String, String> _diaCuttingMap = {}; // Maps DIA -> Cutting DIA
+  Map<String, String> _diaKnittingMap = {}; // Maps DIA -> Knitting DIA
 
   /// DIAs for which storage details have been completed
   final Set<String> _completedStickerDias = {};
@@ -108,10 +110,17 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   bool _enableWeightInput = true;
   double _tareOffset = 0.0;
   bool _useSetBasedEntry = true;
+  ScrollController _hScrollController = ScrollController();
+  double _hScrollOffset = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _hScrollController.addListener(() {
+      if (mounted) {
+        setState(() => _hScrollOffset = _hScrollController.offset);
+      }
+    });
     _inTime = DateFormat('hh:mm a').format(DateTime.now());
     _loadUserRole();
     _loadMasterData();
@@ -140,12 +149,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     for (var r in _rows) {
       r.dispose();
     }
-    // Dispose sticker data controllers
+    // Dispose sticker data
     _stickerData.forEach((dia, data) {
-      for (var row in data.rows) {
-        row.dispose();
-      }
+      data.dispose();
     });
+    _hScrollController.dispose();
 
     _inwardNoController.dispose();
     _lotNumberController.dispose();
@@ -507,6 +515,8 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           final diaData = StickerDiaData();
           diaData.racks = List<String?>.from(storage['racks'] ?? []);
           diaData.pallets = List<String?>.from(storage['pallets'] ?? []);
+          diaData.cuttingDia = storage['cuttingDia']?.toString();
+          diaData.cuttingDiaController = TextEditingController(text: diaData.cuttingDia);
           if (storage['rows'] != null) {
             diaData.rows = (storage['rows'] as List).map((r) {
               final sRow = StickerRow();
@@ -588,6 +598,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               }
               _colourImages[valStr] = imgPath;
               print('DEBUG: Image found for $valStr: $imgPath');
+            }
+
+            // Extract DIA specific fields if category is Dia
+            if (cat['name']?.toString().toLowerCase().contains('dia') ?? false) {
+              if (v['knittingDia'] != null) {
+                _diaKnittingMap[valStr] = v['knittingDia'].toString();
+              }
+              if (v['cuttingDia'] != null) {
+                _diaCuttingMap[valStr] = v['cuttingDia'].toString();
+              }
             }
           } else if (v != null) {
             valStr = v.toString();
@@ -999,6 +1019,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           .map(
             (e) => {
               "dia": e.key,
+              "cuttingDia": e.value.cuttingDia,
               "racks": e.value.racks,
               "pallets": e.value.pallets,
               "rows": e.value.rows
@@ -1920,6 +1941,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   void _initializeStickerRows(String dia) {
     final diaData = _stickerData.putIfAbsent(dia, () => StickerDiaData());
+
+    // Pre-fill Cutting DIA from master if not already set
+    if (diaData.cuttingDia == null || diaData.cuttingDia!.trim().isEmpty) {
+      final masterCutting = _diaCuttingMap[dia.trim()];
+      if (masterCutting != null && masterCutting.isNotEmpty) {
+        diaData.cuttingDia = masterCutting;
+      }
+    }
+    diaData.cuttingDiaController ??= TextEditingController(text: diaData.cuttingDia);
+
     if (diaData.rows.isEmpty && _lotMappedColours.isNotEmpty) {
       // First time: create all rows from mapped colours
       int noSetCounter = 1;
@@ -2880,6 +2911,42 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           }),
         ),
         if (_selectedStickerDia != null) ...[
+          const SizedBox(height: 12),
+          Builder(builder: (context) {
+            final diaData = _stickerData[_selectedStickerDia!];
+            if (diaData == null) return const SizedBox.shrink();
+            final isMissing = diaData.cuttingDia == null || diaData.cuttingDia!.trim().isEmpty;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Cuttable Dia",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TextFormField(
+                  controller: diaData.cuttingDiaController,
+                  decoration: InputDecoration(
+                    hintText: isMissing ? "you not add details in this dia no cuttable dia added" : "Enter Cuttable Dia",
+                    hintStyle: isMissing ? const TextStyle(color: Colors.red, fontSize: 13) : null,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  onChanged: (v) {
+                    setState(() {
+                      diaData.cuttingDia = v;
+                    });
+                  },
+                ),
+              ],
+            );
+          }),
           const SizedBox(height: 16),
           if (selectedRow != null)
             Padding(
@@ -2963,6 +3030,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
+  void _onReorderRows(StickerDiaData diaData, int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final r = diaData.rows.removeAt(oldIndex);
+      diaData.rows.insert(newIndex, r);
+    });
+  }
+
   Widget _buildDynamicSetTable(int sets, {Key? key}) {
     final dia = _selectedStickerDia!;
     final diaData = _stickerData[dia] ?? StickerDiaData();
@@ -2989,264 +3066,337 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          key: key,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Row(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          controller: _hScrollController,
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Fixed Part (Left)
-              Column(
+              // HEADER SECTION (Combined)
+              Stack(
                 children: [
-                  // Empty space for Rack Name Header
-                  _buildHeaderCell("", 50 + 120 + 80), // Total fixed width
-                  // Empty space for Pallet No Header
-                  _buildHeaderCell("", 50 + 120 + 80),
-                  // Headers for fixed part
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0).withOpacity(0.5),
-                      border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-                    ),
-                    child: Row(
+                  // Scrollable Header Content
+                  Padding(
+                    padding: const EdgeInsets.only(left: 350),
+                    child: Column(
                       children: [
-                        _buildGridCell("S.NO", 50),
-                        _buildGridCell("Colour", 120),
-                        _buildGridCell("GSM", 80),
+                        // Header Row 1: Rack Name
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0).withOpacity(0.3),
+                            border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                          ),
+                          child: Row(
+                            children: [
+                              ...List.generate(
+                                sets,
+                                (i) => _buildGridCell(
+                                  "",
+                                  125,
+                                  child: _buildSmallDropdown(
+                                    diaData.racks[i],
+                                    _rackNames,
+                                    (v) => setState(() => diaData.racks[i] = v),
+                                    hint: "Rack",
+                                  ),
+                                ),
+                              ),
+                              _buildGridCell("", 100),
+                              _buildGridCell("", 125),
+                            ],
+                          ),
+                        ),
+                        // Header Row 2: Pallet No
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0).withOpacity(0.3),
+                            border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                          ),
+                          child: Row(
+                            children: [
+                              ...List.generate(
+                                sets,
+                                (i) => _buildGridCell(
+                                  "",
+                                  125,
+                                  child: _buildSmallDropdown(
+                                    diaData.pallets[i],
+                                    _palletNos,
+                                    (v) => setState(() => diaData.pallets[i] = v),
+                                    hint: "Pallet",
+                                  ),
+                                ),
+                              ),
+                              _buildGridCell("", 100),
+                              _buildGridCell("", 125),
+                            ],
+                          ),
+                        ),
+                        // Header Row 3: Labels
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0).withOpacity(0.5),
+                            border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                          ),
+                          child: Row(
+                            children: [
+                              ...List.generate(
+                                sets,
+                                (i) => _buildGridCell(
+                                  setHeaders[i],
+                                  125,
+                                ),
+                              ),
+                              _buildGridCell("Roll No", 100),
+                              _buildGridCell("TOTAL", 125),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  // Data Rows for fixed part
-                  ...rows.asMap().entries.map((e) {
-                    final idx = e.key;
-                    final r = e.value;
-                    r.gsmController ??= TextEditingController(text: r.gsm);
-                    return Container(
-                      decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-                      ),
-                      child: Row(
+                  // Sticky Fixed Header Part
+                  Transform.translate(
+                    offset: Offset(_hScrollOffset, 0),
+                    child: Container(
+                      width: 350,
+                      color: Colors.white,
+                      child: Column(
                         children: [
-                          _buildGridCell('${idx + 1}', 50),
-                          _buildGridCell(
-                            "",
-                            120,
-                            child: _buildSmallDropdown(
-                              r.colour,
-                              _colours,
-                              (v) => setState(() => r.colour = v),
-                              hint: "Colour",
-                              itemImages: _colourImages,
+                          _buildHeaderCell("", 350),
+                          _buildHeaderCell("", 350),
+                          Container(
+                            height: 65,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0).withOpacity(0.5),
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey.shade300),
+                                right: BorderSide(color: Colors.grey.shade300),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                _buildGridCell("", 40),
+                                _buildGridCell("S.NO", 50),
+                                _buildGridCell("Colour", 120),
+                                _buildGridCell("GSM", 80),
+                                _buildGridCell("ACTION", 60),
+                              ],
                             ),
                           ),
-                          _buildGridCell(
-                            "",
-                            80,
-                            child: _buildTableInputText(r.gsmController!, (v) {
-                              r.gsm = v;
-                              final colour = r.colour;
-                              if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
-                                _lastStickerGsmMap[colour] = v;
-                              }
-                              setState(() {});
-                            }),
-                          ),
                         ],
-                      ),
-                    );
-                  }),
-                  // Footer total label for fixed part
-                  Container(
-                    height: 50,
-                    width: 50 + 120 + 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      border: Border(top: BorderSide(color: Colors.grey.shade300)),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      "SET TOTAL",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                        fontSize: 14,
                       ),
                     ),
                   ),
                 ],
               ),
-              // Scrollable Part (Right)
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header Row 1: Rack Name
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2E8F0).withOpacity(0.3),
-                          border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-                        ),
-                        child: Row(
-                          children: [
-                            ...List.generate(
-                              sets,
-                              (i) => _buildGridCell(
-                                "",
-                                125,
-                                child: _buildSmallDropdown(
-                                  diaData.racks[i],
-                                  _rackNames,
-                                  (v) => setState(() => diaData.racks[i] = v),
-                                  hint: "Rack",
-                                ),
-                              ),
-                            ),
-                            _buildGridCell("", 100), // Space for Roll No
-                            _buildGridCell("", 125), // Space for TOTAL
-                          ],
-                        ),
+
+              // BODY SECTION (Reorderable Rows)
+              SizedBox(
+                width: 350 + (sets * 125) + 100 + 125, // Total table width
+                child: ReorderableListView(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onReorder: (oldIdx, newIdx) => _onReorderRows(diaData, oldIdx, newIdx),
+                  buildDefaultDragHandles: false,
+                  children: rows.map((r) {
+                    final idx = rows.indexOf(r);
+                    r.gsmController ??= TextEditingController(text: r.gsm);
+                    return Container(
+                      key: ObjectKey(r),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
                       ),
-                      // Header Row 2: Pallet No
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2E8F0).withOpacity(0.3),
-                          border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-                        ),
-                        child: Row(
-                          children: [
-                            ...List.generate(
-                              sets,
-                              (i) => _buildGridCell(
-                                "",
-                                125,
-                                child: _buildSmallDropdown(
-                                  diaData.pallets[i],
-                                  _palletNos,
-                                  (v) => setState(() => diaData.pallets[i] = v),
-                                  hint: "Pallet",
-                                ),
-                              ),
-                            ),
-                            _buildGridCell("", 100), // Space for Roll No
-                            _buildGridCell("", 125), // Space for TOTAL
-                          ],
-                        ),
-                      ),
-                      // Header Row 3: Labels
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2E8F0).withOpacity(0.5),
-                          border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-                        ),
-                        child: Row(
-                          children: [
-                            ...List.generate(
-                              sets,
-                              (i) => _buildGridCell(
-                                setHeaders[i],
-                                125,
-                              ),
-                            ),
-                            _buildGridCell("Roll No", 100), // Repositioned
-                            _buildGridCell("TOTAL", 125),
-                          ],
-                        ),
-                      ),
-                      // Data Rows
-                      ...rows.asMap().entries.map((e) {
-                        final idx = e.key;
-                        final r = e.value;
-                        return Container(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.grey.shade300),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              ...List.generate(sets, (i) {
-                                if (r.setWeights.length <= i) r.setWeights.add('');
-                                if (r.setLabels.length <= i) {
-                                  r.setLabels.add(_useSetBasedEntry ? setHeaders[i] : _nextNoSetLabel(diaData));
-                                }
-                                if (r.controllers.length <= i) {
-                                  r.controllers.add(TextEditingController(text: r.setWeights[i]));
-                                }
-                                if (r.focusNodes.length <= i) {
-                                  r.focusNodes.add(FocusNode());
-                                }
-                                return _buildGridCell(
-                                  "",
-                                  125,
-                                  child: _buildTableInputText(
-                                    r.controllers[i],
-                                    (v) => setState(() => r.setWeights[i] = v),
-                                    onMicTap: _enableVoiceInput ? () => _startVoiceInputForSetWeight(r, idx, i) : null,
-                                    onWeightTap: _enableWeightInput ? () => _captureScaleWeightForSet(r, i) : null,
-                                    isListening: _isListening && _listeningForStickerRowIdx == idx && _listeningForSetIdx == i,
-                                    focusNode: r.focusNodes.length > i ? r.focusNodes[i] : null,
-                                  ),
-                                );
-                              }),
-                              // Roll No Input
-                              _buildGridCell(
-                                "",
-                                100,
-                                child: _buildTableInputText(r.rollNoController, (v) {
-                                  r.rollNo = v;
+                      child: Stack(
+                        children: [
+                          // All cells (Scrollable part offset by fixed width)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 350),
+                            child: Row(
+                              children: [
+                                ...List.generate(sets, (i) {
+                                  if (r.setWeights.length <= i) r.setWeights.add('');
+                                  if (r.setLabels.length <= i) {
+                                    r.setLabels.add(_useSetBasedEntry ? setHeaders[i] : _nextNoSetLabel(diaData));
+                                  }
+                                  if (r.controllers.length <= i) {
+                                    r.controllers.add(TextEditingController(text: r.setWeights[i]));
+                                  }
+                                  if (r.focusNodes.length <= i) {
+                                    r.focusNodes.add(FocusNode());
+                                  }
+                                  return _buildGridCell(
+                                    "",
+                                    125,
+                                    child: _buildTableInputText(
+                                      r.controllers[i],
+                                      (v) {
+                                        setState(() {
+                                          r.setWeights[i] = v;
+                                          int count = r.setWeights.where((w) => w.trim().isNotEmpty).length;
+                                          if (count > 0) {
+                                            r.rollNo = count.toString();
+                                            r.rollNoController.text = r.rollNo;
+                                          } else {
+                                            r.rollNo = "";
+                                            r.rollNoController.text = "";
+                                          }
+                                        });
+                                      },
+                                      onMicTap: _enableVoiceInput ? () => _startVoiceInputForSetWeight(r, idx, i) : null,
+                                      onWeightTap: _enableWeightInput ? () => _captureScaleWeightForSet(r, i) : null,
+                                      isListening: _isListening && _listeningForStickerRowIdx == idx && _listeningForSetIdx == i,
+                                      focusNode: r.focusNodes.length > i ? r.focusNodes[i] : null,
+                                    ),
+                                  );
                                 }),
-                              ),
-                              // Row Total
-                              _buildGridCell(
-                                r.totalWeight.toStringAsFixed(3),
-                                125,
-                                alignment: Alignment.center,
-                                child: Text(
+                                // Roll No Input
+                                _buildGridCell(
+                                  "",
+                                  100,
+                                  child: _buildTableInputText(r.rollNoController, (v) {
+                                    r.rollNo = v;
+                                  }),
+                                ),
+                                // Row Total
+                                _buildGridCell(
                                   r.totalWeight.toStringAsFixed(3),
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: Color(0xFF475569),
+                                  125,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    r.totalWeight.toStringAsFixed(3),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: Color(0xFF475569),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        );
-                      }),
-                      // Footer for scrollable part: Set Totals
-                      Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                        ),
-                        child: Row(
-                          children: [
-                            ...List.generate(
-                              sets,
-                              (i) => _buildGridCell(
-                                FormatUtils.formatWeight(setTotals[i]),
-                                125,
-                                alignment: Alignment.center,
+                          // Sticky Fixed Column Part
+                          Transform.translate(
+                            offset: Offset(_hScrollOffset, 0),
+                            child: Container(
+                              width: 350,
+                              color: Colors.white.withOpacity(0.9), // Slightly opaque for drag clarity
+                              child: Row(
+                                children: [
+                                  _buildGridCell(
+                                    "",
+                                    40,
+                                    child: ReorderableDragStartListener(
+                                      index: idx,
+                                      child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
+                                    ),
+                                  ),
+                                  _buildGridCell('${idx + 1}', 50),
+                                  _buildGridCell(
+                                    "",
+                                    120,
+                                    child: _buildSmallDropdown(
+                                      r.colour,
+                                      _colours,
+                                      (v) => setState(() => r.colour = v),
+                                      hint: "Colour",
+                                      itemImages: _colourImages,
+                                    ),
+                                  ),
+                                  _buildGridCell(
+                                    "",
+                                    80,
+                                    child: _buildTableInputText(r.gsmController!, (v) {
+                                      r.gsm = v;
+                                      final colour = r.colour;
+                                      if (v.isNotEmpty && colour != null && colour.isNotEmpty) {
+                                        _lastStickerGsmMap[colour] = v;
+                                      }
+                                      setState(() {});
+                                    }),
+                                  ),
+                                  _buildGridCell(
+                                    "",
+                                    60,
+                                    child: IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                      onPressed: () {
+                                        setState(() {
+                                          diaData.rows.removeAt(idx);
+                                        });
+                                      },
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            _buildGridCell("", 100), // Space for Roll No
-                            _buildGridCell(
-                              FormatUtils.formatWeight(grandTotal),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              // FOOTER SECTION
+              Stack(
+                children: [
+                  // Scrollable Footer Content
+                  Padding(
+                    padding: const EdgeInsets.only(left: 350),
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                      ),
+                      child: Row(
+                        children: [
+                          ...List.generate(
+                            sets,
+                            (i) => _buildGridCell(
+                              FormatUtils.formatWeight(setTotals[i]),
                               125,
                               alignment: Alignment.center,
                             ),
-                          ],
+                          ),
+                          _buildGridCell("", 100),
+                          _buildGridCell(
+                            FormatUtils.formatWeight(grandTotal),
+                            125,
+                            alignment: Alignment.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Sticky Footer Label
+                  Transform.translate(
+                    offset: Offset(_hScrollOffset, 0),
+                    child: Container(
+                      height: 50,
+                      width: 350,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade300),
+                          right: BorderSide(color: Colors.grey.shade300),
                         ),
                       ),
-                    ],
+                      alignment: Alignment.center,
+                      child: const Text(
+                        "SET TOTAL",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -3265,10 +3415,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 diaData.rows.add(row);
               });
             },
-            icon: const Icon(Icons.add, size: 20),
-            label: const Text("Add Row"),
+            icon: const Icon(Icons.add_circle_outline, size: 20),
+            label: const Text("Add New Set Entry"),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
         ),
@@ -4037,4 +4188,13 @@ class StickerDiaData {
   List<String?> racks = [];
   List<String?> pallets = [];
   List<StickerRow> rows = []; // Start empty so it can be auto-filled correctly
+  String? cuttingDia;
+  TextEditingController? cuttingDiaController;
+
+  void dispose() {
+    cuttingDiaController?.dispose();
+    for (var row in rows) {
+      row.dispose();
+    }
+  }
 }

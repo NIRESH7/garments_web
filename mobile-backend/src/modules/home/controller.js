@@ -143,7 +143,7 @@ const getSplashConfig = asyncHandler(async (req, res) => {
         minVersion: '1.0.0',
         forceUpdate: false,
         maintenanceMode: false,
-        baseUrl: process.env.BASE_URL || 'http://13.220.94.83:5001',
+        baseUrl: process.env.BASE_URL || 'http://localhost:5001',
     });
 });
 

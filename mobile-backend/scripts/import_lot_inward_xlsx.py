@@ -6,7 +6,7 @@ manual API endpoint: POST /api/inventory/inward.
 Example:
   python3 scripts/import_lot_inward_xlsx.py \
     /Users/deepakios/Desktop/LOT\ INWARD.xlsx \
-    --api-base http://13.220.94.83:5001/api \
+    --api-base http://localhost:5001/api \
     --email admin@example.com --password secret
 
 Or with token:
@@ -258,7 +258,7 @@ def login(api_base: str, email: str, password: str, timeout: int = 45) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bulk import LOT inward Excel into live inventory")
     parser.add_argument("xlsx_path", help="Path to LOT INWARD .xlsx file")
-    parser.add_argument("--api-base", default="http://13.220.94.83:5001/api", help="API base URL")
+    parser.add_argument("--api-base", default="http://localhost:5001/api", help="API base URL")
     parser.add_argument("--token", default=os.getenv("GARMENTS_TOKEN"), help="Bearer token")
     parser.add_argument("--email", default=os.getenv("GARMENTS_EMAIL"), help="Login email (if token not set)")
     parser.add_argument("--password", default=os.getenv("GARMENTS_PASSWORD"), help="Login password (if token not set)")
