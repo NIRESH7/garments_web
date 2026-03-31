@@ -397,7 +397,19 @@ const getShadeCardReport = asyncHandler(async (req, res) => {
 // @desc    Get Lot Aging Summary (Bucketed)
 // @route   GET /api/inventory/reports/aging-summary
 const getLotAgingSummaryReport = asyncHandler(async (req, res) => {
-    const inwards = await Inward.find({}).sort({ inwardDate: 1 });
+    const inwards = await Inward.find({}).sort({ inwardDate: 1 }).lean();
+    const allOutwards = await Outward.find({}).lean();
+
+    // Map outward quantities: lotNo -> {weight, rolls}
+    const outwardMap = {};
+    allOutwards.forEach(o => {
+        const totalWt = o.items.reduce((acc, item) => acc + (item.total_weight || 0), 0);
+        const totalRolls = o.items.reduce((acc, item) => acc + item.colours.reduce((r, c) => r + (c.no_of_rolls || 0), 0), 0);
+        
+        if (!outwardMap[o.lotNo]) outwardMap[o.lotNo] = { weight: 0, rolls: 0 };
+        outwardMap[o.lotNo].weight += totalWt;
+        outwardMap[o.lotNo].rolls += totalRolls;
+    });
 
     const summary = {
         '0-15 Days': { rolls: 0, weight: 0 },
@@ -409,18 +421,32 @@ const getLotAgingSummaryReport = asyncHandler(async (req, res) => {
     const now = new Date();
 
     inwards.forEach(inward => {
-        const age = Math.ceil((now - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24));
+        let inwardWt = inward.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
+        let inwardRolls = inward.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
 
-        let bucket = '45+ Days';
-        if (age <= 15) bucket = '0-15 Days';
-        else if (age <= 30) bucket = '16-30 Days';
-        else if (age <= 45) bucket = '31-45 Days';
+        // Apply Outward (FIFO)
+        if (outwardMap[inward.lotNo]) {
+            const usedWt = Math.min(inwardWt, outwardMap[inward.lotNo].weight);
+            const usedRolls = Math.min(inwardRolls, outwardMap[inward.lotNo].rolls);
+            
+            inwardWt -= usedWt;
+            inwardRolls -= usedRolls;
+            
+            outwardMap[inward.lotNo].weight -= usedWt;
+            outwardMap[inward.lotNo].rolls -= usedRolls;
+        }
 
-        const totalRolls = inward.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
-        const totalWt = inward.diaEntries.reduce((acc, curr) => acc + (curr.recWt || 0), 0);
+        if (inwardWt > 0.1) {
+            const age = Math.ceil((now - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24));
 
-        summary[bucket].rolls += totalRolls;
-        summary[bucket].weight += totalWt;
+            let bucket = '45+ Days';
+            if (age <= 15) bucket = '0-15 Days';
+            else if (age <= 30) bucket = '16-30 Days';
+            else if (age <= 45) bucket = '31-45 Days';
+
+            summary[bucket].rolls += inwardRolls;
+            summary[bucket].weight += inwardWt;
+        }
     });
 
     // Format for frontend table

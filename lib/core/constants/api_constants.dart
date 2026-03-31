@@ -3,7 +3,7 @@ class ApiConstants {
   // flutter build apk --release --dart-define=API_BASE_URL=http://your-server:5001/api --dart-define=SERVER_URL=http://your-server:5001
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://13.220.94.83:5001/api',
+    defaultValue: 'http://13.220.94.83:5001/api', // Use localhost for Web/iOS Simulator. For Android Emulator, use 10.0.2.2.
   );
   static const String serverUrl = String.fromEnvironment(
     'SERVER_URL',
@@ -98,10 +98,10 @@ class ApiConstants {
     // Handle relative paths: remove leading slash
     imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
 
-    // Special check for signature paths and mock IDs:
-    if (!imageUrl.contains('.') && (imageUrl.startsWith('SCRIPT-') || imageUrl.startsWith('TEST-'))) {
-       // Return a placeholder for mock IDs to avoid 404s in UI screenshots
-       return 'https://via.placeholder.com/300x150?text=$imageUrl';
+    // Special Check for S3 URLs to solve CORS on Web
+    if (imageUrl.startsWith('https://garments-app-storage.s3.us-east-1.amazonaws.com')) {
+        // Return proxied URL
+        return '${ApiConstants.serverUrl}/api/proxy-image?url=$imageUrl';
     }
 
     // If the path starts with 'uploads/', it's already properly formatted relative to serverUrl

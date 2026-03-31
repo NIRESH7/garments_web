@@ -93,19 +93,19 @@ class CustomDropdownField extends StatelessWidget {
                             final rColor = resolveColor?.call(value!);
                             final imgPath = itemImages?[value!];
 
-                            if (rColor != null) {
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildColorCircle(rColor),
-                                  const SizedBox(width: 10),
-                                ],
-                              );
-                            } else if (imgPath != null) {
+                            if (imgPath != null && imgPath.isNotEmpty) {
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   _buildImagePreview(imgPath),
+                                  const SizedBox(width: 10),
+                                ],
+                              );
+                            } else if (rColor != null) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildColorCircle(rColor),
                                   const SizedBox(width: 10),
                                 ],
                               );
@@ -345,20 +345,7 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
                             final rColor = widget.resolveColor?.call(item);
                             final imagePath = widget.itemImages?[item];
 
-                            if (rColor != null) {
-                              return Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: rColor,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                    width: 1,
-                                  ),
-                                ),
-                              );
-                            } else if (imagePath != null) {
+                            if (imagePath != null && imagePath.isNotEmpty) {
                               return Container(
                                 width: 32,
                                 height: 32,
@@ -373,6 +360,19 @@ class _SearchableListDialogState extends State<_SearchableListDialog> {
                                               as ImageProvider
                                         : FileImage(File(imagePath)),
                                     fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            } else if (rColor != null) {
+                              return Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: rColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                    width: 1,
                                   ),
                                 ),
                               );

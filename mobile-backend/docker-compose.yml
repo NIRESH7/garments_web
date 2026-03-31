@@ -25,7 +25,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
-      - BASE_URL=http://localhost:5001
+      - BASE_URL=http://13.220.94.83:5001
 
 volumes:
   mongodb_data:

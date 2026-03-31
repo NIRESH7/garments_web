@@ -530,7 +530,7 @@ const buildInwardPayloadFromSummaryRows = (rows) => {
             const rollCount = base + (rem > 0 ? 1 : 0);
             if (rem > 0) rem -= 1;
             const setWeight = avgRollWeight > 0 ? rollCount * avgRollWeight : (totalSets > 0 ? weight / totalSets : 0);
-            setWeights.push(formatWeight(setWeight));
+            setWeights.push(rollCount > 0 ? formatWeight(setWeight) : '');
         }
         return {
             colour: row.colour,
@@ -1560,75 +1560,94 @@ const getLotAgingReport = asyncHandler(async (req, res) => {
         if (endDate) query.inwardDate.$lte = endDate;
     }
 
-    const inwards = await Inward.find(query).sort({ inwardDate: 1 });
+    const inwards = await Inward.find(query).sort({ inwardDate: 1 }).lean();
+    const allOutwards = await Outward.find({}).lean();
+
+    // Map outward quantities: Key = lotNo|dia|colour
+    const outwardCredit = {};
+    allOutwards.forEach(o => {
+        o.items.forEach(item => {
+            if (item.colours) {
+                item.colours.forEach(c => {
+                    const k = `${o.lotNo}|${o.dia}|${c.colour}`.toLowerCase();
+                    if (!outwardCredit[k]) outwardCredit[k] = { weight: 0, rolls: 0 };
+                    outwardCredit[k].weight += (c.weight || 0);
+                    outwardCredit[k].rolls += (c.no_of_rolls || 0);
+                });
+            }
+        });
+    });
 
     let report = [];
+    const now = new Date();
 
     inwards.forEach((inward) => {
-        // We need to map diaEntries to storageDetails if possible to get colour
-        // Or if storageDetails exist, use them.
-        // The requirement is to show Colour. Colour is in storageDetails -> rows -> colour.
-
-        // Strategy: Iterate over storageDetails if available, as they contain the broken-down rolls/weights per colour.
-        // If storageDetails is empty (old data or not entered), fallback to diaEntries (colour will be "N/A").
-
         if (inward.storageDetails && inward.storageDetails.length > 0) {
             inward.storageDetails.forEach(sd => {
                 sd.rows.forEach(row => {
-                    // Each row has a colour and setWeights
-                    // We need total weight/rolls for this colour/dia combination
-                    // But wait, storageDetails tracks sets, not necessarily strict rolls count matching diaEntries one-to-one in a simple way 
-                    // unless we sum them up.
-                    // The user wants "Rolls" and "Wt". 
-                    // In storageDetails, we have 'setWeights'. Number of weights = number of sets (which might be rolls if 1 roll = 1 set, but usually multiple rolls).
-                    // Actually `diaEntries` has the authoritative `recRoll` and `recWt`.
-                    // `storageDetails` is for sticker mapping.
-                    // If we want accurate inventory "Stock" aging, we should use the remaining balance. 
-                    // But the report seems to be "Aging Details" of *Inwards*, i.e. when it came in.
-                    // The requirement says "filter option with lotno,lotname,colour,dia".
-
-                    // Let's explicitly try to link them. 
-                    // If we strictly want "Inward" aging, we list what came in.
-                    // If we split by colour, we must know how many rolls/weight per colour.
-                    // `storageDetails` has `setWeights` (list of weights). count(setWeights) approx rolls (or sets).
-                    // Let's assume 1 set ~ 1 roll/bundle for this report or just count the entries.
-
                     const setWeights = row.setWeights.map(w => parseFloat(w) || 0);
-                    const totalWt = setWeights.reduce((a, b) => a + b, 0);
-                    const totalRolls = setWeights.length; // Approximate if sets=rolls
+                    let inwardWt = setWeights.reduce((a, b) => a + b, 0);
+                    let inwardRolls = setWeights.length;
 
-                    // Find rate for this dia
-                    const diaRate = (inward.diaEntries.find(e => e.dia === sd.dia)?.rate) || inward.rate || 0;
+                    // Apply Outward Credit (FIFO)
+                    const k = `${inward.lotNo}|${sd.dia}|${row.colour}`.toLowerCase();
+                    if (outwardCredit[k]) {
+                        const usedWt = Math.min(inwardWt, outwardCredit[k].weight);
+                        const usedRolls = Math.min(inwardRolls, outwardCredit[k].rolls);
+                        
+                        inwardWt -= usedWt;
+                        inwardRolls -= usedRolls;
+                        
+                        outwardCredit[k].weight -= usedWt;
+                        outwardCredit[k].rolls -= usedRolls;
+                    }
 
-                    if (totalWt > 0) {
+                    // Only show if there's stock remaining
+                    if (inwardWt > 0.05) {
+                        const diaRate = (inward.diaEntries.find(e => e.dia === sd.dia)?.rate) || inward.rate || 0;
                         report.push({
                             lot_number: inward.lotNo,
                             lot_name: inward.lotName,
                             inward_date: inward.inwardDate,
                             dia: sd.dia,
-                            colour: row.colour, // THE NEW FIELD
-                            rolls: totalRolls,
-                            weight: totalWt,
-                            rate: diaRate, // UPDATED
-                            age: Math.ceil((new Date() - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
+                            colour: row.colour,
+                            rolls: inwardRolls,
+                            weight: Number(inwardWt.toFixed(2)),
+                            rate: diaRate,
+                            age: Math.ceil((now - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
                         });
                     }
                 });
             });
         } else {
-            // Fallback for non-sticker entries
+            // Fallback for non-sticker entries (Legacy/Summary data)
             inward.diaEntries.forEach(entry => {
-                report.push({
-                    lot_number: inward.lotNo,
-                    lot_name: inward.lotName,
-                    inward_date: inward.inwardDate,
-                    dia: entry.dia,
-                    colour: 'N/A',
-                    rolls: entry.recRoll,
-                    weight: entry.recWt,
-                    rate: entry.rate || inward.rate || 0, // ADDED
-                    age: Math.ceil((new Date() - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
-                });
+                let inwardWt = entry.recWt || 0;
+                let inwardRolls = entry.recRoll || 0;
+
+                const k = `${inward.lotNo}|${entry.dia}|n/a`.toLowerCase();
+                if (outwardCredit[k]) {
+                    const usedWt = Math.min(inwardWt, outwardCredit[k].weight);
+                    const usedRolls = Math.min(inwardRolls, outwardCredit[k].rolls);
+                    inwardWt -= usedWt;
+                    inwardRolls -= usedRolls;
+                    outwardCredit[k].weight -= usedWt;
+                    outwardCredit[k].rolls -= usedRolls;
+                }
+
+                if (inwardWt > 0.05) {
+                    report.push({
+                        lot_number: inward.lotNo,
+                        lot_name: inward.lotName,
+                        inward_date: inward.inwardDate,
+                        dia: entry.dia,
+                        colour: 'N/A',
+                        rolls: inwardRolls,
+                        weight: Number(inwardWt.toFixed(2)),
+                        rate: entry.rate || inward.rate || 0,
+                        age: Math.ceil((now - new Date(inward.inwardDate)) / (1000 * 60 * 60 * 24))
+                    });
+                }
             });
         }
     });

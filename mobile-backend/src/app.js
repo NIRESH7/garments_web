@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import path from 'path';
 import connectDB from './config/db.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
+import fetch from 'node-fetch';
 
 // Load env vars
 dotenv.config();
@@ -16,30 +17,36 @@ connectDB();
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Custom CORS & Logging Middleware for Dev
+// Enable CORS with a robust global override for development
 app.use((req, res, next) => {
-    if (process.env.NODE_ENV !== 'production') {
-        console.log(`DEBUG: [${new Date().toISOString()}] ${req.method} ${req.url}`);
-        console.log(`DEBUG: Origin: ${req.headers.origin}`);
-    }
-
     const origin = req.headers.origin;
-    // In development, reflect any origin to satisfy CORS
     if (origin) {
         res.header('Access-Control-Allow-Origin', origin);
     } else {
         res.header('Access-Control-Allow-Origin', '*');
     }
-
+    
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cross-Origin-Resource-Policy');
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    // Log image requests specifically to debug CORS/Paths
+    if (req.url.includes('.jpg') || req.url.includes('.png')) {
+        console.log(`DEBUG: Image Request: ${req.url} from ${origin || 'unknown origin'}`);
+    }
 
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
     next();
 });
+
+// Also keep the cors package for standard API routes
+app.use(cors({
+    origin: true, // reflect origin
+    credentials: true
+}));
 app.use(express.json({ limit: '20mb' }));
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 
@@ -95,8 +102,31 @@ if (!isProduction) {
 }
 app.use('/api/tasks', taskRoutes);
 
-const __dirname = path.resolve();
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Proxy for S3 images to avoid CORS on Web
+app.get('/api/proxy-image', async (req, res) => {
+    const imageUrl = req.query.url;
+    if (!imageUrl) return res.status(400).send('URL is required');
+    try {
+        const response = await fetch(imageUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        res.set('Content-Type', response.headers.get('content-type') || 'image/jpeg');
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Cache-Control', 'public, max-age=86400'); // 24h cache
+        res.send(buffer);
+    } catch (error) {
+        console.error('Proxy Error:', error);
+        res.status(500).send('Error fetching image');
+    }
+});
+
+// Serve uploads with explicit headers to support Flutter Web (Html and CanvasKit)
+app.use('/uploads', (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+}, express.static(path.join(path.resolve(), 'uploads')));
 
 // Error Handling
 app.use(notFound);
