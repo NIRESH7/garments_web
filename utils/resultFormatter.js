@@ -17,73 +17,52 @@ const COLUMN_NAMES = {
   exam_id: 'Exam ID',
   exam_name: 'Exam Name',
   total_marks: 'Total Marks',
-  obtained_marks: 'Obtained Marks',
-  class_rank: 'Class Rank',
-  teacher_id: 'Teacher ID',
-  teacher_name: 'Teacher Name',
-  subject_id: 'Subject ID',
-  subject_name: 'Subject',
-  attendance_id: 'Attendance ID',
-  fee_id: 'Fee ID',
-  mark_id: 'Mark ID',
-  rank_id: 'Rank ID',
-  leave_id: 'Leave ID',
-  summary_id: 'Summary ID',
-  total_students: 'Total Students',
-  qualityStatus: 'Quality Status',
-  complaintText: 'Complaint Details'
+    qualityStatus: 'Quality',
+    complaintText: 'Message',
+    lotNo: 'Lot #',
+    lotName: 'Lot Name',
+    fromParty: 'Party',
+    partyName: 'Customer',
+    inwardDate: 'Inward Date',
+    dcNo: 'DC #',
+    dateTime: 'Date',
+    planId: 'Plan ID',
+    planName: 'Plan',
+    groupName: 'Group',
+    itemNames: 'Items'
 };
 
-const TECHNICAL_COLUMNS = ['_id', '__v', 'user', 'updatedAt', 'id', 'createdAt'];
+const TECHNICAL_COLUMNS = ['_id', '__v', 'user', 'updatedAt', 'id', 'createdAt', 'password', 'tokens', 'vehicleNo', 'inTime', 'outTime', 'partyDcNo'];
 
 function formatColumnName(key) {
-  return COLUMN_NAMES[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return COLUMN_NAMES[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 }
 
 export function formatResults(rows) {
-  if (!rows || rows.length === 0) {
-    return 'No matching records were found.';
-  }
+    if (!rows || rows.length === 0) return '';
 
-  // Filter out technical columns from all rows
-  const cleanRows = rows.map(row => {
-    const clean = { ...row };
-    TECHNICAL_COLUMNS.forEach(col => delete clean[col]);
-    return clean;
-  });
+    // Filter out technical columns
+    const cleanRows = rows.map(row => {
+        const clean = { ...row };
+        TECHNICAL_COLUMNS.forEach(col => delete clean[col]);
+        return clean;
+    });
 
-  if (cleanRows.length === 1) {
-    const row = cleanRows[0];
-
-    // special handling for category-like objects with 'values'
-    if (row.values && Array.isArray(row.values) && row.name) {
-      return `**${row.name} list:**\n${row.values.join(', ')}`;
-    }
-
-    // Single row: show as key-value pairs with friendly names
-    return Object.entries(row)
-      .map(([key, value]) => {
-        const friendlyKey = formatColumnName(key);
-        const displayValue = value === null || value === undefined ? 'N/A' :
-          (Array.isArray(value) ? value.join(', ') : value);
-        return `**${friendlyKey}**: ${displayValue}`;
-      })
-      .join('\n');
-  }
-
-  // Multiple rows: show as table with friendly headers
-  const headers = Object.keys(cleanRows[0]);
-  const friendlyHeaders = headers.map(h => formatColumnName(h));
-  const table = cleanRows.map(row => headers.map(h => {
-    const val = row[h];
-    return Array.isArray(val) ? val.join(', ') : (val ?? 'N/A');
-  }));
-
-  const headerLine = friendlyHeaders.join(' | ');
-  const separator = friendlyHeaders.map(() => '---').join(' | ');
-  const dataLines = table.map(cols => cols.join(' | '));
-
-  return [headerLine, separator, ...dataLines].join('\n');
+    // Generate a bold, clean list for high readability
+    return cleanRows.map((row, index) => {
+        const entries = Object.entries(row)
+            .filter(([_, v]) => v !== null && v !== undefined && v !== '')
+            .map(([key, value]) => {
+                const friendlyKey = formatColumnName(key);
+                let displayValue = value;
+                if (Array.isArray(value)) displayValue = value.join(', ');
+                if (typeof value === 'object') displayValue = JSON.stringify(value);
+                return `**${friendlyKey}**: ${displayValue}`;
+            })
+            .join('\n');
+        
+        return `${index + 1}. Details:\n${entries}\n\n--------------------\n`;
+    }).join('\n');
 }
 
 export function summarizeHistory(rows) {

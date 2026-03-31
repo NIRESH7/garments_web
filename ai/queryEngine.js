@@ -28,47 +28,45 @@ async function tryOpenAI(apiKey, question, today, historyText = '') {
       .map(([col, fields]) => `- ${col}(${fields.join(', ')})`)
       .join('\n');
 
-    const prompt = `You are a MongoDB expert for a Garments Inventory System.
-  INWARDS: Records of materials received.
-  OUTWARDS: Records of materials shipped.
-  LOTS/PARTIES/PROCESSES: Stored in the 'categories' collection.
+    const promptTemplate = (history, q, date) => `You are a MongoDB expert for a Garments Inventory System.
+  INWARDS: Records of materials received (lotName, lotNo, fromParty, qualityStatus, complaintText).
+  OUTWARDS: Records of materials shipped (lotName, lotNo, partyName).
+  CATEGORIES: Master lists for lots, items, colours, gsm, processes, dia, racks, pallets.
 
-  Convert the user's natural language question into a MongoDB JSON query.
+  Convert the user's natural language question (English or Tamil) into a MongoDB JSON query.
   Output ONLY a JSON object with:
-  1. "collection": name of collection (must be from the list below)
+  1. "collection": name of collection
   2. "type": "find" or "aggregate"
   3. "query": the query object or aggregation pipeline array
 
 COLLECTIONS:
 ${schemaDescription}
 
-RULES:
-- "lot names", "available lots", "list of lots" -> collection: "categories", query: {"name": "lot name"}
-- "item names", "items", "available items" -> collection: "categories", query: {"name": "Item name"}
+RULES for Query Generation:
+- Use flexible matching with regex for all string fields: {"$regex": "value", "$options": "i"}
+- "lot names", "lots", "available lots" -> collection: "categories", query: {"name": "lot name"}
 - "party names", "available parties" -> collection: "party_masters"
 - "colours", "colors", "available colours" -> collection: "categories", query: {"name": "Colour"}
-- "gsm list", "available gsm" -> collection: "categories", query: {"name": "GSM"}
-- "processes", "available processes" -> collection: "categories", query: {"name": "Process"}
+- "gsm list" -> collection: "categories", query: {"name": "GSM"}
+- "processes" -> collection: "categories", query: {"name": "Process"}
 - "dia list" -> collection: "categories", query: {"name": "Dia"}
-- "racks" -> collection: "categories", query: {"name": "Rack"}
-- "pallets" -> collection: "categories", query: {"name": "Pallet"}
-- "aging report", "lot aging", "aging details" -> collection: "inwards", type: "find", query: {}
+- "complaints" or "issues" -> map to "complaintText" in inwards.
+- "quality" -> map to "qualityStatus" in inwards.
+- Today\'s Date is: ${date}. Interpret dates as DD/MM/YYYY.
+- For single day, use range: {"$gte": "YYYY-MM-DDT00:00:00Z", "$lt": "YYYY-MM-(D+1)DT00:00:00Z"}.
 
-- "complaints" or "issues" should map to "complaintText" in inwards.
-- "quality" or "status" should map to "qualityStatus" in inwards.
-- "date" for inwards refers to "inwardDate", for outwards refers to "dateTime".
-- Today\'s Date is: ${today}. Interpret dates as DD/MM/YYYY.
-- For single day queries, ALWAYS use a range: {"$gte": "YYYY-MM-DDT00:00:00Z", "$lt": "YYYY-MM-(D+1)DT00:00:00Z"}.
-- If the question is purely a greeting or completely off-topic, return: {"strategy": "chat"}
-- If the question is about concepts like "What is an inward?", return: {"strategy": "chat"}
-- ALWAYS return a JSON query if the user asks for "available", "list", "show", "how many", or specific names.
-- Consider the CONVERSATION HISTORY below for context/follow-up.
+STRICT RULES:
+- If greeting or conceptual garments question (e.g. "What is an inward?"), return: {"strategy": "chat"}
+- If completely OUTSIDE app scope (non-garments/non-inventory), return: {"strategy": "out-of-scope"}
+- NEVER guess values. If the user asks for something specific, search for it using regex.
 
 CONVERSATION HISTORY:
-${historyText}
+${history}
 
-User: "${question}"
+User: "${q}"
 JSON:`;
+
+    const prompt = promptTemplate(historyText, question, today);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -80,8 +78,8 @@ JSON:`;
     const jsonStr = text.replace(/```json|```/gi, '').trim();
     const mongoQuery = JSON.parse(jsonStr);
 
-    if (mongoQuery.strategy === 'chat') {
-      return { strategy: 'chat' };
+    if (mongoQuery.strategy === 'chat' || mongoQuery.strategy === 'out-of-scope') {
+      return { strategy: mongoQuery.strategy };
     }
 
     if (!mongoQuery.collection || !COLLECTION_METADATA[mongoQuery.collection]) {
@@ -111,47 +109,37 @@ async function tryGeminiWithModel(apiKey, modelName, question, historyText = '',
       .map(([col, fields]) => `- ${col}(${fields.join(', ')})`)
       .join('\n');
 
-    const prompt = `You are a MongoDB expert for a Garments Inventory System.
-  INWARDS: Records of materials received.
-  OUTWARDS: Records of materials shipped.
-  LOTS/PARTIES/PROCESSES: Stored in the 'categories' collection.
+    const promptTemplate = (history, q, date) => `You are a MongoDB expert for a Garments Inventory System.
+  INWARDS: Records of materials received (lotName, lotNo, fromParty, qualityStatus, complaintText).
+  OUTWARDS: Records of materials shipped (lotName, lotNo, partyName).
+  CATEGORIES: Master lists for lots, items, colours, gsm, processes, dia, racks, pallets.
 
-  Convert the user's natural language question into a MongoDB JSON query.
+  Convert the user's natural language question (English or Tamil) into a MongoDB JSON query.
   Output ONLY a JSON object with:
-  1. "collection": name of collection (must be from the list below)
+  1. "collection": name of collection
   2. "type": "find" or "aggregate"
   3. "query": the query object or aggregation pipeline array
 
 COLLECTIONS:
 ${schemaDescription}
 
-RULES:
-- "lot names", "available lots", "list of lots" -> collection: "categories", query: {"name": "lot name"}
-- "item names", "items", "available items" -> collection: "categories", query: {"name": "Item name"}
+RULES for Query Generation:
+- Use flexible matching with regex for all string fields: {"$regex": "value", "$options": "i"}
+- "lot names", "lots", "available lots" -> collection: "categories", query: {"name": "lot name"}
 - "party names", "available parties" -> collection: "party_masters"
-- "colours", "colors", "available colours" -> collection: "categories", query: {"name": "Colour"}
-- "gsm list", "available gsm" -> collection: "categories", query: {"name": "GSM"}
-- "processes", "available processes" -> collection: "categories", query: {"name": "Process"}
-- "dia list" -> collection: "categories", query: {"name": "Dia"}
-- "racks" -> collection: "categories", query: {"name": "Rack"}
-- "pallets" -> collection: "categories", query: {"name": "Pallet"}
-- "aging report", "lot aging", "aging details" -> collection: "inwards", type: "find", query: {}
+- Today\'s Date is: ${date}. Interpret dates as DD/MM/YYYY.
 
-- "complaints" or "issues" should map to "complaintText" in inwards.
-- "quality" or "status" should map to "qualityStatus" in inwards.
-- "date" for inwards refers to "inwardDate", for outwards refers to "dateTime".
-- Today\'s Date is: ${today}. Interpret dates as DD/MM/YYYY.
-- For single day queries, ALWAYS use a range: {"$gte": "YYYY-MM-DDT00:00:00Z", "$lt": "YYYY-MM-(D+1)DT00:00:00Z"}.
-- If the question is purely a greeting or completely off-topic, return: {"strategy": "chat"}
-- If the question is about concepts like "What is an inward?", return: {"strategy": "chat"}
-- ALWAYS return a JSON query if the user asks for "available", "list", "show", "how many", or specific names.
-- Consider the CONVERSATION HISTORY below for context/follow-up.
+STRICT RULES:
+- If greeting or conceptual garments question (e.g. "What is an inward?"), return: {"strategy": "chat"}
+- If completely OUTSIDE app scope (non-garments/non-inventory), return: {"strategy": "out-of-scope"}
 
 CONVERSATION HISTORY:
-${historyText}
+${history}
 
-User: "${question}"
+User: "${q}"
 JSON:`;
+
+    const prompt = promptTemplate(historyText, question, today);
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
@@ -159,8 +147,8 @@ JSON:`;
 
     const mongoQuery = JSON.parse(jsonStr);
 
-    if (mongoQuery.strategy === 'chat') {
-      return { strategy: 'chat' };
+    if (mongoQuery.strategy === 'chat' || mongoQuery.strategy === 'out-of-scope') {
+      return { strategy: mongoQuery.strategy };
     }
 
     if (!mongoQuery.collection || !COLLECTION_METADATA[mongoQuery.collection]) {

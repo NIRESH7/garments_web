@@ -1046,33 +1046,40 @@ const getBalancedSets = asyncHandler(async (req, res) => {
 
     inwards.forEach(inw => {
         if (inw.storageDetails && Array.isArray(inw.storageDetails)) {
-            inw.storageDetails.forEach(row => {
-                // Robust Dia check: If document matched, we only filter row-level dia if it's explicitly different
-                const rowDia = normalizeText(row.dia);
-                const diaMismatch = rowDia && !new RegExp(`^\\s*${escapeRegex(normalizedDia)}\\s*$`, 'i').test(rowDia);
-                if (diaMismatch) return; 
+            inw.storageDetails.forEach(sdOrRow => {
+                const rows = Array.isArray(sdOrRow.rows) ? sdOrRow.rows : [sdOrRow];
+                
+                rows.forEach(row => {
+                    const rowDia = normalizeText(row.dia || sdOrRow.dia);
+                    const diaMismatch = rowDia && !new RegExp(`^\\s*${escapeRegex(normalizedDia)}\\s*$`, 'i').test(rowDia);
+                    if (diaMismatch) return; 
 
-                const rawColour = normalizeText(row.colour);
-                if (row.stickerDetails && Array.isArray(row.stickerDetails)) {
-                    row.stickerDetails.forEach((weight, idx) => {
-                        const inWeight = parseFloat(weight) || 0;
-                        if (inWeight <= 0) return;
+                    const rawColour = normalizeText(row.colour);
+                    const weightsArray = row.setWeights || row.stickerDetails;
+                    if (weightsArray && Array.isArray(weightsArray)) {
+                        weightsArray.forEach((weight, idx) => {
+                            const inWeight = parseFloat(weight) || 0;
+                            if (inWeight <= 0) return;
 
-                        const rawSetNo = getSetIdentifierFromRow(row, idx);
-                        const key = canonicalKey(rawSetNo, rawColour);
+                            const rawSetNo = getSetIdentifierFromRow(row, idx);
+                            const key = canonicalKey(rawSetNo, rawColour);
 
-                        if (!balanceMap[key]) {
-                            balanceMap[key] = {
-                                set_no: rawSetNo,
-                                colour: row.colour,
-                                weight: 0,
-                                rack_name: normalizeText(row.rackName),
-                                pallet_number: normalizeText(row.palletNumber),
-                            };
-                        }
-                        balanceMap[key].weight += inWeight;
-                    });
-                }
+                            const rackName = normalizeText(row.rackName || (sdOrRow.racks ? sdOrRow.racks[idx] : ''));
+                            const palletNumber = normalizeText(row.palletNumber || (sdOrRow.pallets ? sdOrRow.pallets[idx] : ''));
+
+                            if (!balanceMap[key]) {
+                                balanceMap[key] = {
+                                    set_no: rawSetNo,
+                                    colour: row.colour,
+                                    weight: 0,
+                                    rack_name: rackName,
+                                    pallet_number: palletNumber,
+                                };
+                            }
+                            balanceMap[key].weight += inWeight;
+                        });
+                    }
+                });
             });
         }
     });

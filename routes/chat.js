@@ -8,21 +8,38 @@ import { formatResults } from '../utils/resultFormatter.js';
 
 const router = Router();
 
-async function askAiFreeForm(question) {
-  const prompt = `You are the AI assistant for a "Garments Inventory System".
-  DATABASE CONTEXT:
-  - Inwards: Records of fabric/materials received (date, party, lot, complaints).
-  - Outwards: Records of materials shipped/dispatched.
-  - Lots: Unique batches of fabric.
-  - Masters: Parties (suppliers/customers) and Lot names.
+function detectLanguage(text) {
+  const tamilRegex = /[\u0B80-\u0BFF]/;
+  return tamilRegex.test(text) ? 'tamil' : 'english';
+}
 
-  User message: "${question}"
+async function askAiFreeForm(question, isOutOfScope = false) {
+  const lang = detectLanguage(question);
+  const date = new Date().toLocaleDateString('en-GB');
   
-  If this is a greeting or general system question, answer naturally. 
-  If it is a conceptual question (e.g. "Inward vs Outward"), explain the difference in inventory terms.
-  If it sounds like they were trying to search for specific data that doesn't exist, explain no matching data was found in this inventory records and suggest 3 short, RELEVANT search ideas (e.g. asking for specific lots, parties or dates).
+  if (isOutOfScope) {
+    return lang === 'tamil' 
+      ? "இந்த பயன்பாட்டுடன் தொடர்புடைய கேள்விகளுக்கு மட்டுமே நான் பதிலளிக்க முடியும்."
+      : "I can only answer questions related to this application.";
+  }
+
+  const prompt = `You are a production-grade AI chatbot for a "Garments Inventory System".
+  RULES:
+  1. Detect the user's language (Tamil/English).
+  2. If greeting, respond in the same language.
+  3. If conceptual garments question (e.g. "What is an inward?"), explain concisely in the same language.
+  4. NEVER guess data.
+  5. User Language: ${lang}
+  - Use regex for all string searches: {"$regex": "...", "$options": "i"}
+  - "total outward", "how many outwards" -> type: "aggregate", query: [{"$count": "total_outwards"}]
+  - "available lots", "show all lots" -> collection: "categories", query: {"name": "lot name"}, sort by: {"updatedAt": -1}
+  - "list of parties" -> collection: "party_masters", query: {}, sort by: {"name": 1}
+  - "latest 5 inwards" -> type: "aggregate", query: [{"$sort": {"inwardDate": -1}}, {"$limit": 5}]
+  - Interpret "total" as a request for COUNT or SUM using aggregate pipelines.
+  - Interprets dates as DD/MM/YYYY. Today is: ${date}.
+  6. User Question: "${question}"
   
-  Be concise and helpful.`;
+  Provide a concise, user-friendly response.`;
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (geminiApiKey) {
@@ -30,7 +47,7 @@ async function askAiFreeForm(question) {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({
         model: 'gemini-2.0-flash',
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
+        generationConfig: { temperature: 0.1, maxOutputTokens: 512 }
       });
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
@@ -44,18 +61,27 @@ async function askAiFreeForm(question) {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.4,
+        temperature: 0.1,
       });
       return response.choices[0].message.content.trim();
     } catch (e) { }
   }
 
-  return "I'm your garments database assistant. Try asking about 'inwards', 'lot numbers', or 'complaints'.";
+  return lang === 'tamil' ? "மன்னிக்கவும், என்னால் இப்போது பதிலளிக்க முடியவில்லை." : "System busy. Please try again.";
 }
 
 async function askAiAboutData(question, rows) {
-  const dataStr = JSON.stringify(rows).substring(0, 2000);
-  const prompt = `The user asked: "${question}". \nHere is the data found in the database: \n${dataStr}\n\nProvide a very short, conversational summary of this data. If it is a list, just say what you found. Be concise and helpful.`;
+  const lang = detectLanguage(question);
+  const dataStr = JSON.stringify(rows).substring(0, 3000);
+  const prompt = `You are an AI for a Garments Inventory System.
+  The user asked (Language: ${lang}): "${question}".
+  DATABASE RESULTS: ${dataStr}
+  
+  Instructions:
+  1. Summarize the data concisely in ${lang}.
+  2. Do NOT add any information NOT present in the database.
+  3. If listing items, keep it clear.
+  4. Respond only in ${lang}.`;
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (geminiApiKey) {
@@ -63,13 +89,13 @@ async function askAiAboutData(question, rows) {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({
         model: 'gemini-2.0-flash',
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
+        generationConfig: { temperature: 0.1, maxOutputTokens: 512 }
       });
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
     } catch (e) { }
   }
-  return `I found ${rows.length} records matching your request.`;
+  return lang === 'tamil' ? `${rows.length} பதிவுகள் கிடைத்தன.` : `I found ${rows.length} records.`;
 }
 
 router.get('/health', (_req, res) => {
@@ -95,6 +121,7 @@ router.post('/', async (req, res) => {
   if (!message?.trim()) return res.status(400).json({ error: 'Empty message' });
 
   try {
+    const lang = detectLanguage(message);
     // 1. Context
     const recent = await ChatMessage.find().sort({ created_at: -1 }).limit(3).lean();
     const historyText = recent.reverse().map(m => `User: ${m.user_message}\nAI: ${m.ai_response}`).join('\n\n');
@@ -102,10 +129,17 @@ router.post('/', async (req, res) => {
     // 2. AI Query
     const aiResult = await generateSql(message, historyText).catch(() => ({ strategy: 'err', mongoQuery: null }));
 
-    // 3. Mongo Exec
+    // 3. Handle Special Strategies
+    if (aiResult.strategy === 'out-of-scope') {
+      const responseText = await askAiFreeForm(message, true);
+      ChatMessage.create({ user_message: message.trim(), ai_response: responseText }).catch(() => { });
+      return res.json({ formatted: responseText, strategy: 'out-of-scope', data: [], rowCount: 0 });
+    }
+
+    // 4. Mongo Exec
     let rows = [];
     if (aiResult.strategy === 'chat') {
-      // It's a general question, handled by skip to Response section
+      // General greeting / concept
     } else if (aiResult.mongoQuery) {
       try {
         const { collection, type, query: mQuery } = aiResult.mongoQuery;
@@ -127,26 +161,33 @@ router.post('/', async (req, res) => {
         const finalQuery = castDates(mQuery);
 
         if (type === 'find') {
-          rows = await db.collection(collection).find(finalQuery).limit(50).toArray();
-        } else {
-          rows = await db.collection(collection).aggregate(finalQuery).toArray();
+          rows = await db.collection(collection).find(finalQuery).limit(20).toArray(); // LIMIT TO 20
+        } else if (type === 'aggregate') {
+            const pipeline = Array.isArray(finalQuery) ? finalQuery : [finalQuery];
+            if (!pipeline.some(p => p.$limit)) {
+                pipeline.push({ $limit: 20 });
+            }
+          rows = await db.collection(collection).aggregate(pipeline).toArray();
         }
       } catch (e) { console.error('Data Exec Error:', e.message); }
     }
 
-    // 4. Response
+    // 5. Response Generation
     let responseText;
     if (aiResult.strategy === 'chat') {
       responseText = await askAiFreeForm(message);
     } else if (rows.length > 0) {
       const aiSummary = await askAiAboutData(message, rows);
-      // Always combine AI summary with formatted data to ensure user sees the actual records
-      responseText = `${aiSummary}\n\n${formatResults(rows)}`;
+      const formattedTable = formatResults(rows);
+      responseText = formattedTable ? `${aiSummary}\n\n${formattedTable}` : aiSummary;
     } else {
-      responseText = await askAiFreeForm(message);
+      // STRICT FAILURE: NO DATA FOUND
+      responseText = lang === 'tamil'
+        ? "மன்னிக்கவும், பயன்பாட்டில் தொடர்புடைய தகவல் கிடைக்கவில்லை."
+        : "Sorry, I couldn't find relevant information in the app.";
     }
 
-    // 5. Save History
+    // 6. Save History
     ChatMessage.create({ user_message: message.trim(), ai_response: responseText }).catch(() => { });
     if (aiResult.mongoQuery) SearchLog.create({ question: message.trim(), generated_query: aiResult.mongoQuery }).catch(() => { });
 

@@ -20,116 +20,101 @@ const MODELS = [
 ];
 
 async function tryOpenAI(apiKey, question, today, historyText = '') {
-    try {
-        const openai = new OpenAI({ apiKey });
+  try {
+    const schemaDescription = Object.entries(COLLECTION_METADATA)
+      .map(([col, fields]) => `- ${col}(${fields.join(', ')})`)
+      .join('\n');
 
-        const schemaDescription = Object.entries(COLLECTION_METADATA)
-            .map(([col, fields]) => `- ${col}(${fields.join(', ')})`)
-            .join('\n');
+    const promptTemplate = (q, date) => `You are a MongoDB expert for 'Om Vinayaka' Garments Inventory System.
+  INWARDS: Records of materials received (lotNo, lotName, fromParty, process, inwardDate).
+  OUTWARDS: Records of materials shipped (lotNo, lotName, partyName, dateTime).
+  CUTTINGORDERS: Production plans (planName, status).
+  CATEGORIES: MASTER LISTS for lots, colours, items, etc.
 
-        const prompt = `You are a MongoDB expert for 'Om Vinayaka' Garments Inventory System.
-  INWARDS: Records of materials received.
-  OUTWARDS: Records of materials shipped/dispatched.
-  CUTTINGORDERS: Production plans and lot allocations.
-  PARTIES: Supplier and customer details.
-  TASKS: System/Workflow tasks.
-  CATEGORIES: Master lists for lots, processes, etc.
-
-  Convert the user's natural language question into a MongoDB JSON query.
+  Convert the user's natural language question (English or Tamil) into a MongoDB JSON query.
   Output ONLY a JSON object with:
-  1. "collection": name of collection (from the list below)
+  1. "collection": name of collection
   2. "type": "find" or "aggregate"
   3. "query": the query object or aggregation pipeline array
-  4. "projection": ALWAYS include a MongoDB projection object (e.g. {"name": 1, "_id": 0}) to retrieve ONLY the exact fields the user asked for. Do not return unnecessary fields. If they ask for "all details", leave projection as {}.
-
-COLLECTIONS:
-${schemaDescription}
 
 RULES:
-- Handle typos and misspellings smoothly (e.g. "vaaoilable colour" -> "available colours", "hiio" -> "hello", "tek" -> "tell").
-- "last", "latest", "recent" -> ALWAYS use a query with {"$sort": {"createdAt": -1}} or date field, and {"$limit": 5} (or 1 if they asked for just 'last').
-- "lot names", "available lots", "inward lots" -> collection: "categories", query: {"name": "lot name"}
-- "party names", "available parties", "tell me ll party name" -> collection: "parties"
-- "processes", "available processes" -> collection: "categories", query: {"name": "Process"}
-- "colours", "colors", "available colours" -> collection: "itemgroups", query: {}
-- "complaints" or "issues" -> map to "complaintText" in inwards.
-- "quality status" -> map to "qualityStatus" in inwards.
-- "date" for inwards refers to "inwardDate", for outwards refers to "dateTime".
-- Today's Date is: ${today}.
-- For single day queries, use a range: {"$gte": "YYYY-MM-DDT00:00:00Z", "$lt": "YYYY-MM-(D+1)DT00:00:00Z"}.
+- Use regex for all string searches: {"$regex": "...", "$options": "i"}
+- "total outward", "how many outwards" -> type: "aggregate", query: [{"$count": "total_outwards"}] or calculations with $sum if they ask for weight/quantity.
+- "available lots", "show all lots" -> collection: "categories", query: {"name": "lot name"}, sort by: {"updatedAt": -1}
+- "list of parties" -> collection: "parties", query: {}, sort by: {"name": 1}
+- "latest 5 inwards" -> type: "aggregate", query: [{"$sort": {"inwardDate": -1}}, {"$limit": 5}]
+- Interpret "total" as a request for COUNT or SUM using aggregate pipelines.
+- Interpret dates as DD/MM/YYYY. Today is: ${date}.
 
-CRITICAL INTENT RULES:
-- ONLY return {"strategy": "chat"} if the user is strictly saying a greeting ("hi", "hello", "what's up", "good morning") OR an off-topic question ("how are you").
-- If the text is a fragmented phrase like "available colour", "lot names", "party name" etc, this IS a database query. Assume they want to list those items and generate a valid MongoDB query object.
-- Do NOT return {"strategy": "chat"} for anything referring to records, inventory, names, lots, processes, colours, or inwards/outwards.
+STRICT RULES:
+- If greeting or conceptual garments question, return: {"strategy": "chat"}
+- If completely OUTSIDE app scope, return: {"strategy": "out-of-scope"}
+- NEVER guess data values. Use regex.
 
-User: "${question}"
+User: "${q}"
 JSON:`;
 
-        const response = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.1,
-        });
+    const prompt = promptTemplate(question, today);
+    const openai = new OpenAI({ apiKey });
 
-        const text = response.choices[0].message.content.trim();
-        const jsonStr = text.replace(/```json|```/gi, '').trim();
-        const mongoQuery = JSON.parse(jsonStr);
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+    });
 
-        if (mongoQuery.strategy === 'chat') return { strategy: 'chat' };
+    const text = response.choices[0].message.content.trim();
+    const jsonStr = text.replace(/```json|```/gi, '').trim();
+    const mongoQuery = JSON.parse(jsonStr);
 
-        return { mongoQuery, strategy: 'openai' };
-    } catch (error) {
-        return null;
+    if (mongoQuery.strategy === 'chat' || mongoQuery.strategy === 'out-of-scope') {
+      return { strategy: mongoQuery.strategy };
     }
+
+    return { mongoQuery, strategy: 'openai' };
+  } catch (error) {
+    console.error('OpenAI Error in tryOpenAI:', error.message);
+    return null;
+  }
 }
 
 async function tryGeminiWithModel(apiKey, modelName, question, historyText = '', today) {
-    try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: modelName,
-            generationConfig: { temperature: 0.1, maxOutputTokens: 600 }
-        });
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { temperature: 0.1, maxOutputTokens: 600 }
+    });
 
-        const schemaDescription = Object.entries(COLLECTION_METADATA)
-            .map(([col, fields]) => `- ${col}(${fields.join(', ')})`)
-            .join('\n');
+    const schemaDescription = Object.entries(COLLECTION_METADATA)
+      .map(([col, fields]) => `- ${col}(${fields.join(', ')})`)
+      .join('\n');
 
-        const prompt = `You are a MongoDB expert for 'Om Vinayaka' Garments.
-  Convert the user's question to a MongoDB JSON query.
-  COLLECTIONS:
-${schemaDescription}
+    const promptTemplate = (q, date) => `You are a MongoDB expert for 'Om Vinayaka' Garments.
+  Convert the user's natural language question (English or Tamil) into a MongoDB JSON query.
+  - "total" questions MUST use aggregate pipelines with $count or $sum.
+  - "list" questions MUST use sort.
+  - Use regex for all string matching.
 
-  RULES:
-  - Handle spelling mistakes gracefully (e.g. "vaaoilable" -> "available").
-  - "last", "latest", "recent" -> ALWAYS use an aggregate pipeline with $sort and $limit. Follow strict MongoDB syntax.
-  - "colours" -> collection: "itemgroups"
-  - "lot names" -> collection: "categories", query: {"name": "lot name"}
-  - "parties" -> collection: "parties"
-  
-  CRITICAL: 
-  - ONLY return {"strategy": "chat"} if the user is literally just saying a greeting ("hi", "hello", "good morning") OR an off-topic question.
-  - If the user types a fragmented phrase like "available colour", "lot names", "party name", this IS a database query. Generate a query to fetch them.
-  - Output ONLY a JSON object with: {"collection": "...", "type": "find/aggregate", "query": ..., "projection": {...}}
-  - You MUST include a "projection" object to return ONLY the specific fields requested by the user (exclude _id if not needed).
-  
-  Today's Date is: ${today}.
-  
-  User: "${question}"
-  JSON:`;
+User: "${q}"
+JSON:`;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text().trim();
-        const jsonStr = text.replace(/```json|```/gi, '').trim();
-        const mongoQuery = JSON.parse(jsonStr);
+    const prompt = promptTemplate(question, today);
 
-        if (mongoQuery.strategy === 'chat') return { strategy: 'chat' };
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    const jsonStr = text.replace(/```json|```/gi, '').trim();
+    const mongoQuery = JSON.parse(jsonStr);
 
-        return { mongoQuery, strategy: 'gemini', modelUsed: modelName };
-    } catch (error) {
-        return null;
+    if (mongoQuery.strategy === 'chat' || mongoQuery.strategy === 'out-of-scope') {
+      return { strategy: mongoQuery.strategy };
     }
+
+    return { mongoQuery, strategy: 'gemini', modelUsed: modelName };
+  } catch (error) {
+    console.error('Gemini Error in tryGeminiWithModel:', error.message);
+    return null;
+  }
 }
 
 export async function generateSql(question, historyText = '') {

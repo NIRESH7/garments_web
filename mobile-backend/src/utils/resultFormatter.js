@@ -1,68 +1,48 @@
-// User-friendly column name mappings
 const COLUMN_NAMES = {
-    qualityStatus: 'Quality Status',
-    complaintText: 'Complaint Details',
-    lotNo: 'Lot No',
+    qualityStatus: 'Quality',
+    complaintText: 'Message',
+    lotNo: 'Lot #',
     lotName: 'Lot Name',
-    fromParty: 'Supplier/Party',
+    fromParty: 'Party',
+    partyName: 'Customer',
     inwardDate: 'Inward Date',
-    dcNo: 'DC No',
-    dateTime: 'Date/Time',
+    dcNo: 'DC #',
+    dateTime: 'Date',
     planId: 'Plan ID',
-    planName: 'Plan Name'
+    planName: 'Plan',
+    groupName: 'Group',
+    itemNames: 'Items'
 };
 
-const TECHNICAL_COLUMNS = ['_id', '__v', 'user', 'updatedAt', 'id', 'createdAt', 'password', 'tokens'];
+const TECHNICAL_COLUMNS = ['_id', '__v', 'user', 'updatedAt', 'id', 'createdAt', 'password', 'tokens', 'vehicleNo', 'inTime', 'outTime', 'partyDcNo'];
 
 function formatColumnName(key) {
-    return COLUMN_NAMES[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return COLUMN_NAMES[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 }
 
 export function formatResults(rows) {
-    if (!rows || rows.length === 0) {
-        return 'No matching records were found.';
-    }
+    if (!rows || rows.length === 0) return '';
 
-    // Filter out technical columns from all rows
+    // Filter out technical columns
     const cleanRows = rows.map(row => {
         const clean = { ...row };
         TECHNICAL_COLUMNS.forEach(col => delete clean[col]);
         return clean;
     });
 
-    if (cleanRows.length === 1) {
-        const row = cleanRows[0];
-
-        // special handling for category-like objects with 'values'
-        if (row.values && Array.isArray(row.values) && row.name) {
-            return `**${row.name} list:**\n${row.values.join(', ')}`;
-        }
-
-        // Single row: show as key-value pairs with friendly names
-        return Object.entries(row)
+    // Generate a bold, clean list for mobile readability
+    return cleanRows.map((row, index) => {
+        const entries = Object.entries(row)
+            .filter(([_, v]) => v !== null && v !== undefined && v !== '')
             .map(([key, value]) => {
                 const friendlyKey = formatColumnName(key);
-                const displayValue = value === null || value === undefined ? 'N/A' :
-                    (Array.isArray(value) ? value.join(', ') :
-                        (typeof value === 'object' ? JSON.stringify(value) : value));
+                let displayValue = value;
+                if (Array.isArray(value)) displayValue = value.join(', ');
+                if (typeof value === 'object') displayValue = JSON.stringify(value);
                 return `**${friendlyKey}**: ${displayValue}`;
             })
             .join('\n');
-    }
-
-    // Multiple rows: show as table with friendly headers
-    const headers = Object.keys(cleanRows[0]);
-    const friendlyHeaders = headers.map(h => formatColumnName(h));
-    const table = cleanRows.map(row => headers.map(h => {
-        const val = row[h];
-        if (Array.isArray(val)) return val.join(', ');
-        if (typeof val === 'object' && val !== null) return JSON.stringify(val);
-        return (val ?? 'N/A');
-    }));
-
-    const headerLine = `| ${friendlyHeaders.join(' | ')} |`;
-    const separator = `| ${friendlyHeaders.map(() => '---').join(' | ')} |`;
-    const dataLines = table.map(cols => `| ${cols.join(' | ')} |`);
-
-    return [headerLine, separator, ...dataLines].join('\n');
+        
+        return `Result ${index + 1}:\n${entries}\n\n--------------------\n`;
+    }).join('\n');
 }
