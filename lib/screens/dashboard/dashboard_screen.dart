@@ -23,6 +23,7 @@ import '../tasks/worker_task_dashboard_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
 import '../reports/monthly_summary_report.dart';
+import 'inventory_drill_down_screen.dart';
 // ── New Module Imports ──────────────────────────────────────────────────
 import '../cutting_entry/cutting_entry_list_screen.dart';
 import '../cutting_entry/cutting_daily_plan_screen.dart';
@@ -767,7 +768,11 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => MonthlySummaryReportScreen(),
+                builder: (context) => InventoryDrillDownScreen(
+                  type: 'opening',
+                  startDate: _startDate?.toIso8601String(),
+                  endDate: _endDate?.toIso8601String(),
+                ),
               ),
             );
           },
@@ -782,7 +787,11 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => InwardListScreen(),
+                builder: (context) => InventoryDrillDownScreen(
+                  type: 'inward',
+                  startDate: _startDate?.toIso8601String(),
+                  endDate: _endDate?.toIso8601String(),
+                ),
               ),
             );
           },
@@ -797,7 +806,11 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => OutwardListScreen(),
+                builder: (context) => InventoryDrillDownScreen(
+                  type: 'outward',
+                  startDate: _startDate?.toIso8601String(),
+                  endDate: _endDate?.toIso8601String(),
+                ),
               ),
             );
           },
@@ -806,13 +819,17 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
           title: 'Closing Stock',
           weight: _summary['closing']['weight'],
           rolls: _summary['closing']['rolls'],
-          color: Theme.of(context).primaryColor.withOpacity(0.8),
-          icon: LucideIcons.layers,
+          color: ColorPalette.primary,
+          icon: LucideIcons.checkCircle2,
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => MonthlySummaryReportScreen(),
+                builder: (context) => InventoryDrillDownScreen(
+                  type: 'closing',
+                  startDate: _startDate?.toIso8601String(),
+                  endDate: _endDate?.toIso8601String(),
+                ),
               ),
             );
           },

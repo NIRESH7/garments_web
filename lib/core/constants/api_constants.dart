@@ -3,11 +3,11 @@ class ApiConstants {
   // flutter build apk --release --dart-define=API_BASE_URL=http://your-server:5001/api --dart-define=SERVER_URL=http://your-server:5001
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://13.220.94.83:5001/api', // Use localhost for Web/iOS Simulator. For Android Emulator, use 10.0.2.2.
+    defaultValue: 'http://localhost:5001/api', // Use localhost for Web/iOS Simulator. For Android Emulator, use 10.0.2.2.
   );
   static const String serverUrl = String.fromEnvironment(
     'SERVER_URL',
-    defaultValue: 'http://13.220.94.83:5001',
+    defaultValue: 'http://localhost:5001',
   );
   static const String s3BaseUrl =
       'https://garments-app-storage.s3.us-east-1.amazonaws.com';
@@ -43,6 +43,7 @@ class ApiConstants {
   static const String godownStockReport = '/inventory/reports/godown-stock';
   static const String shadeCardReport = '/inventory/reports/shade-card';
   static const String rackPalletStockReport = '/inventory/reports/rack-pallet';
+  static const String inventoryDrillDown = '/inventory/drill-down';
   static const String aiTranscribe = '/ai/transcribe';
 
   static const String assignments = '/production/assignments';

@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 const router = express.Router();
+
 import {
     createInward,
     importInwardWorkbook,
@@ -36,6 +37,8 @@ import {
     getLotAgingSummaryReport,
     getRackPalletStockReport,
 } from './reportController.js';
+
+import { getDrillDownSummary } from './drillDownController.js';
 
 import { protect } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
@@ -100,6 +103,9 @@ router.route('/outward/:id')
 
 router.get('/outward/generate-dc', protect, generateDcNumber);
 router.get('/outward/check-fifo', protect, checkFifoViolation);
+
+// Drill Down
+router.get('/drill-down', protect, getDrillDownSummary);
 
 // Reports
 router.get('/reports/client', getClientFormatReport);

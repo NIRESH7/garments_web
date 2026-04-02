@@ -548,6 +548,34 @@ class MobileApiService {
     }
   }
 
+  Future<List<dynamic>> getInventoryDrillDown({
+    required String type,
+    String? lotName,
+    String? lotNo,
+    String? dia,
+    String? setNo,
+    String? startDate,
+    String? endDate,
+  }) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.inventoryDrillDown,
+        queryParameters: {
+          'type': type,
+          if (lotName != null) 'lotName': lotName,
+          if (lotNo != null) 'lotNo': lotNo,
+          if (dia != null) 'dia': dia,
+          if (setNo != null) 'setNo': setNo,
+          if (startDate != null) 'startDate': startDate,
+          if (endDate != null) 'endDate': endDate,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<List<dynamic>> getShadeCardReport() async {
     try {
       final response = await _client.get(ApiConstants.shadeCardReport);
