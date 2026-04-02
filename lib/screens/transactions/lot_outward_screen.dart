@@ -716,6 +716,19 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     return total;
   }
 
+  int _getTotalRolls() {
+    int total = 0;
+    for (var set in _selectedSets) {
+      final colours = set['colours'] as List;
+      for (var col in colours) {
+        if (col['isChecked'] == true) {
+          total += (col['rolls'] as num?)?.toInt() ?? 1;
+        }
+      }
+    }
+    return total;
+  }
+
   Future<void> _selectDateTime() async {
     final date = await showDatePicker(
       context: context,
@@ -892,6 +905,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     final colourTotals = _getColourTotals();
     final totalWeight = _getTotalWeight();
     final totalRollWeight = _getTotalRollWeight();
+    final totalRolls = _getTotalRolls();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -943,6 +957,8 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                   'Total Roll Wt',
                   '${totalRollWeight.toStringAsFixed(2)} kg',
                 ),
+                const SizedBox(height: 4),
+                _buildSummaryRow('Total Rolls', '$totalRolls'),
                 const SizedBox(height: 4),
                 _buildSummaryRow('Total Sets', '${_selectedSets.length}'),
               ],

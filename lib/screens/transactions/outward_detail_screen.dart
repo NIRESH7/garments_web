@@ -293,8 +293,14 @@ class OutwardDetailScreen extends StatelessWidget {
     final items = outward['items'] as List<dynamic>? ?? [];
 
     double totalWeight = 0;
+    int grandTotalRolls = 0;
     for (var item in items) {
       totalWeight += (item['total_weight'] as num?)?.toDouble() ?? 0;
+      if (item['colours'] != null) {
+        for (var col in item['colours']) {
+          grandTotalRolls += (col['no_of_rolls'] as num?)?.toInt() ?? 0;
+        }
+      }
     }
 
     return Card(
@@ -321,7 +327,7 @@ class OutwardDetailScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'Total: ${FormatUtils.formatWeight(totalWeight)} Kg',
+                    'Total: ${FormatUtils.formatWeight(totalWeight)} Kg | $grandTotalRolls Rolls',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.orange,
@@ -342,6 +348,13 @@ class OutwardDetailScreen extends StatelessWidget {
   }
 
   Widget _buildItemRow(Map<String, dynamic> item) {
+    int itemTotalRolls = 0;
+    if (item['colours'] != null) {
+      for (var col in item['colours']) {
+        itemTotalRolls += (col['no_of_rolls'] as num?)?.toInt() ?? 0;
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -364,7 +377,7 @@ class OutwardDetailScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                '${FormatUtils.formatWeight(item['total_weight'])} Kg',
+                '${FormatUtils.formatWeight(item['total_weight'])} Kg | $itemTotalRolls Rolls',
                 style: const TextStyle(
                   color: Colors.orange,
                   fontWeight: FontWeight.bold,
