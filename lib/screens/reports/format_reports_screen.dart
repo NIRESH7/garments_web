@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
@@ -103,7 +104,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Extract master lists
         _masterLotNames =
             _agingData
-                .map((e) => e['lot_name']?.toString() ?? '')
+                .map((e) => (e['lot_name']?.toString() ?? '').trim().toUpperCase())
                 .where((s) => s.isNotEmpty)
                 .toSet()
                 .toList()
@@ -277,7 +278,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Local Exact Match Filter
         _agingData = data.where((item) {
           if (filters['lotName'] != null &&
-              item['lot_name'] != filters['lotName'])
+              item['lot_name']?.toString().trim().toUpperCase() != filters['lotName'])
             return false;
           if (filters['lotNo'] != null &&
               item['lot_number'] != filters['lotNo'])
@@ -305,7 +306,10 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Local Exact Match Filter
         _agingData = data.where((item) {
           if (filters['lotName'] != null &&
-              item['lot_name'] != filters['lotName'])
+              item['lot_name']?.toString().trim().toUpperCase() != filters['lotName'])
+            return false;
+          if (filters['lotNo'] != null &&
+              item['lot_number']?.toString().trim() != filters['lotNo'])
             return false;
           return true;
         }).toList();
@@ -320,12 +324,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         );
         // Local Exact Match Filter
         _inwardData = data.where((item) {
-          if (filters['lotName'] != null && item['lotNo'] != filters['lotNo']) {
-            // Wait, Inward has lotNo and lotName top level? Let's check structure or just be safe.
-            // Based on _buildInwardReport: inward['lotNo'], inward['lotName']
-          }
           if (filters['lotName'] != null &&
-              item['lotName'] != filters['lotName'])
+              item['lotName']?.toString().trim().toUpperCase() != filters['lotName'])
             return false;
           if (filters['lotNo'] != null && item['lotNo'] != filters['lotNo'])
             return false;
@@ -345,7 +345,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Local Exact Match Filter
         _outwardData = data.where((item) {
           if (filters['lotName'] != null &&
-              item['lotName'] != filters['lotName'])
+              item['lotName']?.toString().trim().toUpperCase() != filters['lotName'])
             return false;
           if (filters['lotNo'] != null && item['lotNo'] != filters['lotNo'])
             return false;
@@ -366,7 +366,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // Local Exact Match Filter
         _closingData = data.where((item) {
           if (filters['lotName'] != null &&
-              item['lot_name'] != filters['lotName'])
+              item['lot_name']?.toString().trim().toUpperCase() != filters['lotName'])
             return false;
           if (filters['lotNo'] != null &&
               item['lot_number'] != filters['lotNo'])
@@ -434,7 +434,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final dateFilter =
         filters['date']; // Assuming single date or we can do range
 
-    // Group by Lot No
+    // Group by Lot Name
     final Map<String, dynamic> summary = {};
     for (var item in _agingData) {
       // Local Date Filter
@@ -443,23 +443,27 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         if (!_formatDate(item['inward_date']).contains(dateFilter)) continue;
       }
 
-      final lotNo = item['lot_number'] ?? 'N/A';
-      final lotName = item['lot_name'] ?? 'N/A';
+      final lotNo = item['lot_number']?.toString().trim() ?? 'N/A';
+      final rawLotName = item['lot_name']?.toString().trim() ?? 'N/A';
+      final groupingKey = rawLotName.toUpperCase();
 
-      if (!summary.containsKey(lotNo)) {
-        summary[lotNo] = {
-          'lotNo': lotNo,
-          'lotName': lotName,
+      if (!summary.containsKey(groupingKey)) {
+        summary[groupingKey] = {
+          'lotNos': <String>{},
+          'lotName': rawLotName.toUpperCase(),
           'rolls': 0,
           'weight': 0.0,
           'value': 0.0, // ADDED
         };
       }
-      summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
+      if (lotNo != 'N/A' && lotNo.isNotEmpty) {
+        summary[groupingKey]['lotNos'].add(lotNo);
+      }
+      summary[groupingKey]['rolls'] += (item['rolls'] ?? 0) as int;
       final weight = (item['weight'] ?? 0.0) as num;
       final rate = (item['rate'] ?? item['Rate'] ?? 0.0) as num;
-      summary[lotNo]['weight'] += weight;
-      summary[lotNo]['value'] += (weight * rate); // ADDED
+      summary[groupingKey]['weight'] += weight;
+      summary[groupingKey]['value'] += (weight * rate); // ADDED
     }
 
     return _buildReportTable(
@@ -472,8 +476,19 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Status',
       ],
       rows: summary.values.map((v) {
+        final lotNosSet = v['lotNos'] as Set;
+        String lotNoDisplay = 'N/A';
+        if (lotNosSet.isNotEmpty) {
+          final lotNosList = lotNosSet.toList();
+          List<String> chunks = [];
+          for (int i = 0; i < lotNosList.length; i += 2) {
+            chunks.add(lotNosList.sublist(i, (i + 2 > lotNosList.length) ? lotNosList.length : i + 2).join(', '));
+          }
+          lotNoDisplay = chunks.join('\n');
+        }
+
         return <String>[
-          v['lotNo'],
+          lotNoDisplay,
           v['lotName'],
           '${v['rolls']}',
           '${FormatUtils.formatWeight(v['weight'])} Kg',
@@ -746,7 +761,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             child: DataTable(
               headingRowHeight: 45,
               dataRowMinHeight: 40,
-              dataRowMaxHeight: 60,
+              dataRowMaxHeight: double.infinity,
               columnSpacing: 20,
               horizontalMargin: 12,
               headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
@@ -862,16 +877,24 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       final service = _printService;
       // ignore: unnecessary_null_comparison
 
+      print('Generating PDF for ${data['title']}');
       final pdfBytes = await service.generateReportPdf(
-        title: data['title'],
-        headers: data['headers'],
-        rows: data['rows'],
+        title: data['title'] as String,
+        headers: List<String>.from(data['headers'] as List),
+        rows: List<List<String>>.from((data['rows'] as List).map((e) => List<String>.from(e as List))),
+        footerRow: data['footerRow'] != null ? List<String>.from(data['footerRow'] as List) : null,
       );
 
-      await Printing.layoutPdf(
-        onLayout: (format) async => pdfBytes,
-        name:
-            '${data['title'].replaceAll(' ', '_')}_${DateFormat('ddMMyy').format(DateTime.now())}',
+      print('Navigating to Print Preview');
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => _ReportPdfPreviewScreen(
+            pdfBytes: pdfBytes,
+            title: '${data['title']} Preview',
+          ),
+        ),
       );
     } catch (e) {
       if (mounted) {
@@ -898,9 +921,10 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // ignore: unnecessary_null_comparison
 
         final pdfBytes = await service.generateReportPdf(
-          title: data['title'],
-          headers: data['headers'],
-          rows: data['rows'],
+          title: data['title'] as String,
+          headers: List<String>.from(data['headers'] as List),
+          rows: List<List<String>>.from((data['rows'] as List).map((e) => List<String>.from(e as List))),
+          footerRow: data['footerRow'] != null ? List<String>.from(data['footerRow'] as List) : null,
         );
 
         final fileName =
@@ -953,12 +977,12 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   }
 
   Map<String, dynamic> _getReportDataForCurrentTab() {
-    final index = _tabController.index;
+    String title = "";
     List<String> headers = [];
     List<List<String>> rows = [];
-    String title = "";
+    List<String>? footerRow;
 
-    switch (index) {
+    switch (_tabController.index) {
       case 0:
         title = "Aging Details Report";
         headers = [
@@ -969,25 +993,36 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           'Colour',
           'Rolls',
           'Wt',
-          'Val', // ADDED
+          'Val',
           'Days',
         ];
         rows = _agingData.map((item) {
           final aging = _calculateAging(item['inward_date']);
-          final weight = (item['weight'] as num?) ?? 0;
+          final weight = (item['weight'] ?? 0) as num;
           final rate = (item['rate'] ?? item['Rate'] ?? 0) as num;
           return <String>[
             _formatDate(item['inward_date']),
-            item['lot_number'] ?? 'N/A',
-            item['lot_name'] ?? 'N/A',
+            item['lot_number'] ?? '-',
+            item['lot_name'] ?? '-',
             item['dia']?.toString() ?? '-',
             item['colour']?.toString() ?? '-',
             item['rolls']?.toString() ?? '0',
-            '${weight.toStringAsFixed(1)}',
-            '${(weight * rate).toStringAsFixed(0)}', // ADDED
+            weight.toStringAsFixed(1),
+            (weight * rate).toStringAsFixed(0),
             '$aging',
           ];
         }).toList();
+        footerRow = [
+          'TOTAL',
+          '',
+          '',
+          '',
+          '',
+          '${_agingData.fold<int>(0, (sum, item) => sum + ((item['rolls'] ?? 0) as num).toInt())}',
+          FormatUtils.formatWeight(_agingData.fold<double>(0.0, (sum, item) => sum + ((item['weight'] ?? 0) as num).toDouble())),
+          FormatUtils.formatCurrency(_agingData.fold<double>(0.0, (sum, item) => sum + (((item['weight'] ?? 0) as num) * ((item['rate'] ?? 0) as num)).toDouble())),
+          '',
+        ];
         break;
       case 1:
         title = "Aging Summary Report";
@@ -1010,22 +1045,27 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               continue;
           }
 
-          final lotNo = item['lot_number'] ?? 'N/A';
-          final lotName = item['lot_name'] ?? 'N/A';
-          if (!summary.containsKey(lotNo)) {
-            summary[lotNo] = {
-              'lotNo': lotNo,
-              'lotName': lotName,
+          final lotNo = item['lot_number']?.toString().trim() ?? 'N/A';
+          final rawLotName = item['lot_name']?.toString().trim() ?? 'N/A';
+          final groupingKey = rawLotName.toUpperCase();
+
+          if (!summary.containsKey(groupingKey)) {
+            summary[groupingKey] = {
+              'lotNos': <String>{},
+              'lotName': rawLotName.toUpperCase(),
               'rolls': 0,
               'weight': 0.0,
               'value': 0.0, // ADDED
             };
           }
-          summary[lotNo]['rolls'] += (item['rolls'] ?? 0) as int;
+          if (lotNo != 'N/A' && lotNo.isNotEmpty) {
+            summary[groupingKey]['lotNos'].add(lotNo);
+          }
+          summary[groupingKey]['rolls'] += (item['rolls'] ?? 0) as int;
           final weight = (item['weight'] ?? 0.0) as num;
           final rate = (item['rate'] ?? item['Rate'] ?? 0.0) as num;
-          summary[lotNo]['weight'] += weight;
-          summary[lotNo]['value'] += (weight * rate);
+          summary[groupingKey]['weight'] += weight;
+          summary[groupingKey]['value'] += (weight * rate);
         }
 
         headers = [
@@ -1038,15 +1078,34 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         ];
 
         rows = summary.values.map((v) {
+          final lotNosSet = v['lotNos'] as Set;
+          String lotNoDisplay = 'N/A';
+          if (lotNosSet.isNotEmpty) {
+            final lotNosList = lotNosSet.toList();
+            List<String> chunks = [];
+            for (int i = 0; i < lotNosList.length; i += 2) {
+              chunks.add(lotNosList.sublist(i, (i + 2 > lotNosList.length) ? lotNosList.length : i + 2).join(', '));
+            }
+            lotNoDisplay = chunks.join('\n');
+          }
+
           return <String>[
-            v['lotNo'],
+            lotNoDisplay,
             v['lotName'],
             '${v['rolls']}',
-            '${v['weight'].toStringAsFixed(1)} Kg',
+            '${(v['weight'] as num).toStringAsFixed(1)} Kg',
             '${(v['value'] as num).toStringAsFixed(0)}', // ADDED
             'Pending',
           ];
         }).toList();
+        footerRow = [
+          'TOTAL',
+          '',
+          '${summary.values.fold<int>(0, (sum, v) => sum + ((v['rolls'] ?? 0) as num).toInt())}',
+          '${FormatUtils.formatWeight(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num).toDouble()))} Kg',
+          '${FormatUtils.formatCurrency(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['value'] ?? 0) as num).toDouble()))}',
+          '',
+        ];
         break;
       case 2:
         title = "Inward Report";
@@ -1081,8 +1140,20 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             ]);
           }
         }
+        footerRow = [
+          'TOTAL',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '${rows.fold<int>(0, (sum, r) => sum + (double.tryParse(r[7]) ?? 0).toInt())}',
+          FormatUtils.formatWeight(rows.fold<double>(0.0, (sum, r) => sum + (double.tryParse(r[8]) ?? 0.0))),
+          FormatUtils.formatCurrency(rows.fold<double>(0.0, (sum, r) => sum + (double.tryParse(r[9].replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0))),
+        ];
         break;
-      case 3:
+
         title = "Outward Report";
         final filters = _filters[3] ?? {};
         final diaFilter = filters['dia'];
@@ -1114,6 +1185,12 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               '${(e.value['weight'] as num).toStringAsFixed(1)}',
             ];
           }).toList();
+          footerRow = [
+            'TOTAL',
+            '',
+            '${summary.values.fold<int>(0, (sum, v) => sum + ((v['rolls'] ?? 0) as num).toInt())}',
+            FormatUtils.formatWeight(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num))),
+          ];
         } else {
           headers = [
             'Party',
@@ -1147,6 +1224,18 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               (weight * ((out['rate'] ?? out['Rate'] ?? 0) as num)).toStringAsFixed(0),
             ];
           }).toList();
+          footerRow = [
+            'TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '${_outwardData.fold<int>(0, (sum, out) => sum + (out['items'] as List).length)}',
+            FormatUtils.formatWeight(_outwardData.fold<double>(0.0, (sum, out) => sum + (out['items'] as List).fold<double>(0.0, (s, i) => s + ((i['total_weight'] ?? 0) as num).toDouble()))),
+            FormatUtils.formatCurrency(_outwardData.fold<double>(0.0, (sum, out) => sum + ((out['items'] as List).fold<double>(0.0, (s, i) => s + ((i['total_weight'] ?? 0) as num).toDouble()) * ((out['rate'] ?? 0) as num).toDouble()))),
+          ];
         }
         break;
       case 4:
@@ -1181,10 +1270,24 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
             item['status'] ?? '-',
           ];
         }).toList();
+        footerRow = [
+          'TOTAL',
+          '',
+          '${_closingData.fold<int>(0, (sum, item) => sum + ((item['rec_rolls'] ?? 0) as num).toInt())}',
+          FormatUtils.formatWeight(_closingData.fold<double>(0.0, (sum, item) => sum + ((item['rec_weight'] ?? 0) as num).toDouble())),
+          FormatUtils.formatCurrency(_closingData.fold<double>(0.0, (sum, item) => sum + ((item['rec_value'] ?? 0) as num).toDouble())),
+          '${_closingData.fold<int>(0, (sum, item) => sum + ((item['deliv_rolls'] ?? 0) as num).toInt())}',
+          FormatUtils.formatWeight(_closingData.fold<double>(0.0, (sum, item) => sum + ((item['deliv_weight'] ?? 0) as num).toDouble())),
+          FormatUtils.formatCurrency(_closingData.fold<double>(0.0, (sum, item) => sum + ((item['deliv_value'] ?? 0) as num).toDouble())),
+          '${_closingData.fold<int>(0, (sum, item) => sum + ((item['balance_rolls'] ?? 0) as num).toInt())}',
+          FormatUtils.formatWeight(_closingData.fold<double>(0.0, (sum, item) => sum + ((item['balance_weight'] ?? 0) as num).toDouble())),
+          FormatUtils.formatCurrency(_closingData.fold<double>(0.0, (sum, item) => sum + ((item['balance_value'] ?? 0) as num).toDouble())),
+          '',
+        ];
         break;
     }
 
-    return {'headers': headers, 'rows': rows, 'title': title};
+    return {'headers': headers, 'rows': rows, 'title': title, 'footerRow': footerRow};
   }
 
   String _formatDate(String? dateStr) {
@@ -1292,7 +1395,7 @@ class _FilterDialogState extends State<_FilterDialog> {
                 4,
               ].contains(widget.tabIndex)) // Lot Name (All Reports)
                 _buildDropdown('lotName', 'Lot Name', widget.lotNames),
-              if ([0, 2, 3, 4].contains(
+              if ([0, 1, 2, 3, 4].contains(
                 widget.tabIndex,
               )) // Lot No (Aging, Inward, Outward, Closing)
                 _buildDropdown('lotNo', 'Lot No', widget.lotNos),
@@ -1428,13 +1531,49 @@ class _FilterDialogState extends State<_FilterDialog> {
   }
 
   Widget _buildDropdown(String key, String label, List<String> items) {
+    final options = ['All', ...items.where((i) => i.toUpperCase() != 'ALL')];
     return CustomDropdownField(
       label: label,
-      value: _filters[key],
-      items: items,
+      value: _filters[key] ?? 'All',
+      items: options,
       onChanged: (val) {
-        if (val != null) setState(() => _filters[key] = val);
+        if (val != null) {
+          setState(() {
+            if (val == 'All') {
+              _filters.remove(key);
+            } else {
+              _filters[key] = val;
+            }
+          });
+        }
       },
+    );
+  }
+}
+
+class _ReportPdfPreviewScreen extends StatelessWidget {
+  final Uint8List pdfBytes;
+  final String title;
+
+  const _ReportPdfPreviewScreen({
+    required this.pdfBytes,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      body: PdfPreview(
+        build: (format) => pdfBytes,
+        allowPrinting: true,
+        allowSharing: true,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        pdfFileName: title.replaceAll(' ', '_') + '.pdf',
+      ),
     );
   }
 }

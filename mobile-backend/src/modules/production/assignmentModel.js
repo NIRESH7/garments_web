@@ -56,6 +56,10 @@ const assignmentSchema = mongoose.Schema(
             required: true,
             default: 0.0,
         },
+        date: {
+            type: Date,
+            required: false,
+        },
     },
     {
         timestamps: true,

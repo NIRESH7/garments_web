@@ -5,7 +5,7 @@ import Assignment from './assignmentModel.js';
 // @route   POST /api/production/assignments
 // @access  Private
 const createAssignment = asyncHandler(async (req, res) => {
-    const { fabricItem, size, dia, efficiency, dozenWeight, layLength, layPcs, wastePercentage, foldingWt, lotName, gsm } = req.body;
+    const { fabricItem, size, dia, efficiency, dozenWeight, layLength, layPcs, wastePercentage, foldingWt, lotName, gsm, date } = req.body;
 
     const assignment = await Assignment.create({
         user: req.user._id,
@@ -20,6 +20,7 @@ const createAssignment = asyncHandler(async (req, res) => {
         foldingWt,
         lotName,
         gsm,
+        date,
     });
 
     res.status(201).json(assignment);
@@ -29,7 +30,17 @@ const createAssignment = asyncHandler(async (req, res) => {
 // @route   GET /api/production/assignments
 // @access  Private
 const getAssignments = asyncHandler(async (req, res) => {
-    const assignments = await Assignment.find({ user: req.user._id }).sort({
+    const { date } = req.query;
+    const filter = { user: req.user._id };
+
+    if (date) {
+        const d = new Date(date);
+        const next = new Date(d);
+        next.setDate(next.getDate() + 1);
+        filter.date = { $gte: d, $lt: next };
+    }
+
+    const assignments = await Assignment.find(filter).sort({
         createdAt: -1,
     });
     res.json(assignments);
@@ -70,7 +81,7 @@ const updateAssignment = asyncHandler(async (req, res) => {
         throw new Error('Not authorized');
     }
 
-    const { fabricItem, size, dia, efficiency, dozenWeight, layLength, layPcs, wastePercentage, foldingWt, lotName, gsm } = req.body;
+    const { fabricItem, size, dia, efficiency, dozenWeight, layLength, layPcs, wastePercentage, foldingWt, lotName, gsm, date } = req.body;
 
     assignment.fabricItem      = fabricItem      ?? assignment.fabricItem;
     assignment.size            = size            ?? assignment.size;
@@ -83,6 +94,7 @@ const updateAssignment = asyncHandler(async (req, res) => {
     assignment.foldingWt       = foldingWt       ?? assignment.foldingWt;
     assignment.lotName         = lotName         ?? assignment.lotName;
     assignment.gsm             = gsm             ?? assignment.gsm;
+    assignment.date            = date            ?? assignment.date;
 
     const updated = await assignment.save();
     res.json(updated);

@@ -113,6 +113,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
     for (var p in _patterns) {
       p.patternMeasurementController.dispose();
       p.finishingController.dispose();
+      p.punchesController.dispose();
     }
     super.dispose();
   }
@@ -214,6 +215,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
           imageUrl: p['patternImage'],
           patternMeasurementController: TextEditingController(text: (p['patternMeasurement'] ?? '').toString()),
           finishingController: TextEditingController(text: (p['finishingMeasurement'] ?? '').toString()),
+          punchesController: TextEditingController(text: (p['noOfPunches'] ?? '').toString()),
         )).toList();
 
         _cadFileUrl = data['cadFile'];
@@ -229,6 +231,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
       _patterns.add(PatternRowData(
         patternMeasurementController: TextEditingController(),
         finishingController: TextEditingController(),
+        punchesController: TextEditingController(),
       ));
     });
   }
@@ -302,6 +305,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
           'partyName': p.partyName ?? '',
           'patternMeasurement': p.patternMeasurementController.text,
           'finishingMeasurement': p.finishingController.text,
+          'noOfPunches': p.punchesController.text,
           'patternImage': p.imageUrl ?? '',
         });
         if (p.imageFile != null) {
@@ -526,7 +530,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                   TextFormField(
                     controller: _dozenWeightController,
                     decoration: InputDecoration(
-                      labelText: 'Dozen weight',
+                      labelText: 'Costing weight',
                       labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.scale_outlined, color: Color(0xFF3B82F6)),
                       fillColor: Colors.white,
@@ -1114,6 +1118,20 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
             ),
           ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: data.punchesController,
+            decoration: InputDecoration(
+              labelText: 'No. of punches',
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              prefixIcon: const Icon(Icons.pin_outlined, color: Color(0xFF3B82F6)),
+              fillColor: Colors.white,
+              filled: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
+            ),
+          ),
         ],
       ),
     );
@@ -1174,6 +1192,7 @@ class PatternRowData {
   String? imageUrl;
   final TextEditingController patternMeasurementController;
   final TextEditingController finishingController;
+  final TextEditingController punchesController;
 
   PatternRowData({
     this.partyName,
@@ -1181,5 +1200,6 @@ class PatternRowData {
     this.imageUrl,
     required this.patternMeasurementController,
     required this.finishingController,
+    required this.punchesController,
   });
 }

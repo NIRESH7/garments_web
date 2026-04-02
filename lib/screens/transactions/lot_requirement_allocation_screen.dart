@@ -12,7 +12,7 @@ import 'package:garments/widgets/custom_dropdown_field.dart';
 import 'package:share_plus/share_plus.dart';
 import 'lot_outward_screen.dart';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 const List<String> _kWeekDays = [
   'Monday',
   'Tuesday',
@@ -215,6 +215,19 @@ class _LotRequirementAllocationScreenState
       });
     } catch (e) {
       _showError('Error loading data: $e');
+    }
+  }
+
+  Future<void> _loadAssignmentsForDate(DateTime date) async {
+    setState(() => _isLoading = true);
+    try {
+      final assignments = await _api.getAssignments(date: date);
+      setState(() {
+        _assignments = assignments;
+        _isLoading = false;
+      });
+    } catch (e) {
+      _showError('Error loading assignments: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -271,14 +284,9 @@ class _LotRequirementAllocationScreenState
     return numVal.toString();
   }
 
-  int _toSetNo(dynamic value) {
-    if (value is num) return value.toInt();
-    final raw = value?.toString().trim() ?? '';
-    if (raw.isEmpty) return 0;
-    final direct = int.tryParse(raw);
-    if (direct != null) return direct;
-    final match = RegExp(r'\d+').firstMatch(raw);
-    return int.tryParse(match?.group(0) ?? '') ?? 0;
+  String _toSetNo(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim();
   }
 
   Future<List<Map<String, dynamic>>> _fillRackPalletFromInward(
@@ -305,7 +313,8 @@ class _LotRequirementAllocationScreenState
     return allocations.map((a) {
       final lotNo = a['lotNo']?.toString().trim() ?? '';
       final dia = _normalizeDia(a['dia']);
-      final setNo = _toSetNo(a['setNo']);
+      final setNoStr = _toSetNo(a['setNo']);
+      final setNo = int.tryParse(setNoStr) ?? 0;
 
       var rackName = a['rackName']?.toString().trim();
       var palletNumber = a['palletNumber']?.toString().trim();
@@ -530,11 +539,11 @@ class _LotRequirementAllocationScreenState
             alloc['size'] == _selectedSize) {
           final sNo = _toSetNo(alloc['setNo']);
           final lotNo = alloc['lotNo']?.toString().trim();
-          if (sNo > 0) {
+          if (sNo.isNotEmpty) {
             if (lotNo != null && lotNo.isNotEmpty) {
               excludedSets.add('$lotNo|$sNo');
             } else {
-              excludedSets.add(sNo.toString());
+              excludedSets.add(sNo);
             }
           }
         }
@@ -548,11 +557,11 @@ class _LotRequirementAllocationScreenState
           for (var s in entry.sets) {
             final sNo = _toSetNo(s['setNo']);
             final lotNo = s['lotNo']?.toString().trim();
-            if (sNo > 0) {
+            if (sNo.isNotEmpty) {
               if (lotNo != null && lotNo.isNotEmpty) {
                 excludedSets.add('$lotNo|$sNo');
               } else {
-                excludedSets.add(sNo.toString());
+                excludedSets.add(sNo);
               }
             }
           }
@@ -661,7 +670,8 @@ class _LotRequirementAllocationScreenState
     if (sets.isEmpty) return [];
     final Map<String, Map<String, dynamic>> grouped = {};
     for (var s in sets) {
-      final setNo = _toSetNo(s['setNo']);
+      final setNoStr = _toSetNo(s['setNo']);
+      final setNo = int.tryParse(setNoStr) ?? 0;
       if (setNo == 0) continue;
 
       final itemName = s['itemName']?.toString() ?? '';
@@ -1379,6 +1389,7 @@ class _LotRequirementAllocationScreenState
                           _selectedDay = _dayFromDate(picked);
                           _currentSets = [];
                         });
+                        _loadAssignmentsForDate(picked);
                       }
                     },
                     child: InputDecorator(
@@ -1752,7 +1763,8 @@ class _LotRequirementAllocationScreenState
     final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
 
     for (var s in _currentSets) {
-      final setNo = _toSetNo(s['setNo']);
+      final setNoStr = _toSetNo(s['setNo']);
+      final setNo = int.tryParse(setNoStr) ?? 0;
       if (setNo == 0) continue;
       final lotNo = s['lotNo']?.toString() ?? '';
       final dia = s['dia']?.toString() ?? '-';
@@ -2341,7 +2353,8 @@ class _LotRequirementAllocationScreenState
           };
         }
         final entry = g[key]!;
-        final setNo = _toSetNo(r['setNo']);
+        final setNoStr = _toSetNo(r['setNo']);
+        final setNo = int.tryParse(setNoStr) ?? 0;
         final wt = (r['setWeight'] as num?)?.toDouble() ?? 0.0;
         final rack = r['rackName']?.toString() ?? '';
         final pallet = r['palletNumber']?.toString() ?? '';

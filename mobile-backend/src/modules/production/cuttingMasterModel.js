@@ -6,6 +6,7 @@ const patternRowSchema = new mongoose.Schema({
     patternImage: { type: String, default: '' },
     patternMeasurement: { type: String, default: '' },
     finishingMeasurement: { type: String, default: '' },
+    noOfPunches: { type: String, default: '' },
 }, { _id: true });
 
 const cuttingMasterSchema = new mongoose.Schema(

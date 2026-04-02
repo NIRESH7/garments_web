@@ -14,11 +14,17 @@ class ReportPrintService {
     required String title,
     required List<String> headers,
     required List<List<String>> rows,
+    List<String>? footerRow,
     String? subtitle,
   }) async {
     final pdf = pw.Document();
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy HH:mm').format(now);
+
+    final tableRows = List<List<String>>.from(rows);
+    if (footerRow != null) {
+      tableRows.add(footerRow);
+    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -75,7 +81,7 @@ class ReportPrintService {
               cellStyle: const pw.TextStyle(fontSize: 8),
               cellAlignment: pw.Alignment.centerLeft,
               headers: headers,
-              data: rows,
+              data: tableRows,
               border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
             ),
           ];

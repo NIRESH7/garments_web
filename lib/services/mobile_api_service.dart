@@ -606,9 +606,16 @@ class MobileApiService {
   }
 
   // --- Production ---
-  Future<List<dynamic>> getAssignments() async {
+  Future<List<dynamic>> getAssignments({DateTime? date}) async {
     try {
-      final response = await _client.get(ApiConstants.assignments);
+      Map<String, dynamic> query = {};
+      if (date != null) {
+        query['date'] = date.toIso8601String().split('T')[0];
+      }
+      final response = await _client.get(
+        ApiConstants.assignments,
+        queryParameters: query,
+      );
       return response.data;
     } catch (e) {
       return [];

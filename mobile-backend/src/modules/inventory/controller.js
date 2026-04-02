@@ -1000,8 +1000,18 @@ const getLotsFifo = asyncHandler(async (req, res) => {
         query.lotName = { $regex: new RegExp(`^${lotName.trim()}$`, 'i') };
     }
     const inwards = await Inward.find(query).sort({ inwardDate: 1 });
-    const lotNos = [...new Set(inwards.map(i => i.lotNo))];
-    res.json(lotNos);
+    const distinctLotNos = [...new Set(inwards.map(i => i.lotNo))];
+
+    // Filter lots by remaining balance > 0
+    const availableLotNos = [];
+    for (const lotNo of distinctLotNos) {
+        const balance = await getLotBalanceByDia(lotNo, dia);
+        if (balance > 0.1) {
+            availableLotNos.push(lotNo);
+        }
+    }
+
+    res.json(availableLotNos);
 });
 
 // @desc    Get Balanced Sets for Lot and DIA
