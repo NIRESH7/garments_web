@@ -617,13 +617,14 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           );
 
           final w = (stockItem['weight'] as num?)?.toDouble() ?? 0.0;
+          final r = (stockItem['rolls'] as num?)?.toInt() ?? (w > 0 ? 1 : 0);
           setTotalWeight += w;
 
           colours.add({
             'colour': lotCol,
             'weight': w,
             'roll_weight': w,
-            'no_of_rolls': w > 0 ? 1 : 0,
+            'no_of_rolls': r,
             'isChecked': w > 0, // Automatically check if weight is present
           });
         }
@@ -632,12 +633,13 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         if (colours.isEmpty) {
           for (var entry in setStock) {
             final w = (entry['weight'] as num?)?.toDouble() ?? 0.0;
+            final r = (entry['rolls'] as num?)?.toInt() ?? 1;
             setTotalWeight += w;
             colours.add({
               'colour': entry['colour'] ?? 'N/A',
               'weight': w,
               'roll_weight': w,
-              'no_of_rolls': 1,
+              'no_of_rolls': r,
               'isChecked': false,
             });
           }

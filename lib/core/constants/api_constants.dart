@@ -3,7 +3,7 @@ class ApiConstants {
   // flutter build apk --release --dart-define=API_BASE_URL=http://your-server:5001/api --dart-define=SERVER_URL=http://your-server:5001
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:5001/api', // Use localhost for Web/iOS Simulator. For Android Emulator, use 10.0.2.2.
+    defaultValue: 'http://localhost:5001/api',
   );
   static const String serverUrl = String.fromEnvironment(
     'SERVER_URL',

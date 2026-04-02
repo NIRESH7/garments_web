@@ -1056,16 +1056,20 @@ const getBalancedSets = asyncHandler(async (req, res) => {
                             const rackName = normalizeText(row.rackName || (sdOrRow.racks ? sdOrRow.racks[idx] : ''));
                             const palletNumber = normalizeText(row.palletNumber || (sdOrRow.pallets ? sdOrRow.pallets[idx] : ''));
 
+                            const inRolls = (weightsArray.length === 1 && row.rollNo) ? (parseInt(row.rollNo) || 1) : 1;
+
                             if (!balanceMap[key]) {
                                 balanceMap[key] = {
                                     set_no: rawSetNo,
                                     colour: row.colour,
                                     weight: 0,
+                                    rolls: 0,
                                     rack_name: rackName,
                                     pallet_number: palletNumber,
                                 };
                             }
                             balanceMap[key].weight += inWeight;
+                            balanceMap[key].rolls += inRolls;
                         });
                     }
                 });
@@ -1082,13 +1086,14 @@ const getBalancedSets = asyncHandler(async (req, res) => {
                     item.colours.forEach(c => {
                         const rawColour = normalizeText(c.colour);
                         const outWeight = parseFloat(c.weight) || 0;
-                        if (outWeight <= 0) return;
+                        const outRolls = parseInt(c.no_of_rolls) || 0;
+                        if (outWeight <= 0 && outRolls <= 0) return;
 
                         const key = canonicalKey(rawSetNo, rawColour);
                         if (balanceMap[key]) {
-                            const oldWeight = balanceMap[key].weight;
                             balanceMap[key].weight = Math.max(0, balanceMap[key].weight - outWeight);
-                            console.log(`[Diagnostic] Subtraction: Key=${key}, DC=${out.dcNo}, -${outWeight}kg (Result: ${balanceMap[key].weight})`);
+                            balanceMap[key].rolls = Math.max(0, balanceMap[key].rolls - outRolls);
+                            console.log(`[Diagnostic] Subtraction: Key=${key}, DC=${out.dcNo}, -${outWeight}kg, -${outRolls} rolls (Result: ${balanceMap[key].weight}kg, ${balanceMap[key].rolls} rolls)`);
                         }
                     });
                 }
