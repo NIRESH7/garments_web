@@ -149,6 +149,16 @@ class ScaleService {
   static const _keyReadTimeout = 'scale_read_timeout_ms';
 
   final StorageService _storage = StorageService();
+  BluetoothConnection? _btConnection;
+  String? _btAddress;
+
+  Future<void> closeBluetoothConnection() async {
+    if (_btConnection != null) {
+      await _btConnection!.finish();
+      _btConnection = null;
+      _btAddress = null;
+    }
+  }
 
   Future<ScaleSettings> loadSettings() async {
     final enabled = await _storage.readValue(_keyEnabled) == '1';
@@ -367,7 +377,31 @@ class ScaleService {
       throw Exception('Bluetooth is off. Turn on Bluetooth and try again.');
     }
 
-    final connection = await BluetoothConnection.toAddress(address);
+    // Reuse existing connection if valid
+    if (_btConnection != null &&
+        _btAddress == address &&
+        _btConnection!.isConnected) {
+      return _readWeightFromConnection(_btConnection!, config);
+    }
+
+    // Connect and cache
+    try {
+      await closeBluetoothConnection(); // Ensure clean slate
+      final connection = await BluetoothConnection.toAddress(address);
+      _btConnection = connection;
+      _btAddress = address;
+
+      return _readWeightFromConnection(connection, config);
+    } catch (e) {
+      await closeBluetoothConnection();
+      rethrow;
+    }
+  }
+
+  Future<double> _readWeightFromConnection(
+    BluetoothConnection connection,
+    ScaleSettings config,
+  ) async {
     StreamSubscription<Uint8List>? subscription;
     Timer? timeoutTimer;
 
@@ -442,7 +476,8 @@ class ScaleService {
     } finally {
       timeoutTimer?.cancel();
       await subscription?.cancel();
-      connection.dispose();
+      // NOTE: We do NOT dispose the connection here anymore. 
+      // It is managed by ScaleService state.
     }
   }
 

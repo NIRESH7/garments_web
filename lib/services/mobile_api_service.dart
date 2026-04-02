@@ -211,14 +211,14 @@ class MobileApiService {
   }
 
   Future<Map<String, dynamic>> importInwardExcel(
-    String filePath, {
-    String? fileName,
-  }) async {
+    XFile file,
+  ) async {
     try {
+      final bytes = await file.readAsBytes();
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(
-          filePath,
-          filename: fileName ?? filePath.split('/').last,
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: file.name,
         ),
       });
 

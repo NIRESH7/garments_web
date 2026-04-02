@@ -127,6 +127,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _loadMasterData();
     _initSpeech();
     _loadWeightSettings();
+    _preWarmScaleConnection();
 
     if (widget.editInward != null) {
       _populateEditData();
@@ -163,6 +164,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     _vehicleController.dispose();
     _dcController.dispose();
     _complaintController.dispose();
+    _scaleService.closeBluetoothConnection();
     super.dispose();
   }
 
@@ -175,6 +177,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     final role = await StorageService().getRole();
     setState(() => _userRole = role);
     print('DEBUG: User Role loaded: $_userRole');
+  }
+
+  Future<void> _preWarmScaleConnection() async {
+    try {
+      final config = await _scaleService.loadSettings();
+      if (config.enabled) {
+        // Attempt a capture to establish connection in background
+        _scaleService.captureWeight().timeout(const Duration(seconds: 5)).catchError((_) => 0.0);
+      }
+    } catch (_) {}
   }
 
   Future<void> _initSpeech() async {
@@ -532,6 +544,12 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     ? labels[i].trim()
                     : (i + 1).toString(),
               );
+
+              // Auto-detect No-Set Entry if "Weight" label is found
+              if (sRow.setLabels.any((l) => l.toLowerCase().trim() == 'weight')) {
+                _useSetBasedEntry = false;
+              }
+
               // Initialize controllers
               sRow.rollNoController = TextEditingController(text: sRow.rollNo);
               if (sRow.gsm != null) {

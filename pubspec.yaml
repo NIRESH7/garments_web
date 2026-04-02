@@ -67,6 +67,7 @@ dependencies:
   flutter_bluetooth_serial_plus: ^0.5.1
   record: ^6.2.0
   audioplayers: ^6.5.1
+  desktop_drop: ^0.7.0
 
 
 dev_dependencies:

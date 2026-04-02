@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
@@ -13,28 +14,29 @@ class InwardUploadScreen extends StatefulWidget {
 
 class _InwardUploadScreenState extends State<InwardUploadScreen> {
   final MobileApiService _api = MobileApiService();
-  String? _selectedFilePath;
+  XFile? _selectedFile;
   String? _selectedFileName;
   bool _isUploading = false;
   Map<String, dynamic>? _result;
-
   Future<void> _pickFile() async {
     try {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['xlsx', 'xls'],
+        withData: true, // Required for web to get bytes
       );
       if (picked == null || picked.files.isEmpty) return;
 
       final file = picked.files.single;
-      final path = file.path;
-      if (path == null || path.trim().isEmpty) {
-        _showMessage('Selected file path is not available.', isError: true);
-        return;
-      }
-
       setState(() {
-        _selectedFilePath = path;
+        if (kIsWeb) {
+          _selectedFile = XFile.fromData(
+            file.bytes!,
+            name: file.name,
+          );
+        } else {
+          _selectedFile = XFile(file.path!);
+        }
         _selectedFileName = file.name;
         _result = null;
       });
@@ -44,17 +46,14 @@ class _InwardUploadScreenState extends State<InwardUploadScreen> {
   }
 
   Future<void> _upload() async {
-    if (_selectedFilePath == null || _selectedFilePath!.isEmpty) {
+    if (_selectedFile == null) {
       _showMessage('Please select an Excel file first.', isError: true);
       return;
     }
 
     setState(() => _isUploading = true);
     try {
-      final result = await _api.importInwardExcel(
-        _selectedFilePath!,
-        fileName: _selectedFileName,
-      );
+      final result = await _api.importInwardExcel(_selectedFile!);
       if (!mounted) return;
       setState(() => _result = result);
 
@@ -211,18 +210,7 @@ class _InwardUploadScreenState extends State<InwardUploadScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: _isUploading
-                                ? null
-                                : () {
-                                    if (kIsWeb) {
-                                      _showMessage(
-                                        'Web upload is not supported in this flow.',
-                                        isError: true,
-                                      );
-                                      return;
-                                    }
-                                    _pickFile();
-                                  },
+                            onPressed: _isUploading ? null : _pickFile,
                             icon: const Icon(Icons.attach_file),
                             label: const Text('Select File'),
                           ),

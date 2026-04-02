@@ -513,29 +513,18 @@ const buildInwardPayloadFromSummaryRows = (rows) => {
 
     if (storageRows.length === 0) return null;
 
-    const totalSets = Math.max(1, Math.ceil(totalRollsAll / 11));
-    const racks = rackList.length > 0 ? rackList : [];
-    const pallets = palletList.length > 0 ? palletList : [];
-    while (racks.length > 0 && racks.length < totalSets) racks.push(racks[racks.length - 1]);
-    while (pallets.length > 0 && pallets.length < totalSets) pallets.push(pallets[pallets.length - 1]);
+    const totalSets = 1;
+    const racks = rackList.length > 0 ? [rackList[0]] : [];
+    const pallets = palletList.length > 0 ? [palletList[0]] : [];
 
     const rowsWithSets = storageRows.map((row) => {
-        const rolls = row.totalRolls || 0;
-        const weight = row.totalWeight || 0;
-        const avgRollWeight = rolls > 0 ? weight / rolls : 0;
-        const base = totalSets > 0 ? Math.floor(rolls / totalSets) : 0;
-        let rem = totalSets > 0 ? rolls % totalSets : 0;
-        const setWeights = [];
-        for (let i = 0; i < totalSets; i++) {
-            const rollCount = base + (rem > 0 ? 1 : 0);
-            if (rem > 0) rem -= 1;
-            const setWeight = avgRollWeight > 0 ? rollCount * avgRollWeight : (totalSets > 0 ? weight / totalSets : 0);
-            setWeights.push(rollCount > 0 ? formatWeight(setWeight) : '');
-        }
         return {
             colour: row.colour,
             gsm: '',
-            setWeights,
+            rollNo: row.totalRolls.toString() || "1", // Use the total rolls for this colour directly
+            setWeights: [formatWeight(row.totalWeight)], // Use the total weight as a single entry
+            setLabels: ['Weight'], // Use 'Weight' to trigger No-Set mode in the app
+            totalWeight: row.totalWeight // For consistency
         };
     });
 
