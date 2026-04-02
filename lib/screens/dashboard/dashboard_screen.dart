@@ -29,7 +29,6 @@ import '../cutting_entry/cutting_entry_list_screen.dart';
 import '../cutting_entry/cutting_daily_plan_screen.dart';
 import '../stitching/stitching_delivery_screen.dart';
 import '../packing/iron_packing_dc_screen.dart';
-import '../assessment/accessories_item_assign_screen.dart';
 import '../reports/cut_stock_report_screen.dart';
 import '../reports/cutting_entry_report_screen.dart';
 // ────────────────────────────────────────────────────────────────────────
@@ -326,21 +325,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             context,
                             MaterialPageRoute(
                                 builder: (_) => const IronPackingDcScreen()));
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _TransactionTile(
-                      title: 'Accessories Assignment',
-                      subtitle: 'Link accessories to items',
-                      icon: LucideIcons.link2,
-                      color: Colors.pink,
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    const AccessoriesItemAssignScreen()));
                       },
                     ),
                     const SizedBox(height: 12),
