@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../services/mobile_api_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../core/storage/storage_service.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import './task_detail_screen.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -25,6 +27,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   final _audioPlayer = AudioPlayer();
   final _recorder = AudioRecorder();
   final _tts = FlutterTts();
+  final _storage = StorageService();
 
   bool _isListening = false;
   bool _isRecording = false;
@@ -39,6 +42,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   final _descController = TextEditingController();
   String _priority = 'Medium';
   String _assignedTo = 'All';
+  List<String> _assignOptions = ['All', 'Tailoring', 'Packing', 'Cutting'];
   DateTime? _deadline;
 
   List<dynamic> _tasks = [];
@@ -47,7 +51,105 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   void initState() {
     super.initState();
     _initVoice();
+    _loadAssignOptions();
     _loadTasks();
+  }
+
+  Future<void> _loadAssignOptions() async {
+    final saved = await _storage.getAssignmentOptions();
+    if (saved != null && saved.isNotEmpty) {
+      setState(() => _assignOptions = saved);
+      if (!_assignOptions.contains(_assignedTo)) {
+        _assignedTo = _assignOptions.first;
+      }
+    }
+  }
+
+  Future<void> _showManageAssignmentsDialog() async {
+    final newController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Manage Assignments'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: newController,
+                          decoration: const InputDecoration(
+                            hintText: 'New Assignment Name',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add, color: Colors.blue),
+                        onPressed: () async {
+                          final name = newController.text.trim();
+                          if (name.isNotEmpty && !_assignOptions.contains(name)) {
+                            setState(() {
+                              _assignOptions.add(name);
+                            });
+                            setDialogState(() {});
+                            newController.clear();
+                            await _storage.saveAssignmentOptions(_assignOptions);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _assignOptions.length,
+                      itemBuilder: (context, idx) {
+                        final opt = _assignOptions[idx];
+                        // User wants delete option for EVERYTHING
+                        return ListTile(
+                          title: Text(opt),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () async {
+                              setState(() {
+                                _assignOptions.removeAt(idx);
+                                if (_assignedTo == opt) {
+                                  _assignedTo = _assignOptions.isNotEmpty ? _assignOptions.first : 'All';
+                                }
+                                if (_assignOptions.isEmpty) {
+                                  _assignOptions.add('All');
+                                  _assignedTo = 'All';
+                                }
+                              });
+                              setDialogState(() {});
+                              await _storage.saveAssignmentOptions(_assignOptions);
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    setState(() {}); // Refresh main screen dropdown items
   }
 
   @override
@@ -460,15 +562,34 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _assignedTo,
+                    value: _assignOptions.contains(_assignedTo) ? _assignedTo : _assignOptions.first,
                     decoration: const InputDecoration(
                       labelText: 'Assign To',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['All', 'Tailoring', 'Packing', 'Cutting']
-                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                        .toList(),
-                    onChanged: (val) => setState(() => _assignedTo = val!),
+                    items: [
+                      ..._assignOptions.map((p) => DropdownMenuItem(value: p, child: Text(p))),
+                      const DropdownMenuItem(
+                        value: 'ADD_NEW',
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_circle_outline, color: Colors.blue, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Add New Assignment',
+                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val == 'ADD_NEW') {
+                        _showManageAssignmentsDialog();
+                      } else {
+                        setState(() => _assignedTo = val!);
+                      }
+                    },
                   ),
                 ),
               ],
