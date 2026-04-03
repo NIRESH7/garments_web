@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/report_print_service.dart';
 
 import '../../widgets/custom_dropdown_field.dart';
+import '../../widgets/custom_multi_select_field.dart';
 
 class FormatReportsScreen extends StatefulWidget {
   final int initialIndex;
@@ -268,20 +269,23 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       if (index == 0) {
         // Aging
         final data = await _apiService.getLotAgingReport(
-          lotNo: filters['lotNo'],
-          lotName: filters['lotName'],
+          lotNo: null,
+          lotName: null,
           colour: filters['colour'],
           dia: filters['dia'],
           startDate: filters['startDate'],
           endDate: filters['endDate'],
         );
-        // Local Exact Match Filter
+        // Local Multi-Select Filter
         _agingData = data.where((item) {
-          if (filters['lotName'] != null &&
-              item['lot_name']?.toString().trim().toUpperCase() != filters['lotName'])
+          final selLotNames = filters['lotName'] as List<String>? ?? [];
+          final selLotNos = filters['lotNo'] as List<String>? ?? [];
+
+          if (selLotNames.isNotEmpty &&
+              !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase()))
             return false;
-          if (filters['lotNo'] != null &&
-              item['lot_number'] != filters['lotNo'])
+          if (selLotNos.isNotEmpty &&
+              !selLotNos.contains(item['lot_number']?.toString().trim()))
             return false;
           if (filters['colour'] != null && item['colour'] != filters['colour'])
             return false;
@@ -301,15 +305,18 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         // unless we want to filter the *summary view* locally.
         // Let's reload Aging Data with filters and then re-summarize.
         final data = await _apiService.getLotAgingReport(
-          lotName: filters['lotName'],
+          lotName: null,
         );
-        // Local Exact Match Filter
+        // Local Multi-Select Filter
         _agingData = data.where((item) {
-          if (filters['lotName'] != null &&
-              item['lot_name']?.toString().trim().toUpperCase() != filters['lotName'])
+          final selLotNames = filters['lotName'] as List<String>? ?? [];
+          final selLotNos = filters['lotNo'] as List<String>? ?? [];
+
+          if (selLotNames.isNotEmpty &&
+              !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase()))
             return false;
-          if (filters['lotNo'] != null &&
-              item['lot_number']?.toString().trim() != filters['lotNo'])
+          if (selLotNos.isNotEmpty &&
+              !selLotNos.contains(item['lot_number']?.toString().trim()))
             return false;
           return true;
         }).toList();
@@ -319,15 +326,19 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           startDate: filters['startDate'],
           endDate: filters['endDate'],
           fromParty: filters['party'],
-          lotName: filters['lotName'],
-          lotNo: filters['lotNo'],
+          lotName: null,
+          lotNo: null,
         );
-        // Local Exact Match Filter
+        // Local Multi-Select Filter
         _inwardData = data.where((item) {
-          if (filters['lotName'] != null &&
-              item['lotName']?.toString().trim().toUpperCase() != filters['lotName'])
+          final selLotNames = filters['lotName'] as List<String>? ?? [];
+          final selLotNos = filters['lotNo'] as List<String>? ?? [];
+
+          if (selLotNames.isNotEmpty &&
+              !selLotNames.contains(item['lotName']?.toString().trim().toUpperCase()))
             return false;
-          if (filters['lotNo'] != null && item['lotNo'] != filters['lotNo'])
+          if (selLotNos.isNotEmpty &&
+              !selLotNos.contains(item['lotNo']?.toString().trim()))
             return false;
           if (filters['party'] != null && item['fromParty'] != filters['party'])
             return false;
@@ -338,16 +349,20 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         final data = await _apiService.getOutwards(
           startDate: filters['startDate'],
           endDate: filters['endDate'],
-          lotName: filters['lotName'],
-          lotNo: filters['lotNo'],
+          lotName: null,
+          lotNo: null,
           dia: filters['dia'],
         );
-        // Local Exact Match Filter
+        // Local Multi-Select Filter
         _outwardData = data.where((item) {
-          if (filters['lotName'] != null &&
-              item['lotName']?.toString().trim().toUpperCase() != filters['lotName'])
+          final selLotNames = filters['lotName'] as List<String>? ?? [];
+          final selLotNos = filters['lotNo'] as List<String>? ?? [];
+
+          if (selLotNames.isNotEmpty &&
+              !selLotNames.contains(item['lotName']?.toString().trim().toUpperCase()))
             return false;
-          if (filters['lotNo'] != null && item['lotNo'] != filters['lotNo'])
+          if (selLotNos.isNotEmpty &&
+              !selLotNos.contains(item['lotNo']?.toString().trim()))
             return false;
           if (filters['dia'] != null &&
               item['dia']?.toString() != filters['dia'].toString())
@@ -359,17 +374,20 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         final data = await _apiService.getOverviewReport(
           startDate: filters['startDate'],
           endDate: filters['endDate'],
-          lotNo: filters['lotNo'],
-          lotName: filters['lotName'],
+          lotNo: null,
+          lotName: null,
           status: filters['status'],
         );
-        // Local Exact Match Filter
+        // Local Multi-Select Filter
         _closingData = data.where((item) {
-          if (filters['lotName'] != null &&
-              item['lot_name']?.toString().trim().toUpperCase() != filters['lotName'])
+          final selLotNames = filters['lotName'] as List<String>? ?? [];
+          final selLotNos = filters['lotNo'] as List<String>? ?? [];
+
+          if (selLotNames.isNotEmpty &&
+              !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase()))
             return false;
-          if (filters['lotNo'] != null &&
-              item['lot_number'] != filters['lotNo'])
+          if (selLotNos.isNotEmpty &&
+              !selLotNos.contains(item['lot_number']?.toString().trim()))
             return false;
           return true;
         }).toList();
@@ -1387,18 +1405,22 @@ class _FilterDialogState extends State<_FilterDialog> {
               ],
               if (widget.tabIndex == 1) // Aging Summary
                 _buildDatePicker('date', 'Date (Inward)', _dateController),
-              if ([
-                0,
-                1,
-                2,
-                3,
-                4,
-              ].contains(widget.tabIndex)) // Lot Name (All Reports)
-                _buildDropdown('lotName', 'Lot Name', widget.lotNames),
-              if ([0, 1, 2, 3, 4].contains(
-                widget.tabIndex,
-              )) // Lot No (Aging, Inward, Outward, Closing)
-                _buildDropdown('lotNo', 'Lot No', widget.lotNos),
+              if ([0, 1, 2, 3, 4].contains(widget.tabIndex)) ...[
+                CustomMultiSelectField(
+                  label: 'Lot Name',
+                  items: widget.lotNames,
+                  selectedValues: List<String>.from(_filters['lotName'] ?? []),
+                  onChanged: (vals) => setState(() => _filters['lotName'] = vals),
+                ),
+                const SizedBox(height: 12),
+                CustomMultiSelectField(
+                  label: 'Lot No',
+                  items: widget.lotNos,
+                  selectedValues: List<String>.from(_filters['lotNo'] ?? []),
+                  onChanged: (vals) => setState(() => _filters['lotNo'] = vals),
+                ),
+                const SizedBox(height: 12),
+              ],
               if (widget.tabIndex == 2) // Party (Inward)
                 _buildDropdown('party', 'Party Name', widget.parties),
               if ([0, 3].contains(widget.tabIndex)) // Dia (Aging, Outward)
