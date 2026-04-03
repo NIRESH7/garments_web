@@ -175,117 +175,108 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: ColorPalette.softShadow,
-              border: Border.all(color: Colors.grey.shade100),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withOpacity(0.04),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CuttingMasterFormScreen(entryId: entry['_id']),
-                    ),
-                  );
-                  if (result == true) _loadData();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Image / Icon Section
-                          Hero(
-                            tag: 'img_${entry['_id']}',
-                            child: Container(
-                              width: 70,
-                              height: 70,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: Colors.blue.withOpacity(0.05),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CuttingMasterFormScreen(entryId: entry['_id'])),
+                );
+                if (result == true) _loadData();
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            color: const Color(0xFF3B82F6).withOpacity(0.08),
+                          ),
+                          child: (imageUrl != null && imageUrl.isNotEmpty)
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.network(
+                                    ApiConstants.getImageUrl(imageUrl),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(Icons.style_outlined, color: Color(0xFF3B82F6)),
+                                  ),
+                                )
+                              : const Icon(Icons.style_outlined, color: Color(0xFF3B82F6), size: 32),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                itemName,
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.5),
                               ),
-                              child: (imageUrl != null && imageUrl.isNotEmpty)
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.network(
-                                        ApiConstants.getImageUrl(imageUrl),
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (c, e, s) => const Icon(Icons.image_outlined, color: Colors.blue),
-                                      ),
-                                    )
-                                  : const Icon(Icons.style_outlined, color: Colors.blue, size: 30),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          // Content Section
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  itemName,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: ColorPalette.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    _infoChip(Icons.straighten, size, Colors.orange),
-                                    const SizedBox(width: 8),
-                                    _infoChip(Icons.inventory_2_outlined, lotName, Colors.blue),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade500),
-                                    const SizedBox(width: 4),
-                                    Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Divider(height: 1),
-                      const SizedBox(height: 12),
-                      // Action Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              _actionIcon(Icons.share_outlined, Colors.green, () => _shareCutting(entry)),
-                              _actionIcon(Icons.print_outlined, Colors.purple, () => _print(entry, true)),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _infoChip(Icons.straighten_outlined, size, Colors.orange),
+                                  _infoChip(Icons.label_outline, lotName, Colors.blue),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade400),
+                                  const SizedBox(width: 6),
+                                  Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
                             ],
                           ),
-                          Row(
-                            children: [
-                              _actionIcon(Icons.edit_outlined, Colors.blue, () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => CuttingMasterFormScreen(entryId: entry['_id']),
-                                  ),
-                                );
-                                if (result == true) _loadData();
-                              }),
-                              _actionIcon(Icons.delete_outline, Colors.red, () => _deleteCutting(entry['_id'])),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            _actionIcon(Icons.share_outlined, Colors.green, () => _shareCutting(entry)),
+                            const SizedBox(width: 8),
+                            _actionIcon(Icons.print_outlined, Colors.purple, () => _print(entry, true)),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            _actionIcon(Icons.edit_outlined, Colors.blue, () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => CuttingMasterFormScreen(entryId: entry['_id'])),
+                              );
+                              if (result == true) _loadData();
+                            }),
+                            const SizedBox(width: 8),
+                            _actionIcon(Icons.delete_outline, Colors.red, () => _deleteCutting(entry['_id'])),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -329,103 +320,99 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: ColorPalette.softShadow,
-              border: Border.all(color: Colors.grey.shade100),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withOpacity(0.04),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AccessoriesMasterFormScreen(editEntry: entry),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AccessoriesMasterFormScreen(editEntry: entry)),
+                );
+                if (result == true) _loadData();
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            color: const Color(0xFF10B981).withOpacity(0.08),
+                          ),
+                          child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF10B981), size: 32),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                groups.isEmpty ? 'Accessories Master' : groups,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.5),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Items: ${items.isEmpty ? "None" : items}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 13),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade400),
+                                  const SizedBox(width: 6),
+                                  Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                  if (result == true) _loadData();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              color: Colors.green.withOpacity(0.05),
-                            ),
-                            child: const Icon(Icons.inventory_2_outlined, color: Colors.green, size: 30),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  groups.isEmpty ? 'Accessories Master' : groups,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: ColorPalette.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Items: ${items.isEmpty ? "None" : items}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: Colors.grey.shade600),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade500),
-                                    const SizedBox(width: 4),
-                                    Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Divider(height: 1),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              _actionIcon(Icons.share_outlined, Colors.green, () => _shareAccessory(entry)),
-                              _actionIcon(Icons.print_outlined, Colors.purple, () => _print(entry, false)),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              _actionIcon(Icons.edit_outlined, Colors.blue, () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => AccessoriesMasterFormScreen(editEntry: entry),
-                                  ),
-                                );
-                                if (result == true) _loadData();
-                              }),
-                              _actionIcon(Icons.delete_outline, Colors.red, () => _deleteAccessory(entry['_id'])),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            _actionIcon(Icons.share_outlined, Colors.green, () => _shareAccessory(entry)),
+                            const SizedBox(width: 8),
+                            _actionIcon(Icons.print_outlined, Colors.purple, () => _print(entry, false)),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            _actionIcon(Icons.edit_outlined, Colors.blue, () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => AccessoriesMasterFormScreen(editEntry: entry)),
+                              );
+                              if (result == true) _loadData();
+                            }),
+                            const SizedBox(width: 8),
+                            _actionIcon(Icons.delete_outline, Colors.red, () => _deleteCutting(entry['_id'])),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -437,21 +424,21 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
 
   Widget _infoChip(IconData icon, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
               color: color,
             ),
           ),
@@ -461,15 +448,16 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
   }
 
   Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, size: 22, color: color),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
         ),
+        child: Icon(icon, size: 20, color: color),
       ),
     );
   }

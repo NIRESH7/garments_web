@@ -414,377 +414,356 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(widget.entryId == null ? 'New Cutting Master' : 'Edit Cutting Master'),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
-        centerTitle: true,
-        titleTextStyle: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF0F172A),
-          letterSpacing: -0.8,
+      body: DefaultTabController(
+        length: 3,
+        child: Column(
+          children: [
+            Container(
+              color: Colors.white,
+              child: const TabBar(
+                isScrollable: false,
+                labelColor: ColorPalette.primary,
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: ColorPalette.primary,
+                indicatorWeight: 4,
+                labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                tabs: [
+                  Tab(text: 'Identity', icon: Icon(Icons.inventory_2_outlined, size: 20)),
+                  Tab(text: 'Production', icon: Icon(Icons.calculate_outlined, size: 20)),
+                  Tab(text: 'Media', icon: Icon(Icons.camera_alt_outlined, size: 20)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  // Tab 1: Item & Lot Details
+                  _buildIdentityTab(),
+                  // Tab 2: Production & Weights
+                  _buildProductionTab(),
+                  // Tab 3: Patterns & Instructions
+                  _buildMediaTab(),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      body: SingleChildScrollView(
+      bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              _buildSection(
-                title: 'Item & Lot Details',
-                icon: Icons.inventory_2_outlined,
-                children: [
-                  CustomDropdownField(
-                    label: 'Item Name',
-                    items: _itemList,
-                    value: _itemName,
-                    prefixIcon: Icons.shopping_bag_outlined,
-                    onChanged: (v) => setState(() => _itemName = v),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
+          ],
+        ),
+        child: ElevatedButton(
+          onPressed: _isSaving ? null : _save,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(60),
+            backgroundColor: ColorPalette.primary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+          child: _isSaving
+              ? const CircularProgressIndicator(color: Colors.white)
+              : Text(
+                  widget.entryId == null ? 'Save Cutting Master' : 'Update Cutting Master',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIdentityTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        child: Column(
+          children: [
+            _buildCard(
+              title: 'Item Details',
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: CustomDropdownField(
+                        label: 'Item',
+                        items: _itemList,
+                        value: _itemName,
+                        onChanged: (v) => setState(() => _itemName = v),
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: CustomDropdownField(
+                        label: 'Size',
+                        items: _sizeList,
+                        value: _size,
+                        onChanged: (v) => setState(() => _size = v),
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildImagePreview('Item Image', _itemImageFile, _itemImageUrl, () => _pickImage(true)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildCard(
+              title: 'Lot Details',
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomDropdownField(
+                        label: 'Lot Name',
+                        items: _lotList,
+                        value: _lotName,
+                        onChanged: (v) => setState(() => _lotName = v),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: CustomDropdownField(
+                        label: 'Dia',
+                        items: _diaNames,
+                        value: _selectedDiaName,
+                        onChanged: (v) {
+                          setState(() {
+                            _selectedDiaName = v;
+                            _knittingDia = null;
+                            _cuttingDia = null;
+                            _knittingDiaSpecific = null;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                if (_selectedDiaName != null) ...[
                   const SizedBox(height: 16),
                   CustomDropdownField(
-                    label: 'Size',
-                    items: _sizeList,
-                    value: _size,
-                    prefixIcon: Icons.straighten_outlined,
-                    onChanged: (v) => setState(() => _size = v),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildImagePreview('Image', _itemImageFile, _itemImageUrl, () => _pickImage(true)),
-                  const SizedBox(height: 16),
-                  CustomDropdownField(
-                    label: 'Lot Name',
-                    items: _lotList,
-                    value: _lotName,
-                    prefixIcon: Icons.label_outline,
-                    onChanged: (v) => setState(() => _lotName = v),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomDropdownField(
-                    label: 'Dia',
-                    items: _diaNames,
-                    value: _selectedDiaName,
-                    prefixIcon: Icons.adjust_outlined,
+                    label: 'Knitting Dia',
+                    items: _diaObjects
+                        .where((d) => d['name'] == _selectedDiaName)
+                        .map((d) => d['knittingDia']?.toString() ?? '')
+                        .where((s) => s.isNotEmpty)
+                        .toList(),
+                    value: _knittingDiaSpecific,
                     onChanged: (v) {
+                      final diaObj = _diaObjects.firstWhere(
+                        (d) => d['name'] == _selectedDiaName && d['knittingDia']?.toString() == v,
+                        orElse: () => {},
+                      );
                       setState(() {
-                        _selectedDiaName = v;
-                        _knittingDia = null;
-                        _cuttingDia = null;
-                        _knittingDiaSpecific = null;
+                        _knittingDiaSpecific = v;
+                        _knittingDia = v;
+                        _cuttingDia = diaObj['cuttingDia']?.toString();
                       });
                     },
                   ),
+                ],
+                if (_knittingDiaSpecific != null) ...[
                   const SizedBox(height: 16),
-                  if (_selectedDiaName != null)
-                    CustomDropdownField(
-                      label: 'Knitting Dia',
-                      items: _diaObjects
-                          .where((d) => d['name'] == _selectedDiaName)
-                          .map((d) => d['knittingDia']?.toString() ?? '')
-                          .where((s) => s.isNotEmpty)
-                          .toList(),
-                      value: _knittingDiaSpecific,
-                      prefixIcon: Icons.circle_outlined,
-                      onChanged: (v) {
-                        final diaObj = _diaObjects.firstWhere(
-                          (d) => d['name'] == _selectedDiaName && d['knittingDia']?.toString() == v,
-                          orElse: () => {},
-                        );
-                        setState(() {
-                          _knittingDiaSpecific = v;
-                          _knittingDia = v;
-                          _cuttingDia = diaObj['cuttingDia']?.toString();
-                        });
-                      },
+                  _buildReadOnlyField('Cutting Dia (Auto)', _cuttingDia ?? '', Icons.auto_fix_high_outlined),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductionTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildCard(
+            title: 'Weight & Waste',
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _dozenWeightController,
+                      label: 'Costing weight',
+                      icon: Icons.scale_outlined,
+                      isNumeric: true,
                     ),
-                  if (_knittingDiaSpecific != null) ...[
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _cuttingDia,
-                      key: Key('cutting_dia_$_cuttingDia'),
-                      readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: 'Cutting Dia (Auto)',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.auto_fix_high_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _dozenWeightController,
-                    decoration: InputDecoration(
-                      labelText: 'Costing weight',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.scale_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _foldingController,
-                    decoration: InputDecoration(
-                      labelText: 'Folding weight',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.monitor_weight_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _efficiencyController,
-                    decoration: InputDecoration(
-                      labelText: 'Cadd efficiency (%)',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.speed_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _wastePctController,
-                    decoration: InputDecoration(
-                      labelText: 'Waste percentage (%)',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.delete_outline, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _layLengthController,
-                    decoration: InputDecoration(
-                      labelText: 'Lay length in meter',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.square_foot_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _layPcsController,
-                    decoration: InputDecoration(
-                      labelText: 'Lay pcs',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.view_comfortable_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _timeToCompleteController,
-                    decoration: InputDecoration(
-                      labelText: 'Time take to complete/Lay',
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      prefixIcon: const Icon(Icons.timer_outlined, color: Color(0xFF3B82F6)),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _foldingController,
+                      label: 'Folding weight',
+                      icon: Icons.monitor_weight_outlined,
+                      isNumeric: true,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              _buildSection(
-                title: 'Pattern Details',
-                icon: Icons.design_services_outlined,
+              Row(
                 children: [
-                  ..._patterns.asMap().entries.map((entry) => _buildPatternRow(entry.key, entry.value)),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _addPatternRow,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Pattern Row'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _efficiencyController,
+                      label: 'Efficiency (%)',
+                      icon: Icons.speed_outlined,
+                      isNumeric: true,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _wastePctController,
+                      label: 'Waste (%)',
+                      icon: Icons.delete_outline,
+                      isNumeric: true,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              _buildSection(
-                title: 'CAD File Upload',
-                icon: Icons.upload_file_outlined,
-                children: [
-                  _buildFilePicker('Cadd file upload', _cadFile, _cadFileUrl, () => _pickFile(true)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildSection(
-                title: 'Instructions',
-                icon: Icons.record_voice_over_outlined,
-                children: [
-                   _buildInstructionRecordingSection(),
-                  const SizedBox(height: 24),
-                  _buildFilePicker('Instruction Document', _instructionDocFile, _instructionDocUrl, () => _pickFile(false)),
-                ],
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(context).primaryColor.withOpacity(0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).primaryColor.withBlue(255),
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(62),
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    ),
-                    child: _isSaving
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Save Cutting Master',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white),
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 40),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          _buildCard(
+            title: 'Lay & Timing',
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _layLengthController,
+                      label: 'Lay Length (M)',
+                      icon: Icons.square_foot_outlined,
+                      isNumeric: true,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _layPcsController,
+                      label: 'Lay Pcs',
+                      icon: Icons.view_comfortable_outlined,
+                      isNumeric: true,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _timeToCompleteController,
+                label: 'Time to Complete (per Lay)',
+                icon: Icons.timer_outlined,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMediaTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildCard(
+            title: 'Pattern Details',
+            children: [
+              ..._patterns.asMap().entries.map((entry) => _buildPatternRow(entry.key, entry.value)),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _addPatternRow,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Pattern Row'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildCard(
+            title: 'Files & Audio',
+            children: [
+              _buildFilePicker('CAD/CAM file', _cadFile, _cadFileUrl, () => _pickFile(true)),
+              const SizedBox(height: 24),
+              _buildInstructionRecordingSection(),
+              const SizedBox(height: 24),
+              _buildFilePicker('Instruction Document', _instructionDocFile, _instructionDocUrl, () => _pickFile(false)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard({required String title, required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF64748B), fontSize: 13, letterSpacing: 0.8)),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool isNumeric = false}) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20, color: const Color(0xFF3B82F6)),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
+        labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyField(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.grey),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          ]),
+        ],
       ),
     );
   }
@@ -976,56 +955,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   }
 
   Widget _buildSection({required String title, required List<Widget> children, IconData? icon}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
-            blurRadius: 25,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: ThemeData().copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: true,
-          maintainState: true,
-          shape: const RoundedRectangleBorder(side: BorderSide.none),
-          collapsedShape: const RoundedRectangleBorder(side: BorderSide.none),
-          leading: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: const Color(0xFF3B82F6), size: 24),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A),
-              fontSize: 18,
-              letterSpacing: -0.6,
-            ),
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: children,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return _buildCard(title: title, children: children); // Simplified for the tabbed view
   }
 
   Widget _buildImagePreview(String label, XFile? file, String? url, VoidCallback onTap) {

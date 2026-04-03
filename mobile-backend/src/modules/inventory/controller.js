@@ -1017,7 +1017,7 @@ const getLotsFifo = asyncHandler(async (req, res) => {
 // @desc    Get Balanced Sets for Lot and DIA
 // @route   GET /api/inventory/inward/balanced-sets
 const getBalancedSets = asyncHandler(async (req, res) => {
-    const { lotNo, dia } = req.query;
+    const { lotNo, dia, excludeId } = req.query;
     
     // Normalize query params
     const normalizedLotNo = normalizeText(lotNo);
@@ -1032,16 +1032,59 @@ const getBalancedSets = asyncHandler(async (req, res) => {
         'diaEntries.dia': diaRegex
     });
     
-    const outwards = await Outward.find({ 
+    const queryOutwards = { 
         lotNo: lotRegex, 
         dia: diaRegex 
-    });
+    };
+    if (excludeId) {
+        queryOutwards._id = { $ne: excludeId };
+    }
+
+    const outwards = await Outward.find(queryOutwards);
 
     console.log(`\n--- Balancing Logic [Lot: ${normalizedLotNo}, Dia: ${normalizedDia}] ---`);
     console.log(`[Diagnostic] Found ${inwards.length} Inward docs and ${outwards.length} Outward docs for lot matching: ${normalizedLotNo}`);
 
     // Map to track balance per canonicalKey
     const balanceMap = {};
+
+    // 1. ROBUST METADATA SCAN: Build a map of best-known GSM and Cutting Dia per Color for THIS Lot
+    const lotMetadataMap = {};
+    let fallbackGsm = '';
+    let fallbackDia = '';
+    
+    inwards.forEach(inw => {
+        if (inw.gsm && !fallbackGsm) fallbackGsm = inw.gsm;
+        
+        if (inw.diaEntries && Array.isArray(inw.diaEntries)) {
+            inw.diaEntries.forEach(de => {
+                if (de.dia && !fallbackDia) fallbackDia = de.dia;
+            });
+        }
+
+        if (inw.storageDetails && Array.isArray(inw.storageDetails)) {
+            inw.storageDetails.forEach(sd => {
+                const rows = Array.isArray(sd.rows) ? sd.rows : [sd];
+                rows.forEach(row => {
+                    const colour = normalizeText(row.colour);
+                    if (!colour) return;
+                    if (!lotMetadataMap[colour]) lotMetadataMap[colour] = { gsm: '', dia: '', cutting_dia: '' };
+
+                    // GSM: Row > Inward Top Level > Previous Best
+                    if (row.gsm) lotMetadataMap[colour].gsm = row.gsm;
+                    else if (!lotMetadataMap[colour].gsm && inw.gsm) lotMetadataMap[colour].gsm = inw.gsm;
+                    else if (!lotMetadataMap[colour].gsm && fallbackGsm) lotMetadataMap[colour].gsm = fallbackGsm;
+
+                    // Dia: Block > Inward Top Level > Previous Best
+                    if (sd.cuttingDia) lotMetadataMap[colour].cutting_dia = sd.cuttingDia;
+                    if (sd.dia) lotMetadataMap[colour].dia = sd.dia;
+                    
+                    if (!lotMetadataMap[colour].cutting_dia && fallbackDia) lotMetadataMap[colour].cutting_dia = fallbackDia;
+                    if (!lotMetadataMap[colour].dia && fallbackDia) lotMetadataMap[colour].dia = fallbackDia;
+                });
+            });
+        }
+    });
 
     inwards.forEach(inw => {
         if (inw.storageDetails && Array.isArray(inw.storageDetails)) {
@@ -1068,15 +1111,24 @@ const getBalancedSets = asyncHandler(async (req, res) => {
 
                             const inRolls = (weightsArray.length === 1 && row.rollNo) ? (parseInt(row.rollNo) || 1) : 1;
 
-                            if (!balanceMap[key]) {
-                                balanceMap[key] = {
-                                    set_no: rawSetNo,
-                                    colour: row.colour,
-                                    weight: 0,
-                                    rolls: 0,
-                                    rack_name: rackName,
-                                    pallet_number: palletNumber,
-                                };
+                             if (!balanceMap[key]) {
+                                    const meta = lotMetadataMap[row.colour] || {};
+                                    balanceMap[key] = {
+                                        set_no: rawSetNo,
+                                        colour: row.colour,
+                                        weight: 0,
+                                        rolls: 0,
+                                        rack_name: rackName,
+                                        pallet_number: palletNumber,
+                                        gsm: row.gsm || meta.gsm || inw.gsm || '',
+                                        dia: sdOrRow.dia || meta.dia || normalizedDia || '',
+                                        cutting_dia: sdOrRow.cuttingDia || meta.cutting_dia || sdOrRow.dia || normalizedDia || '',
+                                    };
+                            } else {
+                                    // If already exists, still try to populate missing GSM/Dia from meta
+                                    const meta = lotMetadataMap[row.colour] || {};
+                                    if (!balanceMap[key].gsm) balanceMap[key].gsm = row.gsm || meta.gsm || inw.gsm || '';
+                                    if (!balanceMap[key].cutting_dia) balanceMap[key].cutting_dia = sdOrRow.cuttingDia || meta.cutting_dia || '';
                             }
                             balanceMap[key].weight += inWeight;
                             balanceMap[key].rolls += inRolls;

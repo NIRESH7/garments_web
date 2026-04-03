@@ -158,7 +158,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             .replaceAll('point', '.')
             .replaceAll('dot', '.')
             .replaceAll('decimal', '.')
-            .replaceAll('புள்ளி', '.');
+            .replaceAll('à®ªà¯à®³à¯à®³à®¿', '.');
 
         final regExp = RegExp(r'\d+\.?\d*');
         final match = regExp.firstMatch(words);
@@ -267,7 +267,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         setState(() => _currentLotColours = colours);
 
         final sets = await _api.getBalancedSets(_selectedLotNo!, _selectedDia!);
-        setState(() => _availableSets = sets);
+        _availableSets = sets;
+        await _mapMetadataToSelectedSets();
+        if (mounted) setState(() {});
       }
     }
   }
@@ -436,10 +438,62 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
       // Load available sets
       if (_selectedDia != null) {
-        final sets = await _api.getBalancedSets(val, _selectedDia!);
-        setState(() => _availableSets = sets);
+        final sets = await _api.getBalancedSets(
+          val,
+          _selectedDia!,
+          excludeId: widget.editOutward?['_id'],
+        );
+        _availableSets = sets;
+        await _mapMetadataToSelectedSets();
+        if (mounted) setState(() {});
       }
     }
+  }
+
+  Future<void> _mapMetadataToSelectedSets() async {
+    if (_availableSets.isEmpty && widget.editOutward != null) {
+      // Re-fetch available sets with exclusion to ensure metadata is recovered during edit
+      final sets = await _api.getBalancedSets(
+        _selectedLotNo!,
+        _selectedDia!,
+        excludeId: widget.editOutward!['_id'],
+      );
+      _availableSets = sets;
+    }
+
+    for (var selSet in _selectedSets) {
+      final selColours = selSet['colours'] as List;
+      for (var selCol in selColours) {
+        // Find matching colour in available sets using canonical match
+        final match = _availableSets.firstWhere(
+          (s) =>
+              _isSetMatch(s['set_no'].toString(), selSet['set_no'].toString()) &&
+              s['colour'].toString().trim().toLowerCase() ==
+                  selCol['colour'].toString().trim().toLowerCase(),
+          orElse: () => {},
+        );
+        if (match.isNotEmpty) {
+          selCol['gsm'] = _toDouble(match['gsm']);
+          selCol['dia'] = _toDouble(match['dia']);
+          selCol['cutting_dia'] = _toDouble(match['cutting_dia']);
+        }
+      }
+    }
+  }
+
+  bool _isSetMatch(String s1, String s2) {
+    if (s1.trim() == s2.trim()) return true;
+    String clean(String s) {
+      return s.toLowerCase().replaceAll('set', '').replaceAll('s-', '').replaceAll('-', '').trim();
+    }
+    final c1 = clean(s1);
+    final c2 = clean(s2);
+    if (c1 == c2) return true;
+    // Handle leading zeros
+    final int? n1 = int.tryParse(c1);
+    final int? n2 = int.tryParse(c2);
+    if (n1 != null && n2 != null) return n1 == n2;
+    return false;
   }
 
   Future<void> _onPartyChanged(String? val) async {
@@ -588,12 +642,12 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       if (!mounted) return;
 
       // Prevent duplicate selection
-      if (_selectedSets.any((s) => s['set_no'].toString() == setNo)) return;
+      if (_selectedSets.any((s) => _isSetMatch(s['set_no'].toString(), setNo))) return;
 
       setState(() {
         // Find existing stock entries for this set
         final setStock = _availableSets
-            .where((s) => s['set_no'].toString() == setNo)
+            .where((s) => _isSetMatch(s['set_no'].toString(), setNo))
             .toList();
 
         final List<Map<String, dynamic>> colours = [];
@@ -611,8 +665,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
           // Check if we have stock for this color in this set
           final stockItem = setStock.firstWhere(
             (s) =>
+                _isSetMatch(s['set_no'].toString(), setNo.toString()) &&
                 s['colour'].toString().trim().toLowerCase() ==
-                lotCol.trim().toLowerCase(),
+                    lotCol.toString().trim().toLowerCase(),
             orElse: () => {},
           );
 
@@ -625,6 +680,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
             'weight': w,
             'roll_weight': w,
             'no_of_rolls': r,
+            'gsm': _toDouble(stockItem['gsm']),
+            'dia': _toDouble(stockItem['dia']),
+            'cutting_dia': _toDouble(stockItem['cutting_dia']),
             'isChecked': w > 0, // Automatically check if weight is present
           });
         }
@@ -640,6 +698,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
               'weight': w,
               'roll_weight': w,
               'no_of_rolls': r,
+              'gsm': _toDouble(entry['gsm']),
+              'dia': _toDouble(entry['dia']),
+              'cutting_dia': _toDouble(entry['cutting_dia']),
               'isChecked': false,
             });
           }
@@ -696,11 +757,89 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     return totals;
   }
 
+  double _calculateMeters(double weight, double gsm, double dia) {
+    if (weight <= 0 || gsm <= 0 || dia <= 0) {
+      debugPrint('Meter Calculation Skipped: weight=$weight, gsm=$gsm, dia=$dia');
+      return 0.0;
+    }
+    // Formula: (roll_wt * 1000) / (gsm * (cuttable_dia * 2 / 39.37))
+    try {
+      final double result = (weight * 1000.0) / (gsm * (dia * 2.0 / 39.37));
+      return result;
+    } catch (e) {
+      debugPrint('Meter Calculation Error: $e');
+      return 0.0;
+    }
+  }
+
+  Map<String, double> _getColourMeterTotals() {
+    final Map<String, double> totals = {};
+    for (var set in _selectedSets) {
+      final colours = set['colours'] as List;
+      for (var col in colours) {
+        if (col['isChecked'] == true) {
+          final name = col['colour'].toString().trim().isEmpty
+              ? 'N/A'
+              : col['colour'].toString();
+          final w = (col['weight'] as num?)?.toDouble() ?? 0.0;
+          final g = (col['gsm'] as num?)?.toDouble() ?? 0.0;
+          final d = (col['dia'] as num?)?.toDouble() ?? 0.0;
+          final m = _calculateMeters(w, g, d);
+          totals[name] = (totals[name] ?? 0.0) + m;
+        }
+      }
+    }
+    return totals;
+  }
+
+  double _getTotalMeters() {
+    double total = 0.0;
+    // Mirror exactly how the grid METER column is computed:
+    // for each colour, sum roll_weight across ALL sets, then calculate meters once.
+    final colours = _getSelectedSetColourOrder();
+    for (final colour in colours) {
+      final rowRollWeight = _getColourRollWeightTotal(colour);
+      if (rowRollWeight <= 0) continue;
+      // Get GSM and DIA (prefer cutting_dia) from the first set that has them
+      double gsm = 0.0;
+      double dia = 0.0;
+      for (var s in _selectedSets) {
+        final ent = _findSetColourEntry(s, colour);
+        if (ent != null) {
+          gsm = _toDouble(ent['gsm']);
+          dia = _getMeterDia(ent);
+          if (gsm > 0 && dia > 0) break;
+        }
+      }
+      final meters = _calculateMeters(rowRollWeight, gsm, dia);
+      // Round to 1 decimal to match displayed grid values before summing
+      total += double.parse(meters.toStringAsFixed(1));
+    }
+    return total;
+  }
+
   double _getTotalWeight() {
     return _selectedSets.fold(
       0.0,
       (sum, set) => sum + (set['total_weight'] as double),
     );
+  }
+
+  double _toDouble(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is num) return val.toDouble();
+    if (val is String) {
+      final v = val.trim();
+      if (v.isEmpty) return 0.0;
+      return double.tryParse(v) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  double _getMeterDia(Map<String, dynamic> col) {
+    final cd = _toDouble(col['cutting_dia']);
+    if (cd > 0) return cd;
+    return _toDouble(col['dia']);
   }
 
   double _getTotalRollWeight() {
@@ -961,6 +1100,12 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                 _buildSummaryRow('Total Rolls', '$totalRolls'),
                 const SizedBox(height: 4),
                 _buildSummaryRow('Total Sets', '${_selectedSets.length}'),
+                const SizedBox(height: 4),
+                _buildSummaryRow(
+                  'Total Meters',
+                  '${_getTotalMeters().toStringAsFixed(1)} m',
+                  isMain: true,
+                ),
               ],
             ),
           ),
@@ -1128,6 +1273,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                   i + 1: const FixedColumnWidth(150),
                 _selectedSets.length + 1: const FixedColumnWidth(95),
                 _selectedSets.length + 2: const FixedColumnWidth(100),
+                _selectedSets.length + 3: const FixedColumnWidth(100),
               },
               children: [
                 TableRow(
@@ -1147,6 +1293,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                     }),
                     _buildGridHeaderCell('ROLLS'),
                     _buildGridHeaderCell('ROLL WT'),
+                    _buildGridHeaderCell('METER'),
                   ],
                 ),
                 ...colours.map((col) {
@@ -1194,6 +1341,25 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                       }),
                       _buildGridValueCell(rowRolls.toString()),
                       _buildGridValueCell(_formatGridNumber(rowRollWeight)),
+                      _buildGridValueCell(() {
+                        // Get GSM and DIA for this color from the first set that has it
+                        double gsm = 0.0;
+                        double dia = 0.0;
+                        for (var s in _selectedSets) {
+                          final ent = _findSetColourEntry(s, col);
+                          if (ent != null) {
+                            gsm = _toDouble(ent['gsm']);
+                            dia = _getMeterDia(ent);
+                            if (gsm > 0 && dia > 0) break;
+                          }
+                        }
+                        final meters = _calculateMeters(rowRollWeight, gsm, dia);
+                        if (rowRollWeight > 0) {
+                          if (gsm <= 0) return _buildErrorText("NO GSM");
+                          if (dia <= 0) return _buildErrorText("NO DIA");
+                        }
+                        return meters.toStringAsFixed(1);
+                      }()),
                     ],
                   );
                 }),
@@ -1529,7 +1695,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     );
   }
 
-  Widget _buildGridValueCell(String value) {
+  Widget _buildGridValueCell(dynamic value) {
     return Container(
       constraints: const BoxConstraints(minHeight: 52),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -1537,14 +1703,16 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       decoration: BoxDecoration(
         border: Border(right: BorderSide(color: Colors.grey.shade300)),
       ),
-      child: Text(
-        value,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF334155),
-        ),
-      ),
+      child: value is Widget
+          ? value
+          : Text(
+              value.toString(),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF334155),
+              ),
+            ),
     );
   }
 
@@ -1934,7 +2102,7 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         child: const Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            '⚠️ No sets available for this Lot Number. Please ensure you completed the "Sticker & Storage Details" (Next Page) during Inward Entry.',
+            'âš ï¸ No sets available for this Lot Number. Please ensure you completed the "Sticker & Storage Details" (Next Page) during Inward Entry.',
             style: TextStyle(color: Colors.orange, fontSize: 13),
           ),
         ),
@@ -2207,5 +2375,23 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
         );
       }
     });
+  }
+
+  Widget _buildErrorText(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.red.shade700,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 }

@@ -1079,6 +1079,7 @@ class MobileApiService {
           'lotNo': lotNo,
           'dia': dia,
           if (excludeId != null) 'excludeId': excludeId,
+          '_t': DateTime.now().millisecondsSinceEpoch, // Force fresh fetch
         },
       );
       return List<Map<String, dynamic>>.from(response.data);
