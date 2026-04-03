@@ -59,8 +59,8 @@ class InwardPrintService {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(32),
+        pageFormat: PdfPageFormat.letter.landscape,
+        margin: const pw.EdgeInsets.all(30),
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -119,28 +119,41 @@ class InwardPrintService {
   }
 
   pw.Widget _buildHeader(Map<String, dynamic> inward, pw.Font boldFont) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+    const double headerFontSize = 8.0;
+    return pw.Table(
+      columnWidths: {
+        0: const pw.FlexColumnWidth(3),
+        1: const pw.FlexColumnWidth(2),
+      },
       children: [
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+        pw.TableRow(
           children: [
-            pw.Text(
-              'LOT INWARD REPORT',
-              style: pw.TextStyle(font: boldFont, fontSize: 18),
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'LOT INWARD REPORT',
+                  style: pw.TextStyle(font: boldFont, fontSize: 14),
+                ),
+                pw.Text('Party: ${inward['fromParty']}', style: pw.TextStyle(fontSize: headerFontSize)),
+                pw.Text('Lot Name: ${inward['lotName']}', style: pw.TextStyle(fontSize: headerFontSize)),
+              ],
             ),
-            pw.Text('Party: ${inward['fromParty']}'),
-            pw.Text('Lot Name: ${inward['lotName']}'),
-          ],
-        ),
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Text(
-              'Date: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(inward['inwardDate']))}',
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(right: 5), // Safe margin from right edge
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Date: ${DateFormat('dd-MM-yyyy').format(DateTime.parse(inward['inwardDate']))}',
+                    style: pw.TextStyle(fontSize: headerFontSize),
+                  ),
+                  pw.Text('Lot No: ${inward['lotNo']}', style: pw.TextStyle(fontSize: headerFontSize)),
+                  pw.Text('Ref/DC: ${inward['partyDcNo'] ?? 'N/A'}', style: pw.TextStyle(fontSize: headerFontSize)),
+                  pw.Text('Vehicle No: ${inward['vehicleNo'] ?? ""}', style: pw.TextStyle(fontSize: headerFontSize)),
+                ],
+              ),
             ),
-            pw.Text('Lot No: ${inward['lotNo']}'),
-            pw.Text('Ref/DC: ${inward['partyDcNo'] ?? 'N/A'}'),
           ],
         ),
       ],
@@ -187,9 +200,9 @@ class InwardPrintService {
           totals['grandTotalWeight'].toStringAsFixed(2),
         ],
       ],
-      headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
+      headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 8),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-      cellStyle: pw.TextStyle(font: font, fontSize: 10),
+      cellStyle: pw.TextStyle(font: font, fontSize: 7),
       cellAlignment: pw.Alignment.center,
       border: pw.TableBorder.all(),
     );
