@@ -1589,9 +1589,13 @@ const getLotAgingReport = asyncHandler(async (req, res) => {
         if (inward.storageDetails && inward.storageDetails.length > 0) {
             inward.storageDetails.forEach(sd => {
                 sd.rows.forEach(row => {
-                    const setWeights = row.setWeights.map(w => parseFloat(w) || 0);
-                    let inwardWt = setWeights.reduce((a, b) => a + b, 0);
-                    let inwardRolls = setWeights.length;
+                    // Correctly aggregate only active sets (those with non-empty weights)
+                    const activeSetWeights = (row.setWeights || [])
+                        .map(w => parseFloat(w))
+                        .filter(w => !isNaN(w) && w > 0);
+                    
+                    let inwardWt = activeSetWeights.reduce((a, b) => a + b, 0);
+                    let inwardRolls = activeSetWeights.length;
 
                     // Apply Outward Credit (FIFO)
                     const k = `${inward.lotNo}|${sd.dia}|${row.colour}`.toLowerCase();

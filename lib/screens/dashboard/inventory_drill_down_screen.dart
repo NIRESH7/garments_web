@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:printing/printing.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
+import '../../services/report_print_service.dart';
 
 class InventoryDrillDownScreen extends StatefulWidget {
   final String type; // 'opening', 'inward', 'outward', 'closing'
@@ -30,6 +32,7 @@ class InventoryDrillDownScreen extends StatefulWidget {
 
 class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   final _api = MobileApiService();
+  final _printService = ReportPrintService();
   List<dynamic> _data = [];
   bool _isLoading = true;
 
@@ -106,6 +109,16 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
         backgroundColor: Colors.white,
         foregroundColor: ColorPalette.textPrimary,
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.printer, size: 20),
+            onPressed: () => _handlePrint(share: false),
+            tooltip: 'Print PDF',
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.share2, size: 20),
+            onPressed: () => _handlePrint(share: true),
+            tooltip: 'Share PDF',
+          ),
           IconButton(
             icon: const Icon(LucideIcons.refreshCw, size: 20),
             onPressed: _fetchData,
@@ -318,5 +331,67 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handlePrint({bool share = false}) async {
+    if (_data.isEmpty) return;
+
+    final subtitle = _buildPathBreadcrumbs().toString(); // Or a custom one
+    final headers = [_levelLabel, 'ROLLS', 'WEIGHT', 'VALUE'];
+    
+    final rows = _data.map((item) {
+      return [
+        item['name']?.toString() ?? 'N/A',
+        item['totalRolls']?.toString() ?? '0',
+        '${item['totalWeight'] ?? 0} Kg',
+        'INR ${FormatUtils.formatCurrency(item['totalValue'] ?? 0)}',
+      ];
+    }).toList();
+
+    // Calculate totals
+    final totalRolls = _data.fold<int>(0, (sum, item) => sum + ((item['totalRolls'] ?? 0) as num).toInt());
+    final totalWeight = _data.fold<double>(0.0, (sum, item) => sum + ((item['totalWeight'] ?? 0) as num).toDouble());
+    final totalValue = _data.fold<double>(0.0, (sum, item) => sum + ((item['totalValue'] ?? 0) as num).toDouble());
+
+    final footerRow = [
+      'TOTAL',
+      totalRolls.toString(),
+      '${totalWeight.toStringAsFixed(2)} Kg',
+      'INR ${FormatUtils.formatCurrency(totalValue)}',
+    ];
+
+    try {
+      final pdfBytes = await _printService.generateReportPdf(
+        title: '${widget.type.toUpperCase()} REPORT',
+        subtitle: _getDrillDownBreadcrumbText(),
+        headers: headers,
+        rows: rows,
+        footerRow: footerRow,
+      );
+
+      if (share) {
+        await Printing.sharePdf(
+          bytes: pdfBytes,
+          filename: 'Inventory_${widget.type}_${DateTime.now().millisecond}.pdf',
+        );
+      } else {
+        await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate PDF: $e')),
+        );
+      }
+    }
+  }
+
+  String _getDrillDownBreadcrumbText() {
+    List<String> parts = [widget.type.toUpperCase()];
+    if (widget.lotName != null) parts.add(widget.lotName!);
+    if (widget.lotNo != null) parts.add('Lot ${widget.lotNo}');
+    if (widget.dia != null) parts.add('${widget.dia} Dia');
+    if (widget.setNo != null) parts.add(widget.setNo!);
+    return parts.join(' > ');
   }
 }
