@@ -12,7 +12,7 @@ import 'package:garments/widgets/custom_dropdown_field.dart';
 import 'package:share_plus/share_plus.dart';
 import 'lot_outward_screen.dart';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
 const List<String> _kWeekDays = [
   'Monday',
   'Tuesday',
@@ -313,13 +313,12 @@ class _LotRequirementAllocationScreenState
     return allocations.map((a) {
       final lotNo = a['lotNo']?.toString().trim() ?? '';
       final dia = _normalizeDia(a['dia']);
-      final setNoStr = _toSetNo(a['setNo']);
-      final setNo = int.tryParse(setNoStr) ?? 0;
+      final setNo = _toSetNo(a['setNo']);
 
       var rackName = a['rackName']?.toString().trim();
       var palletNumber = a['palletNumber']?.toString().trim();
 
-      if (lotNo.isEmpty || dia.isEmpty || setNo <= 0) {
+      if (lotNo.isEmpty || dia.isEmpty || setNo.isEmpty) {
         return a;
       }
 
@@ -329,7 +328,6 @@ class _LotRequirementAllocationScreenState
       }
 
       final inwards = inwardByLotNo[lotNo] ?? const [];
-      final setIndex = setNo - 1;
 
       for (final inward in inwards) {
         final inwardLotNo = inward['lotNo']?.toString().trim() ?? '';
@@ -351,12 +349,23 @@ class _LotRequirementAllocationScreenState
           final sdDia = _normalizeDia(sd['dia']);
           if (sdDia != dia) continue;
 
-          final racks = sd['racks'] is List
-              ? sd['racks'] as List<dynamic>
-              : null;
-          final pallets = sd['pallets'] is List
-              ? sd['pallets'] as List<dynamic>
-              : null;
+          final setLabels = sd['setLabels'] as List<dynamic>?;
+          final racks = sd['racks'] as List<dynamic>?;
+          final pallets = sd['pallets'] as List<dynamic>?;
+
+          // Find the index of the label in this block
+          int setIndex = -1;
+          if (setLabels != null) {
+            setIndex = setLabels.indexWhere((l) => _toSetNo(l) == setNo);
+          }
+
+          if (setIndex == -1) {
+             // Fallback to numeric index if needed (e.g. "14" vs "Set S-14" logic)
+             final numericOnly = setNo.replaceAll(RegExp(r'[^0-9]'), '');
+             if (numericOnly.isNotEmpty) {
+               setIndex = (int.tryParse(numericOnly) ?? 0) - 1;
+             }
+          }
 
           if (_isMissingRackPalletValue(rackName)) {
             rackName = _pickStorageValue(racks, setIndex) ?? rackName;
@@ -1763,9 +1772,8 @@ class _LotRequirementAllocationScreenState
     final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
 
     for (var s in _currentSets) {
-      final setNoStr = _toSetNo(s['setNo']);
-      final setNo = int.tryParse(setNoStr) ?? 0;
-      if (setNo == 0) continue;
+      final setNo = _toSetNo(s['setNo']);
+      if (setNo.isEmpty) continue;
       final lotNo = s['lotNo']?.toString() ?? '';
       final dia = s['dia']?.toString() ?? '-';
       final setKey = '${lotNo}_${dia}_$setNo';
@@ -1804,7 +1812,14 @@ class _LotRequirementAllocationScreenState
         if (lotCompare != 0) return lotCompare;
         final diaCompare = a['dia'].toString().compareTo(b['dia'].toString());
         if (diaCompare != 0) return diaCompare;
-        return (a['setNo'] as int).compareTo(b['setNo'] as int);
+        
+        // Smarter alphanumeric sort for set numbers
+        final sA = a['setNo'].toString();
+        final sB = b['setNo'].toString();
+        final nA = int.tryParse(sA.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        final nB = int.tryParse(sB.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        if (nA != nB) return nA.compareTo(nB);
+        return sA.compareTo(sB);
       });
 
     // ── Helper: format set range, e.g. [1,2,3] → "1 TO 3" / [5] → "5" ──────
@@ -1882,7 +1897,7 @@ class _LotRequirementAllocationScreenState
             final i = e.key;
             final row = e.value;
             final isEven = i % 2 == 0;
-            final setNo = row['setNo'] as int;
+            final setNo = row['setNo'].toString();
             final racks = (row['racks'] as Set<String>).toList()..sort();
             final pallets = (row['pallets'] as Set<String>).toList()..sort();
             final weight = row['totalWeight'] as double;
@@ -1954,7 +1969,7 @@ class _LotRequirementAllocationScreenState
                       border: Border.all(color: Colors.teal.withOpacity(0.4)),
                     ),
                     child: Text(
-                      'Set $setNo',
+                      setNo.startsWith('Set') ? setNo : 'Set $setNo',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,

@@ -20,8 +20,9 @@ function parseSetNo(value) {
     if (value === null || value === undefined) return null;
     const raw = value.toString().trim();
     if (!raw) return null;
-    // Return original string (lowercase for uniform matching)
-    return raw.toLowerCase();
+    // Normalize: strip leading prefixes like "S-", "Set ", "s-"
+    const stripped = raw.replace(/^(S|Set)[-\s]?/i, '');
+    return stripped.toLowerCase();
 }
 
 function parseExcludedSetsParam(excludedSets) {
@@ -97,6 +98,11 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
 
     const inwards = await Inward.find(query)
         .sort({ inwardDate: 1, createdAt: 1 });
+    
+    // Normalize Lot No for robust matching
+    const cleanQueryLotNo = (lotName || '').toString().trim();
+    const lotNoRegex = new RegExp(`^\\s*${cleanQueryLotNo.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i');
+
     const normalizedDia = normalizeDia(dia);
 
     const setRows = [];
@@ -116,30 +122,43 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
 
         const totalInwardWt = entry.recWt || 0;
 
-        // Extract storage details correctly
-        const sd = inw.storageDetails && typeof inw.storageDetails === 'string'
-            ? (() => { try { return JSON.parse(inw.storageDetails); } catch(e) { return inw.storageDetails; } })()
-            : inw.storageDetails;
+        // Storage detail normalization - can be Array, Object, or Stringified JSON
+        const storageBlocks = (() => {
+            if (!inw.storageDetails) return [];
+            let parsed = inw.storageDetails;
+            if (typeof parsed === 'string') {
+                try { parsed = JSON.parse(parsed); } catch(e) { return []; }
+            }
+            return Array.isArray(parsed) ? parsed : [parsed];
+        })();
 
-        // Calculate used weight from Outwards
-        const outwards = await Outward.find({ lotNo: inw.lotNo });
-        let usedWt = 0;
-
-        // Identify all unique set numbers available in this lot+dia from storageDetails
+        // Identify all unique set numbers available in this lot+dia across all storage blocks
         let availableSetNos = [];
-        if (sd && Array.isArray(sd.rows)) {
-            const seenSets = new Set();
-            sd.rows.forEach(row => {
-                const labels = Array.isArray(row.setLabels) ? row.setLabels : [];
-                labels.forEach((label, idx) => {
-                    const normalizedLabel = (label ?? (idx + 1).toString()).toString().trim().toLowerCase();
-                    if (!seenSets.has(normalizedLabel)) {
-                        seenSets.add(normalizedLabel);
-                        availableSetNos.push(label ?? (idx + 1).toString());
-                    }
+        const seenSets = new Set();
+
+        storageBlocks.forEach(block => {
+            if (Array.isArray(block.rows)) {
+                block.rows.forEach(row => {
+                    // Check if this row matches the target Dia
+                    const rowDia = normalizeDia(row.dia || block.dia);
+                    if (rowDia !== normalizedDia) return;
+
+                    const labels = Array.isArray(row.setLabels) ? row.setLabels : [];
+                    labels.forEach((label, idx) => {
+                        const normalizedLabel = (label ?? (idx + 1).toString()).toString().trim().toLowerCase();
+                        if (!seenSets.has(normalizedLabel)) {
+                            seenSets.add(normalizedLabel);
+                            availableSetNos.push(label ?? (idx + 1).toString());
+                        }
+                    });
                 });
-            });
-        }
+            }
+        });
+
+        // Calculate used weight from Outwards - Use case-insensitive regex for robust lot number matching
+        const cleanLotNo = (inw.lotNo || '').toString().trim();
+        const lotRegex = new RegExp(`^\\s*${cleanLotNo.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i');
+        const outwards = await Outward.find({ lotNo: lotRegex });
 
         // Add Fallback set numbers if no sticker rows were found, up to totalSetsInLot
         if (availableSetNos.length === 0) {
@@ -166,8 +185,8 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
             });
         });
 
-        // Deduct allocations
-        const existingAllocations = await CuttingOrder.find({ 'lotAllocations.lotNo': inw.lotNo });
+        // Deduct allocations - Use the same robust lotRegex
+        const existingAllocations = await CuttingOrder.find({ 'lotAllocations.lotNo': lotRegex });
         existingAllocations.forEach(plan => {
             plan.lotAllocations.forEach(alloc => {
                 if (alloc.lotNo === inw.lotNo && normalizeDia(alloc.dia) === normalizedDia) {
@@ -179,27 +198,32 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
 
         const wpr = calcWeightPerRoll(entry, effDozenWeight);
 
-        // Build set-wise weights by summing all color rows at the same set index
+        // Build set-wise weights by summing all color rows for the target Dia
         const setWeightMap = new Map();
-        if (sd && Array.isArray(sd.rows)) {
-            sd.rows.forEach(row => {
-                const labels = Array.isArray(row.setLabels) ? row.setLabels : [];
-                if (Array.isArray(row.setWeights)) {
-                    row.setWeights.forEach((w, idx) => {
-                        const val = parseFloat(w.toString().replace(/[^0-9.]/g, '')) || 0;
-                        if (val <= 0) return;
-                        const setLabel = (labels[idx] ?? (idx + 1).toString()).toString().trim().toLowerCase();
-                        setWeightMap.set(setLabel, (setWeightMap.get(setLabel) || 0) + val);
-                    });
-                }
-            });
-        }
+        storageBlocks.forEach(block => {
+            if (Array.isArray(block.rows)) {
+                block.rows.forEach(row => {
+                    const rowDia = normalizeDia(row.dia || block.dia);
+                    if (rowDia !== normalizedDia) return;
+
+                    const labels = Array.isArray(row.setLabels) ? row.setLabels : [];
+                    if (Array.isArray(row.setWeights)) {
+                        row.setWeights.forEach((w, idx) => {
+                            const val = parseFloat(w.toString().replace(/[^0-9.]/g, '')) || 0;
+                            if (val <= 0) return;
+                            const setLabel = parseSetNo((labels[idx] ?? (idx + 1).toString()).toString().trim()) ?? (idx + 1).toString();
+                            setWeightMap.set(setLabel, (setWeightMap.get(setLabel) || 0) + val);
+                        });
+                    }
+                });
+            }
+        });
 
         // Expand into set rows, skipping already-used set numbers
         for (const setNo of availableSetNos) {
             if (remainingWeight <= 0.001) break;
 
-            const normalizedSetNo = setNo.toString().trim().toLowerCase();
+            const normalizedSetNo = parseSetNo(setNo.toString().trim()) ?? setNo.toString().trim().toLowerCase();
             const rollsInSet = ROLLS_PER_SET;
             const setWeightFromSticker = setWeightMap.get(normalizedSetNo);
             let actualSetWeight = setWeightFromSticker != null
@@ -208,18 +232,22 @@ async function runFifo({ lotName, dia, effDozenWeight, targetDozen, requiredWeig
 
             // Skip sets that have already been used
             if (!usedSetNos.has(normalizedSetNo)) {
-                // Get Specific Rack/Pallet for this specific set index if possible
+                // Get Specific Rack/Pallet for this specific set index from the matching Dia block
                 let rackName = 'N/A';
                 let palletNumber = 'N/A';
-                if (sd && Array.isArray(availableSetNos)) {
-                    const setIndex = availableSetNos.indexOf(setNo);
-                    if (Array.isArray(sd.racks) && setIndex < sd.racks.length) {
-                        rackName = (sd.racks[setIndex] ?? '').toString().trim() || 'N/A';
+                
+                storageBlocks.forEach(block => {
+                    const blockDia = normalizeDia(block.dia);
+                    if (blockDia === normalizedDia) {
+                        const setIndex = availableSetNos.indexOf(setNo);
+                        if (Array.isArray(block.racks) && setIndex < block.racks.length) {
+                            rackName = (block.racks[setIndex] ?? '').toString().trim() || 'N/A';
+                        }
+                        if (Array.isArray(block.pallets) && setIndex < block.pallets.length) {
+                            palletNumber = (block.pallets[setIndex] ?? '').toString().trim() || 'N/A';
+                        }
                     }
-                    if (Array.isArray(sd.pallets) && setIndex < sd.pallets.length) {
-                        palletNumber = (sd.pallets[setIndex] ?? '').toString().trim() || 'N/A';
-                    }
-                }
+                });
 
                 setRows.push({
                     lotName: inw.lotName,
