@@ -18,6 +18,7 @@ import {
     updateCuttingOrder,
     deleteLotAllocation,
     updateLotAllocation,
+    getAllAllocationsByDate,
 } from './cuttingOrderController.js';
 import {
     createCuttingMaster,
@@ -87,7 +88,7 @@ router
     .put(protect, updateAssignment);
 
 router.get('/cutting-orders/fifo-allocation', protect, getFifoAllocation);
-
+router.get('/cutting-orders/all-allocations-by-date', protect, getAllAllocationsByDate);
 router.get('/cutting-orders/previous-entries', protect, getPreviousPlanning);
 router.get('/cutting-orders/report', protect, getCuttingPlanReport);
 

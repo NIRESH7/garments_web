@@ -1525,6 +1525,18 @@ class MobileApiService {
     }
   }
 
+  Future<List<dynamic>> getAllAllocationsByDate(String date) async {
+    try {
+      final response = await _client.get(
+        ApiConstants.allAllocationsByDate,
+        queryParameters: {'date': date},
+      );
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<List<dynamic>> getTasks() async {
     try {
       final response = await _client.get(ApiConstants.tasks);

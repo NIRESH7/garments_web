@@ -57,6 +57,7 @@ class ApiConstants {
   static const String previousPlanningEntries =
       '/production/cutting-orders/previous-entries';
   static const String cuttingPlanReport = '/production/cutting-orders/report';
+  static const String allAllocationsByDate = '/production/cutting-orders/all-allocations-by-date';
 
   // New Module API Constants (Additive Only)
   static const String cuttingEntry = '/production/cutting-entry';

@@ -77,6 +77,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   List<Map<String, dynamic>> _diaObjects = []; 
   List<String> _diaNames = [];
   List<String> _partyList = [];
+  List<String> _partNameList = [];
 
   final _audioPlayer = AudioPlayer();
 
@@ -170,6 +171,8 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         } else if (name == 'party name') {
           final catParties = vals.map((v) => v['name'].toString()).toList();
           _partyList.addAll(catParties);
+        } else if (name == 'part name') {
+          _partNameList = vals.map((v) => v['name'].toString()).toList();
         } else if (name == 'lot name' || name == 'lot') {
           final catLots = vals.map((v) => v['name'].toString()).toList();
           _lotList.addAll(catLots);
@@ -211,7 +214,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 
         final pats = data['patternDetails'] as List? ?? [];
         _patterns = pats.map((p) => PatternRowData(
-          partyName: p['partyName'],
+          partName: p['partyName'],
           imageUrl: p['patternImage'],
           patternMeasurementController: TextEditingController(text: (p['patternMeasurement'] ?? '').toString()),
           finishingController: TextEditingController(text: (p['finishingMeasurement'] ?? '').toString()),
@@ -229,6 +232,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   void _addPatternRow() {
     setState(() {
       _patterns.add(PatternRowData(
+        partName: null,
         patternMeasurementController: TextEditingController(),
         finishingController: TextEditingController(),
         punchesController: TextEditingController(),
@@ -302,7 +306,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
       for (int i = 0; i < _patterns.length; i++) {
         final p = _patterns[i];
         patternRows.add({
-          'partyName': p.partyName ?? '',
+          'partyName': p.partName ?? '',
           'patternMeasurement': p.patternMeasurementController.text,
           'finishingMeasurement': p.finishingController.text,
           'noOfPunches': p.punchesController.text,
@@ -1083,10 +1087,10 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
           ),
           const SizedBox(height: 8),
           CustomDropdownField(
-            label: 'Party Name',
-            items: _partyList,
-            value: data.partyName,
-            onChanged: (v) => setState(() => data.partyName = v),
+            label: 'Part Name',
+            items: _partNameList,
+            value: data.partName,
+            onChanged: (v) => setState(() => data.partName = v),
           ),
           const SizedBox(height: 16),
           _buildImagePreview('Pattern Image', data.imageFile, data.imageUrl, () => _pickImage(false, patternIndex: index)),
@@ -1187,7 +1191,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 }
 
 class PatternRowData {
-  String? partyName;
+  String? partName;
   XFile? imageFile;
   String? imageUrl;
   final TextEditingController patternMeasurementController;
@@ -1195,7 +1199,7 @@ class PatternRowData {
   final TextEditingController punchesController;
 
   PatternRowData({
-    this.partyName,
+    this.partName,
     this.imageFile,
     this.imageUrl,
     required this.patternMeasurementController,

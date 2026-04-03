@@ -667,18 +667,20 @@ const deleteLotAllocation = asyncHandler(async (req, res) => {
         throw new Error('Planning Sheet not found');
     }
 
+    const idsToDelete = req.params.allocationId.split(',');
     const initialLength = plan.lotAllocations.length;
+    
     plan.lotAllocations = plan.lotAllocations.filter(
-        (a) => a._id.toString() !== req.params.allocationId
+        (a) => !idsToDelete.includes(a._id.toString())
     );
 
     if (plan.lotAllocations.length === initialLength) {
         res.status(404);
-        throw new Error('Allocation not found');
+        throw new Error('No matching allocations found');
     }
 
     await plan.save();
-    res.json({ success: true, message: 'Allocation removed' });
+    res.json({ success: true, message: `${initialLength - plan.lotAllocations.length} allocation(s) removed` });
 });
 
 // @desc    Update a specific lot allocation
@@ -730,6 +732,38 @@ const updateCuttingOrder = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Get all lot allocations across all plans for a specific date
+// @route   GET /api/production/cutting-orders/all-allocations-by-date
+// @access  Private
+const getAllAllocationsByDate = asyncHandler(async (req, res) => {
+    const { date } = req.query;
+
+    if (!date) {
+        res.status(400);
+        throw new Error('Date is required');
+    }
+
+    // Find all cutting orders that have at least one allocation for this date
+    const orders = await CuttingOrder.find({
+        'lotAllocations.date': date
+    });
+
+    const allAllocations = [];
+    orders.forEach(order => {
+        order.lotAllocations.forEach(alloc => {
+            if (alloc.date === date) {
+                allAllocations.push({
+                    ...alloc.toObject(),
+                    planName: order.planName,
+                    planId: order.planId
+                });
+            }
+        });
+    });
+
+    res.json(allAllocations);
+});
+
 export {
     createCuttingOrder,
     getCuttingOrders,
@@ -743,5 +777,6 @@ export {
     updateCuttingOrder,
     deleteLotAllocation,
     updateLotAllocation,
-    runFifo
+    runFifo,
+    getAllAllocationsByDate
 };

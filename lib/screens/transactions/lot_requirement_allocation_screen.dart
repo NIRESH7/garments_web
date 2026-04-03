@@ -679,9 +679,8 @@ class _LotRequirementAllocationScreenState
     if (sets.isEmpty) return [];
     final Map<String, Map<String, dynamic>> grouped = {};
     for (var s in sets) {
-      final setNoStr = _toSetNo(s['setNo']);
-      final setNo = int.tryParse(setNoStr) ?? 0;
-      if (setNo == 0) continue;
+      final setNo = _toSetNo(s['setNo']);
+      if (setNo.isEmpty) continue;
 
       final itemName = s['itemName']?.toString() ?? '';
       final size = s['size']?.toString() ?? '';
@@ -2353,7 +2352,8 @@ class _LotRequirementAllocationScreenState
         final key = '${r['itemName']}_${r['size']}_${r['lotNo']}_${r['dia']}';
         if (!g.containsKey(key)) {
           g[key] = {
-            'id': r['_id'], // Subdocument _id
+            'id': r['_id'], // Subdocument _id (keep for single-edit compatibility)
+            'ids': <String>[r['_id'].toString()], // Store all IDs in this group
             'itemName': r['itemName'],
             'size': r['size'],
             'dozen': r['dozen'],
@@ -2363,18 +2363,19 @@ class _LotRequirementAllocationScreenState
             'dia': r['dia'],
             'racks': <String>{},
             'pallets': <String>{},
-            'setNos': <int>[],
+            'setNos': <String>[],
             'totalWeight': 0.0,
           };
+        } else {
+          (g[key]!['ids'] as List<String>).add(r['_id'].toString());
         }
         final entry = g[key]!;
-        final setNoStr = _toSetNo(r['setNo']);
-        final setNo = int.tryParse(setNoStr) ?? 0;
+        final setNo = _toSetNo(r['setNo']);
         final wt = (r['setWeight'] as num?)?.toDouble() ?? 0.0;
         final rack = r['rackName']?.toString() ?? '';
         final pallet = r['palletNumber']?.toString() ?? '';
-        if (setNo > 0 && !(entry['setNos'] as List<int>).contains(setNo)) {
-          (entry['setNos'] as List<int>).add(setNo);
+        if (setNo.isNotEmpty && !(entry['setNos'] as List<String>).contains(setNo)) {
+          (entry['setNos'] as List<String>).add(setNo);
         }
         if (!_isMissingRackPalletValue(rack)) {
           (entry['racks'] as Set<String>).add(rack.trim());
@@ -2421,7 +2422,12 @@ class _LotRequirementAllocationScreenState
           final dataRows = lots.asMap().entries.map((e) {
             final i = e.key;
             final lot = e.value;
-            final setNos = (lot['setNos'] as List<int>)..sort();
+            final setNos = (lot['setNos'] as List<String>)..sort((a, b) {
+              final nA = int.tryParse(a.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+              final nB = int.tryParse(b.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+              if (nA != nB) return nA.compareTo(nB);
+              return a.compareTo(b);
+            });
             final racks = (lot['racks'] as Set<String>).toList()..sort();
             final pallets = (lot['pallets'] as Set<String>).toList()..sort();
             final wt = lot['totalWeight'] as double;
@@ -2519,7 +2525,9 @@ class _LotRequirementAllocationScreenState
                           size: 16,
                           color: Colors.red,
                         ),
-                        onPressed: () => _deleteAllocationRow(lot['id']),
+                        onPressed: () => _deleteAllocationRow(
+                          (lot['ids'] as List<String>).join(','),
+                        ),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),

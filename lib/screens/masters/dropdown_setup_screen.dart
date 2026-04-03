@@ -57,10 +57,8 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await _api.getCategories();
-
-      // Map server categories to our static list
-      // Map server categories to our static list with aliases
       final List<Map<String, dynamic>> filteredCategories = [];
+      final Set<String> matchedIds = {};
 
       final Map<String, List<String>> categoryAliases = {
         'Colours': ['Colours', 'Colors', 'Colour', 'Color'],
@@ -76,6 +74,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         'Accessories Group': ['Accessories Group', 'Accessory Group', 'accessories group', 'accessory group'],
       };
 
+      // 1. Process static categories and their aliases first
       for (var name in _staticCategoryNames) {
         final List<String> aliases = (categoryAliases[name] ?? [])
             .map((e) => e.toLowerCase().trim())
@@ -84,18 +83,15 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
           aliases.add(name.toLowerCase().trim());
         }
 
-        // Find existing category on server (case-insensitive and trimmed match against aliases)
         final serverCat = res.firstWhere((c) {
-          final String serverName = (c['name'] as String? ?? '')
-              .trim()
-              .toLowerCase();
+          final String serverName = (c['name'] as String? ?? '').trim().toLowerCase();
           return aliases.contains(serverName);
         }, orElse: () => <String, dynamic>{});
 
         if (serverCat.isNotEmpty) {
           filteredCategories.add(serverCat);
+          matchedIds.add(serverCat['_id'].toString());
         } else {
-          // If category doesn't exist on server, create a placeholder
           filteredCategories.add({
             '_id': 'new_$name',
             'name': name,
@@ -104,17 +100,24 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         }
       }
 
+      // 2. Add any other categories from the server that weren't matched
+      for (var serverCat in res) {
+        final String id = serverCat['_id'].toString();
+        if (!matchedIds.contains(id)) {
+          filteredCategories.add(serverCat);
+        }
+      }
+
       setState(() {
         _categories = filteredCategories;
         if (_selectedCategoryId == null && _categories.isNotEmpty) {
           _selectedCategoryId = _categories.first['_id'];
         }
-        // Always refresh values from the current categories list
         _syncValuesWithSelectedCategory();
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

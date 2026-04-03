@@ -25,7 +25,7 @@ const lotAllocationSchema = mongoose.Schema({
     lotName: { type: String },
     lotNo: { type: String },
     dia: { type: String },
-    setNo: { type: Number },        // sequential global set number
+    setNo: { type: String },        // identifier for set (e.g., S-1, S-14)
     rolls: { type: Number, default: 0 },
     setWeight: { type: Number, default: 0 }, // weight for this specific set
     rackName: { type: String },

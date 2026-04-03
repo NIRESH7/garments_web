@@ -43,6 +43,64 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     });
   }
 
+  Future<void> _fetchFromRequirements() async {
+    setState(() => _loading = true);
+    try {
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final allocations = await _api.getAllAllocationsByDate(dateStr);
+      
+      if (allocations.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No lot requirements found for this date.'))
+          );
+        }
+        setState(() => _loading = false);
+        return;
+      }
+
+      setState(() {
+        for (var alloc in allocations) {
+          // Check if this allocation (lot+set+item+size) is already in _planRows
+          final exists = _planRows.any((r) => 
+            r['lotNo'] == alloc['lotNo'] && 
+            r['setNo'] == alloc['setNo'] &&
+            r['itemName'] == alloc['itemName'] &&
+            r['size'] == alloc['size']
+          );
+
+          if (!exists) {
+            _planRows.add({
+              'lotName': alloc['lotName'] ?? '',
+              'lotNo': alloc['lotNo'] ?? '',
+              'dia': alloc['dia'] ?? '',
+              'setNo': (alloc['setNo'] ?? '').toString(),
+              'itemName': alloc['itemName'] ?? '',
+              'size': alloc['size'] ?? '',
+              'dozen': (alloc['dozen'] ?? 0).toDouble(),
+              'layLength': 0,
+              'layPcs': 0,
+              'timing': '',
+              'machineNo': '',
+              'approval': false,
+              'actualTimeTaken': '',
+              'diff': '',
+              'spreadingLayStatus': 'Pending',
+            });
+          }
+        }
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching: $e'), backgroundColor: Colors.red)
+        );
+      }
+      setState(() => _loading = false);
+    }
+  }
+
   void _addRow() {
     setState(() {
       _planRows.add({
@@ -330,7 +388,23 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
                           fontWeight: FontWeight.w600,
                           color: Colors.indigo.shade700),
                     ),
-                    Icon(Icons.edit_calendar, color: Colors.indigo.shade600),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _loading ? null : _fetchFromRequirements,
+                          icon: const Icon(Icons.sync, size: 18),
+                          label: const Text('Fetch from Lot Requirements', 
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.indigo.shade700,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.edit_calendar, color: Colors.indigo.shade600),
+                      ],
+                    ),
                   ],
                 ),
               ),
