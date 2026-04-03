@@ -36,6 +36,7 @@ const cuttingMasterSchema = new mongoose.Schema(
         folding: { type: Number, default: 0 },
         layLengthMeter: { type: Number, default: 0 },
         timeToComplete: { type: String, default: '' },
+        meterPerDozen: { type: Number, default: 0 },
 
         // ─── Section 3: Pattern Details ────────────────────────────────────
         patternDetails: { type: [patternRowSchema], default: [] },

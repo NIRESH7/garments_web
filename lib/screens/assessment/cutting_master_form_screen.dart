@@ -42,6 +42,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   final _wastePctController = TextEditingController(); 
   final _layPcsController = TextEditingController();
   final _timeToCompleteController = TextEditingController();
+  final _meterPerDozenController = TextEditingController();
 
   // ─── Section 2: Lot Details ───
   String? _lotName;
@@ -105,6 +106,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
     _wastePctController.dispose();
     _layPcsController.dispose();
     _timeToCompleteController.dispose();
+    _meterPerDozenController.dispose();
     _efficiencyController.removeListener(_updateWasteFromEfficiency);
     _efficiencyController.dispose();
     _foldingController.dispose();
@@ -211,6 +213,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         _foldingController.text = (data['folding'] ?? 0).toString();
         _layLengthController.text = (data['layLengthMeter'] ?? 0).toString();
         _timeToCompleteController.text = data['timeToComplete'] ?? '';
+        _meterPerDozenController.text = (data['meterPerDozen'] ?? '').toString();
 
         final pats = data['patternDetails'] as List? ?? [];
         _patterns = pats.map((p) => PatternRowData(
@@ -294,6 +297,7 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         'folding': _foldingController.text,
         'layLengthMeter': _layLengthController.text,
         'timeToComplete': _timeToCompleteController.text,
+        'meterPerDozen': _meterPerDozenController.text,
         'instructionText': _instructionTextController.text,
       };
 
@@ -414,6 +418,20 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.entryId == null ? 'New Cutting Master' : 'Edit Cutting Master',
+          style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        centerTitle: true,
+        surfaceTintColor: Colors.transparent,
+      ),
       body: DefaultTabController(
         length: 3,
         child: Column(
@@ -664,6 +682,13 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                 controller: _timeToCompleteController,
                 label: 'Time to Complete (per Lay)',
                 icon: Icons.timer_outlined,
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _meterPerDozenController,
+                label: 'Meter per Dozen',
+                icon: Icons.straighten_outlined,
+                isNumeric: true,
               ),
             ],
           ),

@@ -96,6 +96,7 @@ const createCuttingMaster = [
             patternDetails,
             instructionText,
             timeToComplete,
+            meterPerDozen,
         } = req.body;
 
         // Parse patternDetails JSON string
@@ -140,6 +141,7 @@ const createCuttingMaster = [
             instructionAudio: resolveFilePath(req.files?.instructionAudio?.[0]),
             instructionText: instructionText || '',
             timeToComplete: timeToComplete || '',
+            meterPerDozen: parseFloat(meterPerDozen) || 0,
             instructionDoc: resolveFilePath(req.files?.instructionDoc?.[0]),
         });
 
@@ -211,6 +213,7 @@ const updateCuttingMaster = [
             patternDetails,
             instructionText,
             timeToComplete,
+            meterPerDozen,
         } = req.body;
 
         let parsedPatterns = [];
@@ -261,6 +264,7 @@ const updateCuttingMaster = [
             : entry.instructionAudio;
         entry.instructionText = instructionText ?? entry.instructionText;
         entry.timeToComplete = timeToComplete ?? entry.timeToComplete;
+        entry.meterPerDozen = parseFloat(meterPerDozen) ?? entry.meterPerDozen;
         entry.instructionDoc = req.files?.instructionDoc?.[0]
             ? resolveFilePath(req.files.instructionDoc[0])
             : entry.instructionDoc;
