@@ -144,73 +144,80 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.editEntry != null ? 'Edit Accessories Master' : 'Accessories Master'),
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(
-              _voiceMode ? Icons.mic : (_scaleMode ? Icons.scale : Icons.more_vert),
-              color: _voiceMode ? Colors.orange : (_scaleMode ? Colors.blue.shade300 : null),
-            ),
-            onSelected: (val) {
-              setState(() {
-                if (val == 'voice') {
-                  _voiceMode = !_voiceMode;
-                  if (_voiceMode) _scaleMode = false;
-                } else if (val == 'scale') {
-                  _scaleMode = !_scaleMode;
-                  if (_scaleMode) _voiceMode = false;
-                }
-              });
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'voice',
-                child: Row(
-                  children: [
-                    Icon(Icons.mic, color: _voiceMode ? Colors.orange : Colors.grey),
-                    const SizedBox(width: 8),
-                    Text('Voice Mode', style: TextStyle(fontWeight: _voiceMode ? FontWeight.bold : null)),
-                    const Spacer(),
-                    if (_voiceMode) const Icon(Icons.check, size: 16, color: Colors.orange),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'scale',
-                child: Row(
-                  children: [
-                    Icon(Icons.scale, color: _scaleMode ? Colors.blue : Colors.grey),
-                    const SizedBox(width: 8),
-                    Text('Scale Mode', style: TextStyle(fontWeight: _scaleMode ? FontWeight.bold : null)),
-                    const Spacer(),
-                    if (_scaleMode) const Icon(Icons.check, size: 16, color: Colors.blue),
-                  ],
-                ),
-              ),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.editEntry != null ? 'Edit Accessories Master' : 'Accessories Master'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Group Setup'),
+              Tab(text: 'Item Assignment'),
             ],
           ),
-          if (_isSaving)
-            const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Colors.white))
-          else
-            IconButton(onPressed: _save, icon: const Icon(Icons.check)),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
+          actions: [
+            PopupMenuButton<String>(
+              icon: Icon(
+                _voiceMode ? Icons.mic : (_scaleMode ? Icons.scale : Icons.more_vert),
+                color: _voiceMode ? Colors.orange : (_scaleMode ? Colors.blue.shade300 : null),
+              ),
+              onSelected: (val) {
+                setState(() {
+                  if (val == 'voice') {
+                    _voiceMode = !_voiceMode;
+                    if (_voiceMode) _scaleMode = false;
+                  } else if (val == 'scale') {
+                    _scaleMode = !_scaleMode;
+                    if (_scaleMode) _voiceMode = false;
+                  }
+                });
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'voice',
+                  child: Row(
+                    children: [
+                      Icon(Icons.mic, color: _voiceMode ? Colors.orange : Colors.grey),
+                      const SizedBox(width: 8),
+                      Text('Voice Mode', style: TextStyle(fontWeight: _voiceMode ? FontWeight.bold : null)),
+                      const Spacer(),
+                      if (_voiceMode) const Icon(Icons.check, size: 16, color: Colors.orange),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'scale',
+                  child: Row(
+                    children: [
+                      Icon(Icons.scale, color: _scaleMode ? Colors.blue : Colors.grey),
+                      const SizedBox(width: 8),
+                      Text('Scale Mode', style: TextStyle(fontWeight: _scaleMode ? FontWeight.bold : null)),
+                      const Spacer(),
+                      if (_scaleMode) const Icon(Icons.check, size: 16, color: Colors.blue),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_isSaving)
+              const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Colors.white))
+            else
+              IconButton(onPressed: _save, icon: const Icon(Icons.check)),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Form(
+                key: _formKey,
+                child: TabBarView(
+                  children: [
+                    // Tab 1: Accessories Group Setup
+                    SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                    // REMOVED Section label
-                    ..._groupRows.asMap().entries.map((entry) => _buildGroupRow(entry.key, entry.value)),
+                          ..._groupRows.asMap().entries.map((entry) => _buildGroupRow(entry.key, entry.value)),
                           Center(
                             child: TextButton.icon(
                               onPressed: _addGroupRow,
@@ -219,9 +226,17 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
                               style: TextButton.styleFrom(foregroundColor: ColorPalette.primary),
                             ),
                           ),
-                              const SizedBox(height: 16),
-                        // REMOVED Section label
-                        ..._assignRows.asMap().entries.map((entry) => _buildAssignRow(entry.key, entry.value)),
+                          const SizedBox(height: 80),
+                        ],
+                      ),
+                    ),
+                    // Tab 2: Accessories Assign for Item
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ..._assignRows.asMap().entries.map((entry) => _buildAssignRow(entry.key, entry.value)),
                           Center(
                             child: TextButton.icon(
                               onPressed: _addAssignRow,
@@ -230,14 +245,14 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
                               style: TextButton.styleFrom(foregroundColor: ColorPalette.primary),
                             ),
                           ),
-                          const SizedBox(height: 100),
+                          const SizedBox(height: 80),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
