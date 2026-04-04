@@ -981,6 +981,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                       'weight': col['weight'],
                       'roll_weight': col['roll_weight'],
                       'no_of_rolls': col['no_of_rolls'],
+                      'gsm': col['gsm'],
+                      'dia': col['dia'],
+                      'cutting_dia': col['cutting_dia'],
                     },
                   )
                   .toList();

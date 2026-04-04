@@ -49,6 +49,7 @@ class OutwardPrintService {
     final Map<String, Map<String, dynamic>> colorSummary = {};
     double totalWeight = 0;
     int totalRolls = 0;
+    double totalMeters = 0;
 
     for (var set in items) {
       final colours = set['colours'] as List<dynamic>? ?? [];
@@ -57,13 +58,31 @@ class OutwardPrintService {
         final wt = (col['weight'] as num?)?.toDouble() ?? 0;
         final r = (col['no_of_rolls'] as num?)?.toInt() ?? 0;
 
+        final gsm = (col['gsm'] as num?)?.toDouble() ?? 0;
+        final dia = (col['cutting_dia'] as num?)?.toDouble() ??
+            (col['dia'] as num?)?.toDouble() ??
+            0;
+
+        double meters = 0;
+        if (wt > 0 && gsm > 0 && dia > 0) {
+          meters = (wt * 1000.0) / (gsm * (dia * 2.0 / 39.37));
+        }
+
         if (!colorSummary.containsKey(name)) {
-          colorSummary[name] = {'colour': name, 'weight': 0.0, 'rolls': 0};
+          colorSummary[name] = {
+            'colour': name,
+            'weight': 0.0,
+            'rolls': 0,
+            'meters': 0.0
+          };
         }
         colorSummary[name]!['weight'] += wt;
         colorSummary[name]!['rolls'] += r;
+        colorSummary[name]!['meters'] += double.parse(meters.toStringAsFixed(1));
+
         totalWeight += wt;
         totalRolls += r;
+        totalMeters += double.parse(meters.toStringAsFixed(1));
       }
     }
 
@@ -82,6 +101,7 @@ class OutwardPrintService {
                 colorSummary.values.toList(),
                 totalWeight,
                 totalRolls,
+                totalMeters,
                 font,
                 boldFont,
               ),
@@ -148,21 +168,28 @@ class OutwardPrintService {
     List<Map<String, dynamic>> summary,
     double totalWt,
     int totalRolls,
+    double totalMeters,
     pw.Font font,
     pw.Font boldFont,
   ) {
     return pw.Table.fromTextArray(
-      headers: ['Colour', 'Total Rolls', 'Total Weight (Kg)'],
+      headers: ['Colour', 'Total Rolls', 'Total Weight (Kg)', 'Total Meter'],
       data: [
         ...summary.map(
           (row) => [
             row['colour'],
             row['rolls'].toString(),
             row['weight'].toStringAsFixed(2),
+            row['meters'].toStringAsFixed(1),
           ],
         ),
         // Total Row
-        ['TOTAL', totalRolls.toString(), totalWt.toStringAsFixed(2)],
+        [
+          'TOTAL',
+          totalRolls.toString(),
+          totalWt.toStringAsFixed(2),
+          totalMeters.toStringAsFixed(1)
+        ],
       ],
       headerStyle: pw.TextStyle(
         font: boldFont,

@@ -4,11 +4,117 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/outward_print_service.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/utils/format_utils.dart';
+import '../../services/mobile_api_service.dart';
 
-class OutwardDetailScreen extends StatelessWidget {
+class OutwardDetailScreen extends StatefulWidget {
   final Map<String, dynamic> outward;
 
   const OutwardDetailScreen({super.key, required this.outward});
+
+  @override
+  State<OutwardDetailScreen> createState() => _OutwardDetailScreenState();
+}
+
+class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
+  final _api = MobileApiService();
+  late Map<String, dynamic> _outward;
+  bool _isRecovering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _outward = Map<String, dynamic>.from(widget.outward);
+    _recoverMetadata();
+  }
+
+  Future<void> _recoverMetadata() async {
+    final items = _outward['items'] as List<dynamic>? ?? [];
+    bool needsRecovery = false;
+
+    for (var set in items) {
+      final colours = set['colours'] as List<dynamic>? ?? [];
+      for (var col in colours) {
+        if (col['gsm'] == null || col['dia'] == null) {
+          needsRecovery = true;
+          break;
+        }
+      }
+      if (needsRecovery) break;
+    }
+
+    if (!needsRecovery) return;
+
+    final lotNo = _outward['lotNo']?.toString();
+    final dia = _outward['dia']?.toString();
+
+    if (lotNo == null || dia == null) return;
+
+    setState(() => _isRecovering = true);
+
+    try {
+      // Pass the outward's own ID as excludeId so the backend
+      // excludes this DC from stock subtraction, allowing us to
+      // correctly recover the inward GSM/DIA metadata.
+      final outwardId = _outward['_id']?.toString();
+      final balancedSets = await _api.getBalancedSets(
+        lotNo,
+        dia,
+        excludeId: outwardId,
+      );
+      if (balancedSets.isEmpty) {
+        setState(() => _isRecovering = false);
+        return;
+      }
+
+      for (var set in items) {
+        final colours = set['colours'] as List<dynamic>? ?? [];
+        for (var col in colours) {
+          if (col['gsm'] == null || col['dia'] == null) {
+            // Find matching colour in balanced sets
+            final match = balancedSets.firstWhere(
+              (s) =>
+                  _isSetMatch(s['set_no']?.toString() ?? '', set['set_no']?.toString() ?? '') &&
+                  s['colour']?.toString().trim().toLowerCase() ==
+                      col['colour']?.toString().trim().toLowerCase(),
+              orElse: () => {},
+            );
+
+            if (match.isNotEmpty) {
+              col['gsm'] = _parseDouble(match['gsm']);
+              col['dia'] = _parseDouble(match['dia']);
+              col['cutting_dia'] = _parseDouble(match['cutting_dia']);
+            }
+          }
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Metadata recovery failed: $e');
+    } finally {
+      if (mounted) setState(() => _isRecovering = false);
+    }
+  }
+
+  bool _isSetMatch(String s1, String s2) {
+    if (s1.trim() == s2.trim()) return true;
+    String clean(String s) {
+      return s.toLowerCase().replaceAll('set', '').replaceAll('s-', '').replaceAll('-', '').trim();
+    }
+    final c1 = clean(s1);
+    final c2 = clean(s2);
+    if (c1 == c2) return true;
+    final int? n1 = int.tryParse(c1);
+    final int? n2 = int.tryParse(c2);
+    if (n1 != null && n2 != null) return n1 == n2;
+    return false;
+  }
+
+  double _parseDouble(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is num) return val.toDouble();
+    if (val is String) return double.tryParse(val.trim()) ?? 0.0;
+    return 0.0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +123,20 @@ class OutwardDetailScreen extends StatelessWidget {
         title: const Text('Outward Details'),
         backgroundColor: Colors.orange,
         actions: [
+          if (_isRecovering)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.print),
             onPressed: () => _printReport(context),
@@ -54,26 +174,26 @@ class OutwardDetailScreen extends StatelessWidget {
       sb.writeln("*LOT OUTWARD DETAILS (DC)*");
       sb.writeln("");
 
-      sb.writeln("DC No: ${outward['dcNo'] ?? 'N/A'}");
+      sb.writeln("DC No: ${_outward['dcNo'] ?? 'N/A'}");
       String formattedDate = 'N/A';
-      if (outward['dateTime'] != null) {
+      if (_outward['dateTime'] != null) {
         try {
           formattedDate = DateFormat(
             'dd-MM-yyyy',
-          ).format(DateTime.parse(outward['dateTime']));
+          ).format(DateTime.parse(_outward['dateTime']));
         } catch (e) {
-          formattedDate = outward['dateTime'].toString();
+          formattedDate = _outward['dateTime'].toString();
         }
       }
       sb.writeln("Date: $formattedDate");
-      sb.writeln("Party: ${outward['partyName'] ?? 'N/A'}");
+      sb.writeln("Party: ${_outward['partyName'] ?? 'N/A'}");
       sb.writeln(
-        "Lot: ${outward['lotName'] ?? 'N/A'} / ${outward['lotNo'] ?? 'N/A'}",
+        "Lot: ${_outward['lotName'] ?? 'N/A'} / ${_outward['lotNo'] ?? 'N/A'}",
       );
-      sb.writeln("DIA: ${outward['dia'] ?? 'N/A'}");
+      sb.writeln("DIA: ${_outward['dia'] ?? 'N/A'}");
       sb.writeln("");
 
-      final items = outward['items'] as List<dynamic>? ?? [];
+      final items = _outward['items'] as List<dynamic>? ?? [];
       double grandTotalWeight = 0;
       int grandTotalRolls = 0;
 
@@ -88,8 +208,16 @@ class OutwardDetailScreen extends StatelessWidget {
           final cName = col['colour'] ?? 'N/A';
           final cWt = (col['weight'] as num?)?.toDouble() ?? 0.0;
           final cR = (col['no_of_rolls'] as num?)?.toInt() ?? 0;
+          
+          final gsm = (col['gsm'] as num?)?.toDouble() ?? 0.0;
+          final dia = (col['cutting_dia'] as num?)?.toDouble() ?? (col['dia'] as num?)?.toDouble() ?? 0.0;
+          final meters = _calculateMeters(cWt, gsm, dia);
 
-          sb.writeln("  - $cName: $cWt Kg ($cR Rolls)");
+          if (meters > 0) {
+            sb.writeln("  - $cName: $cWt Kg ($cR Rolls, ${meters.toStringAsFixed(1)} M)");
+          } else {
+            sb.writeln("  - $cName: $cWt Kg ($cR Rolls)");
+          }
           grandTotalWeight += cWt;
           grandTotalRolls += cR;
         }
@@ -108,10 +236,10 @@ class OutwardDetailScreen extends StatelessWidget {
 
       sb.writeln("Signatures:");
       sb.writeln(
-        "Lot Incharge: ${outward['lotInchargeSignature'] != null ? 'OK' : 'Missing'}",
+        "Lot Incharge: ${_outward['lotInchargeSignature'] != null ? 'OK' : 'Missing'}",
       );
       sb.writeln(
-        "Authorized: ${outward['authorizedSignature'] != null ? 'OK' : 'Missing'}",
+        "Authorized: ${_outward['authorizedSignature'] != null ? 'OK' : 'Missing'}",
       );
 
       final whatsappUrl =
@@ -146,7 +274,7 @@ class OutwardDetailScreen extends StatelessWidget {
   Future<void> _printReport(BuildContext context) async {
     try {
       final service = OutwardPrintService();
-      await service.printOutwardReport(outward);
+      await service.printOutwardReport(_outward);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(
@@ -176,11 +304,11 @@ class OutwardDetailScreen extends StatelessWidget {
               children: [
                 _buildSignatureItem(
                   'Lot Incharge',
-                  outward['lotInchargeSignature'],
+                  _outward['lotInchargeSignature'],
                 ),
                 _buildSignatureItem(
                   'Authorized',
-                  outward['authorizedSignature'],
+                  _outward['authorizedSignature'],
                 ),
               ],
             ),
@@ -247,20 +375,20 @@ class OutwardDetailScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
-            _buildInfoRow('DC No', outward['dcNo'] ?? 'N/A'),
-            _buildInfoRow('Lot Name', outward['lotName'] ?? 'N/A'),
-            _buildInfoRow('Lot No', outward['lotNo'] ?? 'N/A'),
-            _buildInfoRow('DIA', outward['dia'] ?? 'N/A'),
-            if (outward['dateTime'] != null)
+            _buildInfoRow('DC No', _outward['dcNo'] ?? 'N/A'),
+            _buildInfoRow('Lot Name', _outward['lotName'] ?? 'N/A'),
+            _buildInfoRow('Lot No', _outward['lotNo'] ?? 'N/A'),
+            _buildInfoRow('DIA', _outward['dia'] ?? 'N/A'),
+            if (_outward['dateTime'] != null)
               _buildInfoRow(
                 'Date',
                 DateFormat(
                   'dd-MM-yyyy',
-                ).format(DateTime.parse(outward['dateTime'])),
+                ).format(DateTime.parse(_outward['dateTime'])),
               ),
-            _buildInfoRow('In Time', outward['inTime'] ?? 'N/A'),
-            _buildInfoRow('Out Time', outward['outTime'] ?? 'N/A'),
-            _buildInfoRow('Vehicle No', outward['vehicleNo'] ?? 'N/A'),
+            _buildInfoRow('In Time', _outward['inTime'] ?? 'N/A'),
+            _buildInfoRow('Out Time', _outward['outTime'] ?? 'N/A'),
+            _buildInfoRow('Vehicle No', _outward['vehicleNo'] ?? 'N/A'),
           ],
         ),
       ),
@@ -280,9 +408,9 @@ class OutwardDetailScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(),
-            _buildInfoRow('Party Name', outward['partyName'] ?? 'N/A'),
-            _buildInfoRow('Process', outward['process'] ?? 'N/A'),
-            _buildInfoRow('Address', outward['address'] ?? 'N/A'),
+            _buildInfoRow('Party Name', _outward['partyName'] ?? 'N/A'),
+            _buildInfoRow('Process', _outward['process'] ?? 'N/A'),
+            _buildInfoRow('Address', _outward['address'] ?? 'N/A'),
           ],
         ),
       ),
@@ -290,7 +418,7 @@ class OutwardDetailScreen extends StatelessWidget {
   }
 
   Widget _buildItemsCard() {
-    final items = outward['items'] as List<dynamic>? ?? [];
+    final items = _outward['items'] as List<dynamic>? ?? [];
 
     double totalWeight = 0;
     int grandTotalRolls = 0;
@@ -434,6 +562,18 @@ class OutwardDetailScreen extends StatelessWidget {
                           '${col['no_of_rolls'] ?? 0}',
                         ),
                       ),
+                      Expanded(
+                        child: _buildSmallInfo(
+                          'Meter',
+                          () {
+                            final gsm = (col['gsm'] as num?)?.toDouble() ?? 0.0;
+                            final dia = (col['cutting_dia'] as num?)?.toDouble() ?? 
+                                        (col['dia'] as num?)?.toDouble() ?? 0.0;
+                            final m = _calculateMeters((col['weight'] as num?)?.toDouble() ?? 0.0, gsm, dia);
+                            return m > 0 ? m.toStringAsFixed(1) : '-';
+                          }(),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -494,5 +634,14 @@ class OutwardDetailScreen extends StatelessWidget {
         style: const TextStyle(fontSize: 12, color: Colors.black87),
       ),
     );
+  }
+
+  double _calculateMeters(double weight, double gsm, double dia) {
+    if (weight <= 0 || gsm <= 0 || dia <= 0) return 0.0;
+    try {
+      return (weight * 1000.0) / (gsm * (dia * 2.0 / 39.37));
+    } catch (e) {
+      return 0.0;
+    }
   }
 }
