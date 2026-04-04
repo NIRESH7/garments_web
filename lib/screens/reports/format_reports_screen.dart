@@ -447,23 +447,34 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   }
 
   Widget _buildAgingSummaryReport() {
-    // Apply local date filter if needed for Summary
+    // Use _closingData (Overview Report) which correctly computes:
+    //   balance_rolls = rec_rolls - deliv_rolls
+    //   balance_weight = rec_weight - deliv_weight
+    // This ensures Outward is properly deducted.
+    //
+    // Group by Lot Name across all lot numbers.
     final filters = _filters[1] ?? {};
-    final dateFilter =
-        filters['date']; // Assuming single date or we can do range
 
-    // Group by Lot Name
     final Map<String, dynamic> summary = {};
-    for (var item in _agingData) {
-      // Local Date Filter
-      if (dateFilter != null && dateFilter.isNotEmpty) {
-        // Simple string match or compare
-        if (!_formatDate(item['inward_date']).contains(dateFilter)) continue;
-      }
+    for (var item in _closingData) {
+      final balRolls = ((item['balance_rolls'] ?? 0) as num).toInt();
+      final balWeight = ((item['balance_weight'] ?? 0) as num).toDouble();
+      final balValue = ((item['balance_value'] ?? 0) as num).toDouble();
+
+      // Only include lots that still have stock
+      if (balWeight <= 0.05 && balRolls <= 0) continue;
 
       final lotNo = item['lot_number']?.toString().trim() ?? 'N/A';
       final rawLotName = item['lot_name']?.toString().trim() ?? 'N/A';
       final groupingKey = rawLotName.toUpperCase();
+
+      // Optional LotName filter
+      final selLotNames = filters['lotName'] as List<String>? ?? [];
+      if (selLotNames.isNotEmpty &&
+          !selLotNames.contains(groupingKey)) continue;
+
+      final selLotNos = filters['lotNo'] as List<String>? ?? [];
+      if (selLotNos.isNotEmpty && !selLotNos.contains(lotNo)) continue;
 
       if (!summary.containsKey(groupingKey)) {
         summary[groupingKey] = {
@@ -471,17 +482,16 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           'lotName': rawLotName.toUpperCase(),
           'rolls': 0,
           'weight': 0.0,
-          'value': 0.0, // ADDED
+          'value': 0.0,
         };
       }
+
       if (lotNo != 'N/A' && lotNo.isNotEmpty) {
         summary[groupingKey]['lotNos'].add(lotNo);
       }
-      summary[groupingKey]['rolls'] += (item['rolls'] ?? 0) as int;
-      final weight = (item['weight'] ?? 0.0) as num;
-      final rate = (item['rate'] ?? item['Rate'] ?? 0.0) as num;
-      summary[groupingKey]['weight'] += weight;
-      summary[groupingKey]['value'] += (weight * rate); // ADDED
+      summary[groupingKey]['rolls'] += balRolls;
+      summary[groupingKey]['weight'] += balWeight;
+      summary[groupingKey]['value'] += balValue;
     }
 
     return _buildReportTable(
@@ -490,7 +500,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Lot Name',
         'Total Rolls',
         'Total Weight',
-        'Total Value', // ADDED
+        'Total Value',
         'Status',
       ],
       rows: summary.values.map((v) {
@@ -500,7 +510,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           final lotNosList = lotNosSet.toList();
           List<String> chunks = [];
           for (int i = 0; i < lotNosList.length; i += 2) {
-            chunks.add(lotNosList.sublist(i, (i + 2 > lotNosList.length) ? lotNosList.length : i + 2).join(', '));
+            chunks.add(lotNosList
+                .sublist(i, (i + 2 > lotNosList.length) ? lotNosList.length : i + 2)
+                .join(', '));
           }
           lotNoDisplay = chunks.join('\n');
         }
@@ -510,8 +522,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           v['lotName'],
           '${v['rolls']}',
           '${FormatUtils.formatWeight(v['weight'])} Kg',
-          '${FormatUtils.formatCurrency(v['value'] ?? 0)}', // ADDED
-          'Pending',
+          '${FormatUtils.formatCurrency(v['value'] ?? 0)}',
+          'In Stock',
         ];
       }).toList(),
       footerRow: [
@@ -519,7 +531,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         '',
         '${summary.values.fold<int>(0, (sum, v) => sum + ((v['rolls'] ?? 0) as num).toInt())}',
         '${FormatUtils.formatWeight(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['weight'] ?? 0) as num).toDouble()))} Kg',
-        '${FormatUtils.formatCurrency(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['value'] ?? 0) as num).toDouble()))}', // ADDED
+        '${FormatUtils.formatCurrency(summary.values.fold<double>(0.0, (sum, v) => sum + ((v['value'] ?? 0) as num).toDouble()))}',
         '',
       ],
     );

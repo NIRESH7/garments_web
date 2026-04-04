@@ -18,6 +18,26 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
 
   final List<String> _statusOptions = ['Pending', 'In Progress', 'Completed'];
 
+  // Column widths (pixels) — matches the reference spreadsheet proportions
+  static const double _wLotName     = 90.0;
+  static const double _wLotNo       = 110.0;
+  static const double _wDia         = 46.0;
+  static const double _wSetNo       = 56.0;
+  static const double _wItemName    = 120.0;
+  static const double _wSize        = 46.0;
+  static const double _wDozen       = 60.0;
+  static const double _wLayLength   = 72.0;
+  static const double _wLayPcs      = 56.0;
+  static const double _wTiming      = 80.0;
+  static const double _wMachine     = 84.0;
+  static const double _wApproval    = 68.0;
+  static const double _wActualTime  = 96.0;
+  static const double _wDiff        = 54.0;
+  static const double _wStatus      = 110.0;
+  static const double _wDelete      = 40.0;
+  static const double _rowH         = 48.0;
+  static const double _headerH      = 38.0;
+
   @override
   void initState() {
     super.initState();
@@ -48,12 +68,11 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final allocations = await _api.getAllAllocationsByDate(dateStr);
-      
+
       if (allocations.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No lot requirements found for this date.'))
-          );
+            const SnackBar(content: Text('No lot requirements found for this date.')));
         }
         setState(() => _loading = false);
         return;
@@ -61,13 +80,11 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
 
       setState(() {
         for (var alloc in allocations) {
-          // Check if this allocation (lot+set+item+size) is already in _planRows
-          final exists = _planRows.any((r) => 
-            r['lotNo'] == alloc['lotNo'] && 
+          final exists = _planRows.any((r) =>
+            r['lotNo'] == alloc['lotNo'] &&
             r['setNo'] == alloc['setNo'] &&
             r['itemName'] == alloc['itemName'] &&
-            r['size'] == alloc['size']
-          );
+            r['size'] == alloc['size']);
 
           if (!exists) {
             _planRows.add({
@@ -94,8 +111,7 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error fetching: $e'), backgroundColor: Colors.red)
-        );
+          SnackBar(content: Text('Error fetching: $e'), backgroundColor: Colors.red));
       }
       setState(() => _loading = false);
     }
@@ -146,195 +162,224 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     }
   }
 
-  Widget _field(String label, String value, Function(String) onChange,
-      {bool numeric = false}) {
-    return TextFormField(
-      initialValue: value,
-      keyboardType: numeric ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontSize: 11),
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-        filled: true,
-        fillColor: Colors.grey.shade50,
+  // ── Cell helpers ──────────────────────────────────────────────
+
+  Widget _hCell(String text, double width) {
+    return Container(
+      width: width,
+      height: _headerH,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD9E1F2), // light blue-grey like Excel header
+        border: Border(
+          right: BorderSide(color: Colors.blueGrey.shade200),
+          bottom: BorderSide(color: Colors.blueGrey.shade300, width: 1.5),
+        ),
       ),
-      onChanged: (v) {
-        if (numeric) {
-          onChange((num.tryParse(v) ?? 0).toString());
-        } else {
-          onChange(v);
-        }
-      },
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF1F3864),
+          height: 1.2,
+        ),
+      ),
     );
   }
 
-  Widget _buildPlanRowCard(int i) {
-    final row = _planRows[i];
+  Widget _inputCell(
+    double width,
+    String value,
+    Function(String) onChange, {
+    bool numeric = false,
+    Color? bg,
+  }) {
+    return Container(
+      width: width,
+      height: _rowH,
+      decoration: BoxDecoration(
+        color: bg ?? Colors.white,
+        border: Border(
+          right: BorderSide(color: Colors.blueGrey.shade100),
+          bottom: BorderSide(color: Colors.blueGrey.shade100),
+        ),
+      ),
+      child: TextFormField(
+        initialValue: value,
+        keyboardType: numeric
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 11.5, color: Colors.black87),
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+        ),
+        onChanged: (v) {
+          if (numeric) {
+            onChange((num.tryParse(v) ?? 0).toString());
+          } else {
+            onChange(v);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _checkCell(double width, bool value, Function(bool) onChange) {
+    return Container(
+      width: width,
+      height: _rowH,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: Colors.blueGrey.shade100),
+          bottom: BorderSide(color: Colors.blueGrey.shade100),
+        ),
+      ),
+      child: Checkbox(
+        value: value,
+        onChanged: (v) => onChange(v ?? false),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        activeColor: Colors.indigo,
+      ),
+    );
+  }
+
+  Widget _dropCell(double width, String value, Function(String?) onChange) {
+    return Container(
+      width: width,
+      height: _rowH,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: Colors.blueGrey.shade100),
+          bottom: BorderSide(color: Colors.blueGrey.shade100),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _statusOptions.contains(value) ? value : 'Pending',
+          isDense: true,
+          isExpanded: true,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          style: const TextStyle(fontSize: 10.5, color: Colors.black87),
+          items: _statusOptions
+              .map((s) => DropdownMenuItem(
+                  value: s, child: Text(s, style: const TextStyle(fontSize: 10.5))))
+              .toList(),
+          onChanged: onChange,
+        ),
+      ),
+    );
+  }
+
+  Widget _delCell(int index) {
+    return Container(
+      width: _wDelete,
+      height: _rowH,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.blueGrey.shade100)),
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: Icon(Icons.close, color: Colors.red.shade400, size: 16),
+        onPressed: () => setState(() => _planRows.removeAt(index)),
+      ),
+    );
+  }
+
+  // ── Table ─────────────────────────────────────────────────────
+
+  Widget _buildTable() {
+    final totalW = _wLotName + _wLotNo + _wDia + _wSetNo + _wItemName +
+        _wSize + _wDozen + _wLayLength + _wLayPcs + _wTiming +
+        _wMachine + _wApproval + _wActualTime + _wDiff + _wStatus + _wDelete;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row
-            Row(
-              children: [
+      elevation: 2,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: BorderSide(color: Colors.blueGrey.shade200)),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: totalW,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header row
+              Row(children: [
+                _hCell('Lot Name',      _wLotName),
+                _hCell('Lot No',        _wLotNo),
+                _hCell('Dia',           _wDia),
+                _hCell('Set No',        _wSetNo),
+                _hCell('Item Name',     _wItemName),
+                _hCell('Size',          _wSize),
+                _hCell('Dozen',         _wDozen),
+                _hCell('Lay\nLength',   _wLayLength),
+                _hCell('Lay\nPcs',      _wLayPcs),
+                _hCell('Timing',        _wTiming),
+                _hCell('Machine\nNo',   _wMachine),
+                _hCell('Approval',      _wApproval),
+                _hCell('Actual\nTime',  _wActualTime),
+                _hCell('Diff.',         _wDiff),
+                _hCell('Spreading /\nLay Status', _wStatus),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.shade50,
-                    borderRadius: BorderRadius.circular(20),
+                  width: _wDelete, height: _headerH,
+                  color: const Color(0xFFD9E1F2),
+                ),
+              ]),
+
+              // ── Data rows
+              if (_planRows.isEmpty)
+                Container(
+                  width: totalW,
+                  height: 52,
+                  color: const Color(0xFFFAFAFC),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'No rows. Tap "Add Cutting Row" to begin.',
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                   ),
-                  child: Text('Row ${i + 1}',
-                      style: TextStyle(
-                          color: Colors.indigo.shade700,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: row['spreadingLayStatus'] ?? 'Pending',
-                    isDense: true,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 6),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6)),
-                    ),
-                    items: _statusOptions
-                        .map((s) => DropdownMenuItem(
-                            value: s,
-                            child: Text(s,
-                                style: const TextStyle(fontSize: 12))))
-                        .toList(),
-                    onChanged: (v) => setState(
-                        () => _planRows[i]['spreadingLayStatus'] = v ?? 'Pending'),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Checkbox(
-                      value: row['approval'] == true,
-                      onChanged: (v) =>
-                          setState(() => _planRows[i]['approval'] = v ?? false),
-                    ),
-                    const Text('Approved',
-                        style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      color: Colors.red, size: 20),
-                  onPressed: () => setState(() => _planRows.removeAt(i)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // Item Name (full width)
-            _field('Item Name', row['itemName'] ?? '',
-                (v) => setState(() => _planRows[i]['itemName'] = v)),
-            const SizedBox(height: 8),
-            // Row 1: Lot Name + Lot No
-            Row(
-              children: [
-                Expanded(
-                  child: _field('Lot Name', row['lotName'] ?? '',
-                      (v) => setState(() => _planRows[i]['lotName'] = v)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field('Lot No', row['lotNo'] ?? '',
-                      (v) => setState(() => _planRows[i]['lotNo'] = v)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Row 2: Dia + Set No + Size
-            Row(
-              children: [
-                Expanded(
-                  child: _field('Dia', row['dia'] ?? '',
-                      (v) => setState(() => _planRows[i]['dia'] = v)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field('Set No', row['setNo'] ?? '',
-                      (v) => setState(() => _planRows[i]['setNo'] = v)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field('Size', row['size'] ?? '',
-                      (v) => setState(() => _planRows[i]['size'] = v)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Row 3: Dozen + Lay Length + Lay Pcs
-            Row(
-              children: [
-                Expanded(
-                  child: _field(
-                      'Dozen',
-                      (row['dozen'] ?? 0).toString(),
-                      (v) => setState(
-                          () => _planRows[i]['dozen'] = num.tryParse(v) ?? 0),
-                      numeric: true),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field(
-                      'Lay Length',
-                      (row['layLength'] ?? 0).toString(),
-                      (v) => setState(
-                          () => _planRows[i]['layLength'] = num.tryParse(v) ?? 0),
-                      numeric: true),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field(
-                      'Lay Pcs',
-                      (row['layPcs'] ?? 0).toString(),
-                      (v) => setState(
-                          () => _planRows[i]['layPcs'] = num.tryParse(v) ?? 0),
-                      numeric: true),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Row 4: Timing + Machine No + Actual Time
-            Row(
-              children: [
-                Expanded(
-                  child: _field('Timing', row['timing'] ?? '',
-                      (v) => setState(() => _planRows[i]['timing'] = v)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field('Machine No', row['machineNo'] ?? '',
-                      (v) => setState(() => _planRows[i]['machineNo'] = v)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _field('Actual Time', row['actualTimeTaken'] ?? '',
-                      (v) => setState(() => _planRows[i]['actualTimeTaken'] = v)),
-                ),
-              ],
-            ),
-          ],
+                )
+              else
+                ..._planRows.asMap().entries.map((e) {
+                  final i = e.key;
+                  final row = e.value;
+                  final bg = i.isOdd ? const Color(0xFFF5F7FF) : Colors.white;
+                  return Row(children: [
+                    _inputCell(_wLotName,  row['lotName']  ?? '', (v) => setState(() => _planRows[i]['lotName']  = v), bg: bg),
+                    _inputCell(_wLotNo,    row['lotNo']    ?? '', (v) => setState(() => _planRows[i]['lotNo']    = v), bg: bg),
+                    _inputCell(_wDia,      (row['dia']     ?? '').toString(), (v) => setState(() => _planRows[i]['dia']     = v), bg: bg),
+                    _inputCell(_wSetNo,    (row['setNo']   ?? '').toString(), (v) => setState(() => _planRows[i]['setNo']   = v), bg: bg),
+                    _inputCell(_wItemName, row['itemName'] ?? '', (v) => setState(() => _planRows[i]['itemName'] = v), bg: bg),
+                    _inputCell(_wSize,     (row['size']    ?? '').toString(), (v) => setState(() => _planRows[i]['size']    = v), bg: bg),
+                    _inputCell(_wDozen,    (row['dozen']   ?? 0).toString(),  (v) => setState(() => _planRows[i]['dozen']   = num.tryParse(v) ?? 0), numeric: true, bg: bg),
+                    _inputCell(_wLayLength,(row['layLength']?? 0).toString(), (v) => setState(() => _planRows[i]['layLength']= num.tryParse(v) ?? 0), numeric: true, bg: bg),
+                    _inputCell(_wLayPcs,   (row['layPcs']  ?? 0).toString(),  (v) => setState(() => _planRows[i]['layPcs']  = num.tryParse(v) ?? 0), numeric: true, bg: bg),
+                    _inputCell(_wTiming,   row['timing']   ?? '', (v) => setState(() => _planRows[i]['timing']   = v), bg: bg),
+                    _inputCell(_wMachine,  row['machineNo']?? '', (v) => setState(() => _planRows[i]['machineNo']= v), bg: bg),
+                    _checkCell(_wApproval, row['approval'] == true, (v) => setState(() => _planRows[i]['approval'] = v)),
+                    _inputCell(_wActualTime, row['actualTimeTaken'] ?? '', (v) => setState(() => _planRows[i]['actualTimeTaken'] = v), bg: bg),
+                    _inputCell(_wDiff,     row['diff']     ?? '', (v) => setState(() => _planRows[i]['diff']     = v), bg: bg),
+                    _dropCell(_wStatus,    row['spreadingLayStatus'] ?? 'Pending', (v) => setState(() => _planRows[i]['spreadingLayStatus'] = v ?? 'Pending')),
+                    _delCell(i),
+                  ]);
+                }),
+            ],
+          ),
         ),
       ),
     );
@@ -342,8 +387,11 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dayName = DateFormat('EEEE').format(_selectedDate);
+    final dateStr = DateFormat('dd/MM/yyyy').format(_selectedDate);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF4F6FB),
       appBar: AppBar(
         title: const Text('Cutting Daily Plan',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -353,104 +401,144 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
       ),
       body: Column(
         children: [
-          // Date selector
+          // ── Date / Day header bar (matches reference image)
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.all(12),
-            child: InkWell(
-              onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: _selectedDate,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2030),
-                );
-                if (d != null) {
-                  setState(() => _selectedDate = d);
-                  _loadForDate();
-                }
-              },
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.indigo.shade200),
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.indigo.shade50,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      DateFormat('EEEE, dd MMM yyyy').format(_selectedDate),
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.indigo.shade700),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                // Date picker chip
+                InkWell(
+                  onTap: () async {
+                    final d = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                    );
+                    if (d != null) {
+                      setState(() => _selectedDate = d);
+                      _loadForDate();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD9E1F2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blueGrey.shade200),
                     ),
-                    Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        TextButton.icon(
-                          onPressed: _loading ? null : _fetchFromRequirements,
-                          icon: const Icon(Icons.sync, size: 18),
-                          label: const Text('Fetch from Lot Requirements', 
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.indigo.shade700,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                        const Icon(Icons.calendar_today,
+                            size: 14, color: Color(0xFF1F3864)),
+                        const SizedBox(width: 6),
+                        RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                                fontSize: 13, color: Color(0xFF1F3864)),
+                            children: [
+                              const TextSpan(
+                                  text: 'Date  ',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w500)),
+                              TextSpan(
+                                  text: dateStr,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                              const TextSpan(
+                                  text: '    Day  ',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w500)),
+                              TextSpan(
+                                  text: dayName,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.edit_calendar, color: Colors.indigo.shade600),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_drop_down,
+                            size: 18, color: Color(0xFF1F3864)),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const Spacer(),
+                // Fetch button
+                TextButton.icon(
+                  onPressed: _loading ? null : _fetchFromRequirements,
+                  icon: const Icon(Icons.sync, size: 16),
+                  label: const Text('Fetch from Lot Requirements',
+                      style:
+                          TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF1F3864),
+                    backgroundColor: const Color(0xFFD9E1F2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
             ),
           ),
+
+          // ── Table area
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView(
+                : SingleChildScrollView(
                     padding: const EdgeInsets.all(12),
-                    children: [
-                      ..._planRows.asMap().entries
-                          .map((e) => _buildPlanRowCard(e.key)),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _addRow,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Cutting Row'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTable(),
+                        const SizedBox(height: 12),
+
+                        // Add Row button
+                        OutlinedButton.icon(
+                          onPressed: _addRow,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Cutting Row'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 44),
+                            side: BorderSide(color: Colors.indigo.shade300),
+                            foregroundColor: Colors.indigo.shade700,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: _saving ? null : _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 52),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                        const SizedBox(height: 10),
+
+                        // Save button
+                        ElevatedButton(
+                          onPressed: _saving ? null : _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1F3864),
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: _saving
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Text('Save Plan',
+                                  style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold)),
                         ),
-                        child: _saving
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                            : const Text('Save Plan',
-                                style: TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(height: 40),
-                    ],
+                        const SizedBox(height: 40),
+                      ],
+                    ),
                   ),
           ),
         ],
