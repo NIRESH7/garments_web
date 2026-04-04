@@ -230,13 +230,14 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
                         ],
                       ),
                     ),
-                    // Tab 2: Accessories Assign for Item
+                    // Tab 2: Accessories Assign for Item - Excel Table Layout
                     SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ..._assignRows.asMap().entries.map((entry) => _buildAssignRow(entry.key, entry.value)),
+                          _buildAssignmentTable(),
+                          const SizedBox(height: 12),
                           Center(
                             child: TextButton.icon(
                               onPressed: _addAssignRow,
@@ -409,55 +410,241 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
     );
   }
 
-  Widget _buildAssignRow(int index, AssignmentRow row) {
+  Widget _buildAssignmentTable() {
+    const sizes = ['75', '80', '85', '90', '95', '100', '105', '110'];
+    const double colItem = 130.0;
+    const double colGroup = 120.0;
+    const double colName = 120.0;
+    const double colSize = 80.0;
+    const double colQty = 72.0;
+    const double colSz = 60.0;
+    const double colDel = 44.0;
+    const double rowH = 48.0;
+    const double headerH = 42.0;
+
+    const totalW = colItem + colGroup + colName + colSize + colQty + colSz * 8 + colDel;
+
+    // --- Cell builders ---
+    Widget headerCell(String text, {double width = colItem}) {
+      return Container(
+        width: width,
+        height: headerH,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [ColorPalette.primary, ColorPalette.primary.withOpacity(0.82)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border(right: BorderSide(color: Colors.white.withOpacity(0.25))),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+            letterSpacing: 0.3,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+        ),
+      );
+    }
+
+    Widget dropCell(String? value, List<String> items, void Function(String?) onChange,
+        {double width = colItem, Color rowBg = Colors.white}) {
+      return Container(
+        width: width,
+        height: rowH,
+        decoration: BoxDecoration(
+          color: rowBg,
+          border: Border(
+            right: BorderSide(color: Colors.grey.shade200),
+            bottom: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: items.contains(value) ? value : null,
+            isExpanded: true,
+            isDense: true,
+            hint: Text('Select', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFF1A1A2E)),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            icon: Icon(Icons.keyboard_arrow_down, size: 16, color: ColorPalette.primary.withOpacity(0.7)),
+            items: items
+                .map((e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(e,
+                        style: const TextStyle(fontSize: 11.5),
+                        overflow: TextOverflow.ellipsis)))
+                .toList(),
+            onChanged: onChange,
+          ),
+        ),
+      );
+    }
+
+    Widget inputCell(TextEditingController ctrl,
+        {double width = colSz, Color rowBg = Colors.white}) {
+      return Container(
+        width: width,
+        height: rowH,
+        decoration: BoxDecoration(
+          color: rowBg,
+          border: Border(
+            right: BorderSide(color: Colors.grey.shade200),
+            bottom: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        child: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            hintText: '0',
+            hintStyle: TextStyle(color: Colors.grey.shade300, fontSize: 11),
+          ),
+        ),
+      );
+    }
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Table title bar
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: const Color(0xFFF8F9FF),
+            child: Row(
               children: [
-                Text('Assignment #${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                IconButton(
-                  onPressed: () => setState(() => _assignRows.removeAt(index)),
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                Icon(Icons.table_chart_outlined, size: 16, color: ColorPalette.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'ACC. ASSIGN FOR ITEM',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: ColorPalette.primary,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${_assignRows.length} row${_assignRows.length != 1 ? 's' : ''}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                 ),
               ],
             ),
-            CustomDropdownField(
-              label: 'Item Name',
-              value: row.itemName,
-              items: _itemList,
-              onChanged: (val) => setState(() => row.itemName = val),
+          ),
+          const Divider(height: 1, thickness: 1),
+
+          // Scrollable table
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: totalW,
+              child: Column(
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      headerCell('Item Name', width: colItem),
+                      headerCell('Acc. Group', width: colGroup),
+                      headerCell('Acc. Name', width: colName),
+                      headerCell('Size', width: colSize),
+                      headerCell('Qty/pcs', width: colQty),
+                      ...sizes.map((s) => headerCell(s, width: colSz)),
+                      Container(width: colDel, height: headerH, color: ColorPalette.primary),
+                    ],
+                  ),
+
+                  // Data rows
+                  if (_assignRows.isEmpty)
+                    Container(
+                      width: totalW,
+                      height: 56,
+                      color: const Color(0xFFFAFAFC),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.inbox_outlined, size: 18, color: Colors.grey.shade400),
+                          const SizedBox(width: 8),
+                          Text(
+                            'No rows yet. Tap "Add Assign Row" to begin.',
+                            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._assignRows.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final row = entry.value;
+                      final isOdd = i.isOdd;
+                      final rowBg = isOdd ? const Color(0xFFF5F6FF) : Colors.white;
+                      return Row(
+                        children: [
+                          dropCell(row.itemName, _itemList,
+                              (v) => setState(() => row.itemName = v),
+                              width: colItem, rowBg: rowBg),
+                          dropCell(row.group, _groupList,
+                              (v) => setState(() => row.group = v),
+                              width: colGroup, rowBg: rowBg),
+                          dropCell(row.accessoryName, _accessoryList,
+                              (v) => setState(() => row.accessoryName = v),
+                              width: colName, rowBg: rowBg),
+                          dropCell(row.size, _sizeList,
+                              (v) => setState(() => row.size = v),
+                              width: colSize, rowBg: rowBg),
+                          inputCell(row.qtyPerPieceController,
+                              width: colQty, rowBg: rowBg),
+                          ...sizes.map((s) => inputCell(row.sizeControllers[s]!,
+                              width: colSz, rowBg: rowBg)),
+                          Container(
+                            width: colDel,
+                            height: rowH,
+                            decoration: BoxDecoration(
+                              color: rowBg,
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey.shade200),
+                              ),
+                            ),
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: Icon(Icons.close, color: Colors.red.shade400, size: 18),
+                              onPressed: () => setState(() => _assignRows.removeAt(i)),
+                              tooltip: 'Remove row',
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                ],
+              ),
             ),
-            CustomDropdownField(
-              label: 'Accessories Group',
-              value: row.group,
-              items: _groupList,
-              onChanged: (val) => setState(() => row.group = val),
-            ),
-            CustomDropdownField(
-              label: 'Accessories Name',
-              value: row.accessoryName,
-              items: _accessoryList,
-              onChanged: (val) => setState(() => row.accessoryName = val),
-            ),
-            CustomDropdownField(
-              label: 'Size',
-              value: row.size,
-              items: _sizeList,
-              onChanged: (val) => setState(() => row.size = val),
-            ),
-            _miniTextField('Quantity per piece', row.qtyPerPieceController, keyboardType: TextInputType.number),
-            const SizedBox(height: 8),
-            _buildSizeGrid(row),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  // Keep old _buildAssignRow for any future reference but it's no longer used in Tab 2
+  Widget _buildAssignRow(int index, AssignmentRow row) {
+    return const SizedBox.shrink();
   }
 
   Widget _buildSizeGrid(AssignmentRow row) {
