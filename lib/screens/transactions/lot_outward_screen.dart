@@ -1342,7 +1342,50 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
                           controller: controller,
                         );
                       }),
-                      _buildGridValueCell(rowRolls.toString()),
+                      // Editable ROLLS cell
+                      TableCell(
+                        verticalAlignment: TableCellVerticalAlignment.middle,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          child: TextFormField(
+                            initialValue: rowRolls.toString(),
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(color: Colors.blue.shade200),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(color: Colors.blue.shade100),
+                              ),
+                              filled: true,
+                              fillColor: Colors.blue.shade50,
+                            ),
+                            onChanged: (v) {
+                              final parsed = int.tryParse(v.trim());
+                              if (parsed == null) return;
+                              setState(() {
+                                // Update no_of_rolls for THIS colour across all selected sets
+                                for (var set in _selectedSets) {
+                                  final entry = _findSetColourEntry(set, col);
+                                  if (entry != null && entry['isChecked'] == true) {
+                                    entry['no_of_rolls'] = parsed;
+                                  }
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      ),
                       _buildGridValueCell(_formatGridNumber(rowRollWeight)),
                       _buildGridValueCell(() {
                         // Get GSM and DIA for this color from the first set that has it
