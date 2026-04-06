@@ -1,4 +1,23 @@
+import 'package:intl/intl.dart';
+
 class FormatUtils {
+  static String formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    try {
+      DateTime dt;
+      if (date is DateTime) {
+        dt = date;
+      } else if (date is String) {
+        dt = DateTime.parse(date);
+      } else {
+        return 'N/A';
+      }
+      return DateFormat('dd-MM-yyyy').format(dt);
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
   static String formatWeight(dynamic value) {
     if (value == null) return '0.00';
     try {

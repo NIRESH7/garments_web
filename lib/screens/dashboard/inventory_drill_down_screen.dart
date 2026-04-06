@@ -210,11 +210,18 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
               ),
               Expanded(
-                flex: 1,
+                flex: widget.setNo != null ? 2 : 1,
                 child: Text('ROLLS',
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
               ),
+              if (widget.setNo != null)
+                Expanded(
+                  flex: 2,
+                  child: Text(widget.type == 'inward' ? 'INW DATE' : 'OUT DATE',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                ),
               Expanded(
                 flex: 2,
                 child: Text('WEIGHT',
@@ -265,6 +272,11 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                                 'GSM: ${item['gsm'] ?? 'N/A'} | Inw: ${item['inwardNo'] ?? 'N/A'}',
                                 style: const TextStyle(fontSize: 11, color: Colors.grey),
                               ),
+                              if (item['date'] != null)
+                                Text(
+                                  'Date: ${FormatUtils.formatDate(item['date'])}',
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
                             ],
                             if (widget.setNo == null)
                               Padding(
@@ -278,13 +290,22 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                         ),
                       ),
                       Expanded(
-                        flex: 1,
+                        flex: widget.setNo != null ? 2 : 1,
                         child: Text(
                           item['totalRolls'].toString(),
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 14),
                         ),
                       ),
+                      if (widget.setNo != null)
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            item['date'] != null ? FormatUtils.formatDate(item['date']) : 'N/A',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
                       Expanded(
                         flex: 2,
                         child: Text(
@@ -337,13 +358,22 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
     if (_data.isEmpty) return;
 
     final subtitle = _buildPathBreadcrumbs().toString(); // Or a custom one
-    final headers = [_levelLabel, 'ROLLS', 'WEIGHT', 'VALUE'];
+    final headers = [
+      _levelLabel,
+      'ROLLS',
+      if (widget.setNo != null) (widget.type == 'inward' ? 'INW DATE' : 'OUT DATE'),
+      'WEIGHT',
+      if (widget.setNo != null) 'RACK/PALLET',
+      'VALUE'
+    ];
     
     final rows = _data.map((item) {
       return [
         item['name']?.toString() ?? 'N/A',
         item['totalRolls']?.toString() ?? '0',
+        if (widget.setNo != null) (item['date'] != null ? FormatUtils.formatDate(item['date']) : 'N/A'),
         '${item['totalWeight'] ?? 0} Kg',
+        if (widget.setNo != null) '${item['rack'] ?? ''}/${item['pallet'] ?? ''}',
         'INR ${FormatUtils.formatCurrency(item['totalValue'] ?? 0)}',
       ];
     }).toList();
@@ -356,7 +386,9 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
     final footerRow = [
       'TOTAL',
       totalRolls.toString(),
+      if (widget.setNo != null) '',
       '${totalWeight.toStringAsFixed(2)} Kg',
+      if (widget.setNo != null) '',
       'INR ${FormatUtils.formatCurrency(totalValue)}',
     ];
 

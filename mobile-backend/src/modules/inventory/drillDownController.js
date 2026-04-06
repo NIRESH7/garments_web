@@ -19,8 +19,9 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
         const { type, lotName, lotNo, dia, setNo, startDate, endDate } = req.query;
 
         // Date Range Logic
-        const start = startDate ? new Date(startDate) : new Date(new Date().setHours(0, 0, 0, 0));
-        const end = endDate ? new Date(endDate) : new Date(new Date().setHours(23, 59, 59, 999));
+        // Date Range Logic - If not provided, use all time (1970 to 2099)
+        const start = startDate ? new Date(startDate) : new Date(0); // 1970
+        const end = endDate ? new Date(endDate) : new Date('2099-12-31');
 
         console.log(`[DrillDown] Type: ${type}, LotName: ${lotName}, LotNo: ${lotNo}, Dia: ${dia}`);
 
@@ -40,21 +41,24 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
             inwardQuery.inwardDate = { $gte: start, $lte: end };
             outwardQuery = { _id: null }; // No outwards for inward report
         } else if (type === 'outward') {
-            inwardQuery = { _id: null }; // No inwards for outward report
+            // We still need inwards to get Metadata (GSM, Rate) even for Outward reports
+            inwardQuery = {}; 
             outwardQuery.dateTime = { $gte: start, $lte: end };
         } else if (type === 'closing') {
             inwardQuery.inwardDate = { $lte: end };
             outwardQuery.dateTime = { $lte: end };
         }
 
-        // Apply filters
+        // Apply filters (Flexible with whitespace/trimming)
         if (lotName) {
-            const regexLotName = new RegExp(`^${lotName.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&')}$`, 'i');
+            const finalLotName = lotName.toString().trim();
+            const regexLotName = new RegExp(finalLotName.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&'), 'i');
             inwardQuery.lotName = regexLotName;
             outwardQuery.lotName = regexLotName;
         }
         if (lotNo) {
-            const regexLotNo = new RegExp(`^${lotNo.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&')}$`, 'i');
+            const finalLotNo = lotNo.toString().trim();
+            const regexLotNo = new RegExp(finalLotNo.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&'), 'i');
             inwardQuery.lotNo = regexLotNo;
             outwardQuery.lotNo = regexLotNo;
         }
@@ -261,7 +265,7 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                                         if (!group.gsm) group.gsm = row?.gsm || inwardForRate.gsm || '';
                                         if (!group.inwardNo) group.inwardNo = inwardForRate.inwardNo;
                                         if (!group.fromParty) group.fromParty = inwardForRate.fromParty;
-                                        if (!group.date) group.date = inwardForRate.inwardDate;
+                                        if (!group.date) group.date = out.dateTime; // FIXED: Use Outward Date
                                     }
                                 });
                             }

@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/report_print_service.dart';
 
 import '../../widgets/custom_dropdown_field.dart';
+import '../dashboard/inventory_drill_down_screen.dart';
 import '../../widgets/custom_multi_select_field.dart';
 
 class FormatReportsScreen extends StatefulWidget {
@@ -721,7 +722,8 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
         'Bal Val', // ADDED
         'Status',
       ],
-      rows: _closingData.map((item) {
+      rows: _closingData.asMap().entries.map((entry) {
+        final item = entry.value;
         return <String>[
           item['lot_number'] ?? '-',
           item['lot_name'] ?? '-',
@@ -737,6 +739,20 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           item['status'] ?? '-',
         ];
       }).toList(),
+      onRowTap: (index) {
+        final item = _closingData[index];
+        final isFresh = (item['status'] ?? '').toString().toLowerCase() == 'fresh';
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => InventoryDrillDownScreen(
+              type: isFresh ? 'inward' : 'outward',
+              lotName: item['lot_name'],
+              lotNo: item['lot_number'],
+            ),
+          ),
+        );
+      },
       footerRow: [
         'TOTAL',
         '',
@@ -772,6 +788,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     required List<String> headers,
     required List<List<String>> rows,
     List<String>? footerRow,
+    Function(int)? onRowTap,
   }) {
     if (rows.isEmpty) return const Center(child: Text('No data found'));
 
@@ -789,11 +806,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
               borderRadius: BorderRadius.circular(8),
             ),
             child: DataTable(
-              headingRowHeight: 45,
-              dataRowMinHeight: 40,
-              dataRowMaxHeight: double.infinity,
-              columnSpacing: 20,
-              horizontalMargin: 12,
+              showCheckboxColumn: false,
               headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
               columns: headers
                   .map(
@@ -810,8 +823,11 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                   )
                   .toList(),
               rows: [
-                ...rows.map((row) {
+                ...rows.asMap().entries.map((rowEntry) {
+                  final rowIndex = rowEntry.key;
+                  final row = rowEntry.value;
                   return DataRow(
+                    onSelectChanged: onRowTap != null ? (_) => onRowTap(rowIndex) : null,
                     cells: row.asMap().entries.map((entry) {
                       final index = entry.key;
                       final cell = entry.value;
@@ -821,6 +837,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
                       if (columnHeader == 'Status') {
                         if (cell == 'Completed') textColor = Colors.green;
                         if (cell == 'Pending') textColor = Colors.red;
+                        if (cell == 'Fresh') textColor = Colors.blue;
                       }
 
                       return DataCell(
@@ -1442,6 +1459,7 @@ class _FilterDialogState extends State<_FilterDialog> {
               if (widget.tabIndex == 4) // Status (Closing)
                 _buildDropdown('status', 'Status', [
                   'All',
+                  'Fresh',
                   'Pending',
                   'Completed',
                 ]),

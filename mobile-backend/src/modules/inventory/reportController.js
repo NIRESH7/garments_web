@@ -22,14 +22,18 @@ const getOverviewReport = asyncHandler(async (req, res) => {
 
         // Filter by Lot No/Name (Partial Match) during iteration or after
         // Doing it here saves processing
-        if (lotNo && !new RegExp(lotNo, 'i').test(i.lotNo)) return;
-        if (lotName && !new RegExp(lotName, 'i').test(i.lotName)) return;
+        const finalLotNo = (i.lotNo || '').toString().trim();
+        const finalLotName = (i.lotName || '').toString().trim();
 
-        if (!stockMap[i.lotNo]) {
-            stockMap[i.lotNo] = {
-                lot_number: i.lotNo,
-                lot_name: i.lotName,
-                party_name: i.fromParty,
+        // Filter by Lot No/Name (Partial Match)
+        if (lotNo && !new RegExp(lotNo, 'i').test(finalLotNo)) return;
+        if (lotName && !new RegExp(lotName, 'i').test(finalLotName)) return;
+
+        if (!stockMap[finalLotNo]) {
+            stockMap[finalLotNo] = {
+                lot_number: finalLotNo,
+                lot_name: finalLotName,
+                party_name: (i.fromParty || '').toString().trim(),
                 rec_rolls: 0,
                 rec_weight: 0,
                 rec_value: 0, // ADDED
@@ -47,20 +51,21 @@ const getOverviewReport = asyncHandler(async (req, res) => {
             recVal += entryWt * (entry.rate || i.rate || 0);
         });
         
-        stockMap[i.lotNo].rec_rolls += i.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
-        stockMap[i.lotNo].rec_weight += recWt;
-        stockMap[i.lotNo].rec_value += recVal;
+        stockMap[finalLotNo].rec_rolls += i.diaEntries.reduce((acc, curr) => acc + (curr.recRoll || curr.roll || 0), 0);
+        stockMap[finalLotNo].rec_weight += recWt;
+        stockMap[finalLotNo].rec_value += recVal;
     });
 
     outwards.forEach(o => {
         // Only process outwards for lots that passed the inward filters
-        if (stockMap[o.lotNo]) {
+        const finalLotNo = (o.lotNo || '').toString().trim();
+        if (stockMap[finalLotNo]) {
             o.items.forEach(item => {
                 // Sum up rolls and weight for all colors in the set
                 const delivWt = item.total_weight || 0;
-                stockMap[o.lotNo].deliv_rolls += item.colours.reduce((acc, curr) => acc + (curr.no_of_rolls || 0), 0);
-                stockMap[o.lotNo].deliv_weight += delivWt;
-                stockMap[o.lotNo].deliv_value += delivWt * (stockMap[o.lotNo].rate || 0); // ADDED
+                stockMap[finalLotNo].deliv_rolls += item.colours.reduce((acc, curr) => acc + (curr.no_of_rolls || 0), 0);
+                stockMap[finalLotNo].deliv_weight += delivWt;
+                stockMap[finalLotNo].deliv_value += delivWt * (stockMap[finalLotNo].rate || 0); // ADDED
             });
         } else {
             // Handle case where outward exists but inward doesn't (shouldn't happen ideally)
@@ -72,7 +77,12 @@ const getOverviewReport = asyncHandler(async (req, res) => {
     let report = Object.values(stockMap).map(s => {
         const bal_rolls = s.rec_rolls - s.deliv_rolls;
         const bal_weight = s.rec_weight - s.deliv_weight;
-        const statusVal = bal_weight > 0.1 ? 'Pending' : 'Completed';
+        let statusVal = 'Completed';
+        if (s.deliv_weight < 0.1) {
+            statusVal = 'Fresh';
+        } else if (bal_weight > 0.1) {
+            statusVal = 'Pending';
+        }
         return {
             ...s,
             balance_rolls: bal_rolls,
