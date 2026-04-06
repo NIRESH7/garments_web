@@ -35,6 +35,7 @@ const itemAssignmentSchema = new mongoose.Schema({
 });
 
 const accessoriesMasterSchema = new mongoose.Schema({
+  date: { type: Date, default: Date.now },
   groupSetup: [groupSetupSchema],
   itemAssignment: [itemAssignmentSchema],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }

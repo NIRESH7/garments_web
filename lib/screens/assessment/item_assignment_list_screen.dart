@@ -407,7 +407,7 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
                               if (result == true) _loadData();
                             }),
                             const SizedBox(width: 8),
-                            _actionIcon(Icons.delete_outline, Colors.red, () => _deleteCutting(entry['_id'])),
+                            _actionIcon(Icons.delete_outline, Colors.red, () => _deleteAccessory(entry['_id'])),
                           ],
                         ),
                       ],

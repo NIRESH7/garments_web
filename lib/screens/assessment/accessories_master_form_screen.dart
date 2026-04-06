@@ -40,6 +40,8 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
 
   // Section 2: Accessories Assign for Item Rows
   List<AssignmentRow> _assignRows = [];
+  String? _selectedItemName;
+  DateTime _assignmentDate = DateTime.now();
 
   @override
   void initState() {
@@ -113,15 +115,41 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
     });
   }
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _saveGroupSetup() async {
+    if (_groupRows.isEmpty) return;
     setState(() => _isSaving = true);
+    final data = {
+      'date': DateTime.now().toIso8601String(),
+      'groupSetup': _groupRows.map((e) => e.toMap()).toList(),
+      'itemAssignment': [],
+    };
+    await _performSave(data);
+  }
+
+  Future<void> _saveItemAssignment() async {
+    if (_assignRows.isEmpty || _selectedItemName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select Item and add at least one row')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    
+    // Assign the selected item name to all rows before saving
+    final formattedRows = _assignRows.map((e) {
+      final map = e.toMap();
+      map['itemName'] = _selectedItemName;
+      return map;
+    }).toList();
 
     final data = {
-      'groupSetup': _groupRows.map((e) => e.toMap()).toList(),
-      'itemAssignment': _assignRows.map((e) => e.toMap()).toList(),
+      'date': _assignmentDate.toIso8601String(),
+      'groupSetup': [],
+      'itemAssignment': formattedRows,
     };
+    await _performSave(data);
+  }
 
+  Future<void> _performSave(Map<String, dynamic> data) async {
     try {
       bool success;
       if (widget.editEntry != null) {
@@ -131,6 +159,7 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
       }
 
       if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved successfully')));
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save')));
@@ -202,7 +231,21 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
             if (_isSaving)
               const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Colors.white))
             else
-              IconButton(onPressed: _save, icon: const Icon(Icons.check)),
+              Builder(
+                builder: (context) {
+                  return IconButton(
+                    onPressed: () {
+                      final tabIndex = DefaultTabController.of(context).index;
+                      if (tabIndex == 0) {
+                        _saveGroupSetup();
+                      } else {
+                        _saveItemAssignment();
+                      }
+                    }, 
+                    icon: const Icon(Icons.check)
+                  );
+                }
+              ),
           ],
         ),
         body: _isLoading
@@ -226,17 +269,51 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
                               style: TextButton.styleFrom(foregroundColor: ColorPalette.primary),
                             ),
                           ),
+                          const SizedBox(height: 20),
+                          Center(
+                            child: ElevatedButton.icon(
+                              onPressed: _isSaving ? null : _saveGroupSetup,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: ColorPalette.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: _isSaving 
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.save),
+                              label: const Text('Save Group Setup', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
                           const SizedBox(height: 80),
                         ],
                       ),
                     ),
-                    // Tab 2: Accessories Assign for Item - Excel Table Layout
+                    // Tab 2: Accessories Assign for Item - Header + Table
                     SingleChildScrollView(
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _buildAssignmentHeader(),
+                          const SizedBox(height: 12),
                           _buildAssignmentTable(),
+                          const SizedBox(height: 20),
+                          Center(
+                            child: ElevatedButton.icon(
+                              onPressed: _isSaving ? null : _saveItemAssignment,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: ColorPalette.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: _isSaving 
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.save),
+                              label: const Text('Save Item Assignment', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           Center(
                             child: TextButton.icon(
@@ -410,11 +487,89 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
     );
   }
 
+  Widget _buildAssignmentHeader() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('ITEM NAME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 4),
+                DropdownButtonHideUnderline(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButton<String>(
+                      value: _itemList.contains(_selectedItemName) ? _selectedItemName : null,
+                      isExpanded: true,
+                      hint: const Text('Select Item', style: TextStyle(fontSize: 13)),
+                      style: const TextStyle(fontSize: 14, color: Colors.black),
+                      items: _itemList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (val) => setState(() => _selectedItemName = val),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: InkWell(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _assignmentDate,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (date != null) setState(() => _assignmentDate = date);
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('DATE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 16, color: ColorPalette.primary),
+                        const SizedBox(width: 8),
+                        Text(DateFormat('dd-MM-yyyy').format(_assignmentDate), style: const TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAssignmentTable() {
     const sizes = ['75', '80', '85', '90', '95', '100', '105', '110'];
-    const double colItem = 130.0;
-    const double colGroup = 120.0;
-    const double colName = 120.0;
+    const double colGroup = 140.0;
+    const double colName = 140.0;
     const double colSize = 80.0;
     const double colQty = 72.0;
     const double colSz = 60.0;
@@ -422,10 +577,10 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
     const double rowH = 48.0;
     const double headerH = 42.0;
 
-    const totalW = colItem + colGroup + colName + colSize + colQty + colSz * 8 + colDel;
+    const totalW = colGroup + colName + colSize + colQty + colSz * 8 + colDel;
 
     // --- Cell builders ---
-    Widget headerCell(String text, {double width = colItem}) {
+    Widget headerCell(String text, {double width = colGroup}) {
       return Container(
         width: width,
         height: headerH,
@@ -454,7 +609,7 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
     }
 
     Widget dropCell(String? value, List<String> items, void Function(String?) onChange,
-        {double width = colItem, Color rowBg = Colors.white}) {
+        {double width = colGroup, Color rowBg = Colors.white}) {
       return Container(
         width: width,
         height: rowH,
@@ -561,7 +716,6 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
                   // Header
                   Row(
                     children: [
-                      headerCell('Item Name', width: colItem),
                       headerCell('Acc. Group', width: colGroup),
                       headerCell('Acc. Name', width: colName),
                       headerCell('Size', width: colSize),
@@ -598,9 +752,6 @@ class _AccessoriesMasterFormScreenState extends State<AccessoriesMasterFormScree
                       final rowBg = isOdd ? const Color(0xFFF5F6FF) : Colors.white;
                       return Row(
                         children: [
-                          dropCell(row.itemName, _itemList,
-                              (v) => setState(() => row.itemName = v),
-                              width: colItem, rowBg: rowBg),
                           dropCell(row.group, _groupList,
                               (v) => setState(() => row.group = v),
                               width: colGroup, rowBg: rowBg),
