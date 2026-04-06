@@ -76,9 +76,11 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
         const groupMap = new Map();
 
         // Helper to get or create group entry
-        const getGroup = (key) => {
+        const getGroup = (key, date = null) => {
             if (!groupMap.has(key)) {
-                groupMap.set(key, { name: key, totalRolls: 0, totalWeight: 0, totalValue: 0 });
+                groupMap.set(key, { name: key, totalRolls: 0, totalWeight: 0, totalValue: 0, date: date });
+            } else if (date && (!groupMap.get(key).date || new Date(date) < new Date(groupMap.get(key).date))) {
+                groupMap.get(key).date = date; // Track earliest inward for aging
             }
             return groupMap.get(key);
         };
@@ -100,7 +102,7 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                 }
 
                 if (key !== 'DEEP_LEVEL') {
-                    const group = getGroup(key);
+                    const group = getGroup(key, inw.inwardDate || inw.dateTime);
                     const weight = parseFloat(de.recWt || 0);
                     const rolls = parseInt(de.recRoll || de.roll || 0);
                     const rate = parseFloat(de.rate || inw.rate || 0);
@@ -125,7 +127,7 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                                 row.setWeights.forEach((weightStr, index) => {
                                     if (weightStr !== null && weightStr !== undefined && weightStr !== '') {
                                         const setKey = `Set ${index + 1}`;
-                                        const group = getGroup(setKey);
+                                        const group = getGroup(setKey, inw.inwardDate || inw.dateTime);
                                         const weight = parseFloat(weightStr);
                                         
                                         const diaEntry = inw.diaEntries.find(d => d.dia === dia);
@@ -276,11 +278,19 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
         });
 
         // Finalize results
-        results = Array.from(groupMap.values()).map(g => ({
-            ...g,
-            totalWeight: parseFloat(g.totalWeight.toFixed(3)),
-            totalValue: parseFloat(g.totalValue.toFixed(2))
-        })).filter(g => Math.abs(g.totalWeight) > 0.001); // Filter out zero balance
+        results = Array.from(groupMap.values()).map(g => {
+            let agingDays = 0;
+            if (g.date) {
+                const diffTime = Math.abs(new Date() - new Date(g.date));
+                agingDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            }
+            return {
+                ...g,
+                totalWeight: parseFloat(g.totalWeight.toFixed(3)),
+                totalValue: parseFloat(g.totalValue.toFixed(2)),
+                days: agingDays
+            };
+        }).filter(g => Math.abs(g.totalWeight) > 0.001); // Filter out zero balance
 
         res.json(results);
     } catch (error) {

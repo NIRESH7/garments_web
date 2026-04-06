@@ -205,9 +205,9 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
           child: Row(
             children: [
               Expanded(
-                flex: 3,
+                flex: 4,
                 child: Text(_levelLabel,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
               ),
               Expanded(
                 flex: widget.setNo != null ? 2 : 1,
@@ -226,13 +226,20 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                 flex: 2,
                 child: Text('WEIGHT',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
               ),
+              if (widget.lotNo == null)
+                Expanded(
+                  flex: 1,
+                  child: Text('DAYS',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+                ),
               Expanded(
                 flex: 2,
                 child: Text('VALUE',
                     textAlign: TextAlign.right,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
               ),
             ],
           ),
@@ -253,13 +260,13 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        flex: 3,
+                        flex: 4,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               item['name'] ?? 'N/A',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (widget.setNo != null) ...[
@@ -314,6 +321,15 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                         ),
                       ),
+                      if (widget.lotNo == null)
+                        Expanded(
+                          flex: 1,
+                          child: Text(
+                            (item['days'] ?? '0').toString(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ),
                       Expanded(
                         flex: 2,
                         child: Text(
