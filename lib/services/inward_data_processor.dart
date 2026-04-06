@@ -2,7 +2,7 @@ class InwardDataProcessor {
   static Map<String, dynamic> process(Map<String, dynamic> inward) {
     final Set<String> diaSet = {};
     final Map<String, Map<String, dynamic>> colourMap = {};
-    final Map<String, Map<String, double>> diaTotals = {};
+    final Map<String, Map<String, dynamic>> diaTotals = {};
 
     // Helper to add data
     void addData(String colour, String dia, int rolls, double weight) {
@@ -29,10 +29,10 @@ class InwardDataProcessor {
       cData['totalWeight'] += weight;
 
       if (!diaTotals.containsKey(dia)) {
-        diaTotals[dia] = {'rolls': 0.0, 'weight': 0.0};
+        diaTotals[dia] = {'rolls': 0, 'weight': 0.0};
       }
-      diaTotals[dia]!['rolls'] = (diaTotals[dia]!['rolls'] ?? 0) + rolls;
-      diaTotals[dia]!['weight'] = (diaTotals[dia]!['weight'] ?? 0) + weight;
+      diaTotals[dia]!['rolls'] = (diaTotals[dia]!['rolls']?.toInt() ?? 0) + rolls;
+      diaTotals[dia]!['weight'] = (diaTotals[dia]!['weight'] ?? 0.0) + weight;
     }
 
     // Process storageDetails if available (preferred for colour breakdown)
@@ -43,10 +43,19 @@ class InwardDataProcessor {
         for (var row in rows) {
             final colour = row['colour']?.toString() ?? 'N/A';
             // Count sets/rolls and weight
-            final setWeights = row['setWeights'] as List? ?? [];
-            int rolls = setWeights.length; 
-            double weight = setWeights.fold(0.0, (sum, w) => sum + (double.tryParse(w.toString()) ?? 0));
-            
+            final setWeights = (row['setWeights'] as List? ?? [])
+                .where((w) {
+                  if (w == null) return false;
+                  final s = w.toString().trim();
+                  if (s.isEmpty) return false;
+                  final val = double.tryParse(s);
+                  return val != null && val > 0;
+                })
+                .toList();
+            int rolls = setWeights.length;
+            double weight = setWeights.fold(
+                0.0, (sum, w) => sum + (double.tryParse(w.toString()) ?? 0.0));
+
             addData(colour, dia, rolls, weight);
         }
       }
@@ -68,8 +77,8 @@ class InwardDataProcessor {
     double grandTotalWeight = 0.0;
     
     diaTotals.forEach((key, value) {
-        grandTotalRolls += (value['rolls'] ?? 0).toInt();
-        grandTotalWeight += (value['weight'] ?? 0);
+        grandTotalRolls += ((value['rolls'] ?? 0) as num).toInt();
+        grandTotalWeight += ((value['weight'] ?? 0) as num).toDouble();
     });
 
     return {

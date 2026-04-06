@@ -194,7 +194,8 @@ class InwardPrintService {
           'TOTAL',
           ...dias.map((dia) {
             final t = totals[dia] ?? {'rolls': 0, 'weight': 0.0};
-            return '${t['rolls']} / ${t['weight'].toStringAsFixed(2)}';
+            final rolls = (t['rolls'] as num?)?.toInt() ?? 0;
+            return '$rolls / ${t['weight'].toStringAsFixed(2)}';
           }),
           totals['grandTotalRolls'].toString(),
           totals['grandTotalWeight'].toStringAsFixed(2),
