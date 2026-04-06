@@ -52,13 +52,13 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
         // Apply filters (Flexible with whitespace/trimming)
         if (lotName) {
             const finalLotName = lotName.toString().trim();
-            const regexLotName = new RegExp(finalLotName.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&'), 'i');
+            const regexLotName = new RegExp('^' + finalLotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i');
             inwardQuery.lotName = regexLotName;
             outwardQuery.lotName = regexLotName;
         }
         if (lotNo) {
             const finalLotNo = lotNo.toString().trim();
-            const regexLotNo = new RegExp(finalLotNo.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g, '\\\\$&'), 'i');
+            const regexLotNo = new RegExp('^' + finalLotNo.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i');
             inwardQuery.lotNo = regexLotNo;
             outwardQuery.lotNo = regexLotNo;
         }

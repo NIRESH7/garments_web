@@ -26,8 +26,8 @@ const getOverviewReport = asyncHandler(async (req, res) => {
         const finalLotName = (i.lotName || '').toString().trim();
 
         // Filter by Lot No/Name (Partial Match)
-        if (lotNo && !new RegExp(lotNo, 'i').test(finalLotNo)) return;
-        if (lotName && !new RegExp(lotName, 'i').test(finalLotName)) return;
+        if (lotNo && !new RegExp('^' + lotNo.toString().trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i').test(finalLotNo)) return;
+        if (lotName && !new RegExp('^' + lotName.toString().trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i').test(finalLotName)) return;
 
         if (!stockMap[finalLotNo]) {
             stockMap[finalLotNo] = {
@@ -234,7 +234,7 @@ const getClientFormatReport = asyncHandler(async (req, res) => {
 
     let query = {};
     if (fromParty) {
-        query.fromParty = { $regex: new RegExp(fromParty, 'i') };
+        query.fromParty = { $regex: new RegExp('^' + fromParty.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
     }
 
     const inwards = await Inward.find(query).sort({ inwardDate: -1 });
@@ -364,7 +364,7 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
     // Filter by query params if provided
     let filteredReport = report;
     if (lotName) {
-        filteredReport = filteredReport.filter(r => r.lotName.toLowerCase().includes(lotName.toLowerCase()));
+        filteredReport = filteredReport.filter(r => r.lotName.toLowerCase() === lotName.toLowerCase());
     }
     if (dia) {
         filteredReport = filteredReport.filter(r => r.dia === dia);
@@ -554,8 +554,8 @@ const getRackPalletStockReport = asyncHandler(async (req, res) => {
     if (lotName && lotName !== 'All') {
         const searchLot = lotName.toLowerCase();
         stockReport = stockReport.filter(s =>
-            (s.lotName && s.lotName.toString().toLowerCase().includes(searchLot)) ||
-            (s.lotNo && s.lotNo.toString().toLowerCase().includes(searchLot))
+            (s.lotName && s.lotName.toString().toLowerCase() === searchLot) ||
+            (s.lotNo && s.lotNo.toString().toLowerCase() === searchLot)
         );
     }
 

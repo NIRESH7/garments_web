@@ -983,9 +983,9 @@ const getInwards = asyncHandler(async (req, res) => {
         if (startDate) query.inwardDate.$gte = startDate;
         if (endDate) query.inwardDate.$lte = endDate;
     }
-    if (fromParty) query.fromParty = { $regex: new RegExp(fromParty, 'i') };
-    if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
-    if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
+    if (fromParty) query.fromParty = { $regex: new RegExp('^' + fromParty.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
+    if (lotName) query.lotName = { $regex: new RegExp('^' + lotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
+    if (lotNo) query.lotNo = { $regex: new RegExp('^' + lotNo.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
 
     const inwards = await Inward.find(query).sort({ inwardDate: -1 });
     res.json(inwards);
@@ -1480,9 +1480,9 @@ const getOutwards = asyncHandler(async (req, res) => {
         if (startDate) query.dateTime.$gte = startDate;
         if (endDate) query.dateTime.$lte = endDate;
     }
-    if (lotName) query.lotName = { $regex: new RegExp(lotName, 'i') };
-    if (lotNo) query.lotNo = { $regex: new RegExp(lotNo, 'i') };
-    if (dia) query.dia = { $regex: new RegExp(dia, 'i') };
+    if (lotName) query.lotName = { $regex: new RegExp('^' + lotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
+    if (lotNo) query.lotNo = { $regex: new RegExp('^' + lotNo.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
+    if (dia) query.dia = { $regex: new RegExp('^' + dia.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
 
     const outwards = await Outward.find(query).sort({ dateTime: -1 }).lean();
     

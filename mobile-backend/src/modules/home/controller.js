@@ -40,7 +40,7 @@ const getHomeData = asyncHandler(async (req, res) => {
             let weight = 0;
             let rolls = 0;
             list.forEach(i => {
-                if (lotName && i.lotName && !new RegExp(lotName, 'i').test(i.lotName)) return;
+                if (lotName && i.lotName && !new RegExp('^' + lotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i').test(i.lotName)) return;
                 if (!i.diaEntries) return;
                 i.diaEntries.forEach(de => {
                     if (dia && de.dia !== dia) return;
@@ -55,7 +55,7 @@ const getHomeData = asyncHandler(async (req, res) => {
             let weight = 0;
             let rolls = 0;
             list.forEach(o => {
-                if (lotName && o.lotName && !new RegExp(lotName, 'i').test(o.lotName)) return;
+                if (lotName && o.lotName && !new RegExp('^' + lotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i').test(o.lotName)) return;
                 if (dia && o.dia !== dia) return;
                 if (!o.items) return;
                 o.items.forEach(item => {
@@ -99,7 +99,7 @@ const getHomeData = asyncHandler(async (req, res) => {
 
         // 5. Recent Inwards (Global or filtered)
         const recentDisplayQuery = {};
-        if (lotName) recentDisplayQuery.lotName = { $regex: new RegExp(lotName, 'i') };
+        if (lotName) recentDisplayQuery.lotName = { $regex: new RegExp('^' + lotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
         const recentInwardsRaw = await Inward.find(recentDisplayQuery)
             .sort({ inwardDate: -1 })
             .limit(3);

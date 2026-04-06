@@ -228,7 +228,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
               ),
-              if (widget.lotNo == null)
+              if (widget.lotName != null && widget.lotNo == null)
                 Expanded(
                   flex: 1,
                   child: Text('DAYS',
@@ -321,7 +321,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                         ),
                       ),
-                      if (widget.lotNo == null)
+                      if (widget.lotName != null && widget.lotNo == null)
                         Expanded(
                           flex: 1,
                           child: Text(
