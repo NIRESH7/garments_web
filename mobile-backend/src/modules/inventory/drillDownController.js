@@ -120,26 +120,65 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                     if (s.dia !== dia) return;
                     const rows = Array.isArray(s.rows) ? s.rows : [];
                     
+                    // HEURISTIC: Check if this was a "Not Set Wise" entry or single set
+                    // We look at all rows to see if any have more than 1 set weight
+                    let maxSetsInStorage = 0;
+                    rows.forEach(r => {
+                      if (Array.isArray(r.setWeights)) maxSetsInStorage = Math.max(maxSetsInStorage, r.setWeights.length);
+                    });
+
                     if (!setNo) {
-                        // Level 4: Group by Set
-                        rows.forEach(row => {
-                            if (Array.isArray(row.setWeights)) {
-                                row.setWeights.forEach((weightStr, index) => {
-                                    if (weightStr !== null && weightStr !== undefined && weightStr !== '') {
-                                        const setKey = `Set ${index + 1}`;
-                                        const group = getGroup(setKey, inw.inwardDate || inw.dateTime);
-                                        const weight = parseFloat(weightStr);
-                                        
-                                        const diaEntry = inw.diaEntries.find(d => d.dia === dia);
-                                        const rate = parseFloat(diaEntry?.rate || inw.rate || 0);
-                                        
-                                        group.totalWeight += weight;
-                                        group.totalRolls += 1;
-                                        group.totalValue += (weight * rate);
-                                    }
-                                });
-                            }
-                        });
+                        // Level 4: Group by Set (UNLESS it's a single set entry)
+                        if (maxSetsInStorage > 1) {
+                            rows.forEach(row => {
+                                if (Array.isArray(row.setWeights)) {
+                                    row.setWeights.forEach((weightStr, index) => {
+                                        if (weightStr !== null && weightStr !== undefined && weightStr !== '') {
+                                            const setKey = `Set ${index + 1}`;
+                                            const group = getGroup(setKey, inw.inwardDate || inw.dateTime);
+                                            const weight = parseFloat(weightStr);
+                                            
+                                            const diaEntry = inw.diaEntries.find(d => d.dia === dia);
+                                            const rate = parseFloat(diaEntry?.rate || inw.rate || 0);
+                                            
+                                            group.totalWeight += weight;
+                                            group.totalRolls += 1;
+                                            group.totalValue += (weight * rate);
+                                        }
+                                    });
+                                }
+                            });
+                        } else {
+                            // SKIP SET LEVEL: Group by Color directly
+                            // Source of truth for rolls is the diaEntries (main grid)
+                            const diaEntry = inw.diaEntries.find(d => d.dia === dia);
+                            const totalGridRolls = parseInt(diaEntry?.recRoll || diaEntry?.roll || 0);
+                            const totalStorageWeight = rows.reduce((sum, r) => sum + parseFloat(r.setWeights?.[0] || 0), 0);
+
+                            rows.forEach(row => {
+                                if (Array.isArray(row.setWeights) && row.setWeights[0]) {
+                                    const colorKey = row.colour || 'Unknown';
+                                    const group = getGroup(colorKey, inw.inwardDate || inw.dateTime);
+                                    const weight = parseFloat(row.setWeights[0]);
+                                    
+                                    const rate = parseFloat(diaEntry?.rate || inw.rate || 0);
+                                    
+                                    // Proportionally allocate rolls from the main grid
+                                    const proportion = totalStorageWeight > 0 ? (weight / totalStorageWeight) : (1 / rows.length);
+                                    const allocatedRolls = proportion * totalGridRolls;
+
+                                    group.totalWeight += weight;
+                                    group.totalRolls += allocatedRolls; 
+                                    group.totalValue += (weight * rate);
+                                    group.isColorLevel = true; // Signal to frontend
+                                    
+                                    if (!group.rack) group.rack = s.racks ? s.racks[0] : '';
+                                    if (!group.pallet) group.pallet = s.pallets ? s.pallets[0] : '';
+                                    if (!group.gsm) group.gsm = row.gsm || inw.gsm || '';
+                                    if (!group.inwardNo) group.inwardNo = inw.inwardNo;
+                                }
+                            });
+                        }
                     } else {
                         // Level 5: Group by Color inside the given Set
                         const targetSetIndex = parseInt(setNo.replace(/Set /i, '').trim()) - 1;
@@ -286,6 +325,7 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
             }
             return {
                 ...g,
+                totalRolls: Math.round(g.totalRolls),
                 totalWeight: parseFloat(g.totalWeight.toFixed(3)),
                 totalValue: parseFloat(g.totalValue.toFixed(2)),
                 days: agingDays

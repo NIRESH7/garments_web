@@ -3,7 +3,7 @@ import axios from 'axios';
 const testChat = async (message) => {
     try {
         console.log(`Testing: "${message}"`);
-        const response = await axios.post('http://localhost:5001/api/chat', { message });
+        const response = await axios.post('http://13.220.94.83:5001/api/chat', { message });
         console.log('Response:', response.data.formatted);
         console.log('Strategy:', response.data.strategy);
         console.log('Row Count:', response.data.rowCount);

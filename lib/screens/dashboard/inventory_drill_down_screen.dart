@@ -81,7 +81,11 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
     if (widget.lotName == null) return 'LOT NAME';
     if (widget.lotNo == null) return 'LOT NUMBER';
     if (widget.dia == null) return 'DIA';
-    if (widget.setNo == null) return 'SET';
+    
+    // Check if the current data contains color-level markers (from skipped Set level)
+    final bool isColorLevelFromSkip = _data.isNotEmpty && _data.any((item) => item['isColorLevel'] == true);
+    if (widget.setNo == null && !isColorLevelFromSkip) return 'SET';
+    
     return 'COLOR';
   }
 
@@ -215,7 +219,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
               ),
-              if (widget.setNo != null)
+              if (widget.setNo != null || (_data.isNotEmpty && _data.any((i) => i['isColorLevel'] == true)))
                 Expanded(
                   flex: 2,
                   child: Text(widget.type == 'inward' ? 'INW DATE' : 'OUT DATE',
@@ -253,7 +257,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
             itemBuilder: (context, index) {
               final item = _data[index];
               return InkWell(
-                onTap: widget.setNo != null ? null : () => _navigateToNextLevel(item),
+                onTap: (widget.setNo != null || item['isColorLevel'] == true) ? null : () => _navigateToNextLevel(item),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   color: Colors.white,
@@ -269,7 +273,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                               overflow: TextOverflow.ellipsis,
                             ),
-                            if (widget.setNo != null) ...[
+                            if (widget.setNo != null || item['isColorLevel'] == true) ...[
                               const SizedBox(height: 4),
                               Text(
                                 'Rack: ${item['rack'] ?? 'N/A'} | Pallet: ${item['pallet'] ?? 'N/A'}',
@@ -285,7 +289,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                                 ),
                             ],
-                            if (widget.setNo == null)
+                            if (widget.setNo == null && item['isColorLevel'] != true)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
@@ -297,14 +301,14 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                         ),
                       ),
                       Expanded(
-                        flex: widget.setNo != null ? 2 : 1,
+                        flex: (widget.setNo != null || item['isColorLevel'] == true) ? 2 : 1,
                         child: Text(
                           item['totalRolls'].toString(),
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 14),
                         ),
                       ),
-                      if (widget.setNo != null)
+                      if (widget.setNo != null || item['isColorLevel'] == true)
                         Expanded(
                           flex: 2,
                           child: Text(

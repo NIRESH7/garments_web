@@ -151,12 +151,15 @@ class ScaleService {
   final StorageService _storage = StorageService();
   BluetoothConnection? _btConnection;
   String? _btAddress;
+  Stream<Uint8List>? _btInputStream;
+  Completer<double>? _ongoingCapture;
 
   Future<void> closeBluetoothConnection() async {
     if (_btConnection != null) {
       await _btConnection!.finish();
       _btConnection = null;
       _btAddress = null;
+      _btInputStream = null;
     }
   }
 
@@ -256,27 +259,44 @@ class ScaleService {
 
   Future<double> captureWeight({ScaleSettings? settings}) async {
     final config = settings ?? await loadSettings();
-    if (!config.enabled) {
-      if (kIsWeb) {
-        // Allow trial weights on web even if "disabled" in service, 
-        // as long as the UI toggle is ON (config comes from UI or DB)
-        return 5.0 + Random().nextDouble() * 2.0;
+
+    // Prevent multiple concurrent capture attempts which cause stream errors
+    if (_ongoingCapture != null && !_ongoingCapture!.isCompleted) {
+      return _ongoingCapture!.future;
+    }
+
+    _ongoingCapture = Completer<double>();
+
+    try {
+      double result;
+      if (!config.enabled) {
+        if (kIsWeb) {
+          result = 5.0 + Random().nextDouble() * 2.0;
+        } else {
+          throw Exception(
+            'Scale machine is disabled. Enable it in Scale Machine menu.',
+          );
+        }
+      } else if (kIsWeb) {
+        // Mock weight for web development
+        await Future.delayed(const Duration(milliseconds: 500));
+        result = 10.0 + Random().nextDouble() * 5.0;
+      } else if (config.connectionType == 'bluetooth') {
+        result = await _captureBluetoothWeight(config);
+      } else {
+        result = await _captureUsbWeight(config);
       }
-      throw Exception(
-        'Scale machine is disabled. Enable it in Scale Machine menu.',
-      );
-    }
 
-    if (kIsWeb) {
-      // Mock weight for web development
-      await Future.delayed(const Duration(milliseconds: 500));
-      return 10.0 + Random().nextDouble() * 5.0;
+      if (!_ongoingCapture!.isCompleted) {
+        _ongoingCapture!.complete(result);
+      }
+      return result;
+    } catch (e) {
+      if (!_ongoingCapture!.isCompleted) {
+        _ongoingCapture!.completeError(e);
+      }
+      rethrow;
     }
-
-    if (config.connectionType == 'bluetooth') {
-      return _captureBluetoothWeight(config);
-    }
-    return _captureUsbWeight(config);
   }
 
   Future<double> _captureUsbWeight(ScaleSettings config) async {
@@ -390,6 +410,7 @@ class ScaleService {
       final connection = await BluetoothConnection.toAddress(address);
       _btConnection = connection;
       _btAddress = address;
+      _btInputStream = connection.input?.asBroadcastStream();
 
       return _readWeightFromConnection(connection, config);
     } catch (e) {
@@ -418,7 +439,8 @@ class ScaleService {
       double? previous;
       var stableHits = 0;
 
-      subscription = connection.input?.listen(
+      final inputStream = _btInputStream ?? connection.input;
+      subscription = inputStream?.listen(
         (data) {
           for (final b in data) {
             if (b == 10 || b == 13) {
