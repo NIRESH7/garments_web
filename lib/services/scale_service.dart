@@ -257,6 +257,21 @@ class ScaleService {
         .toList();
   }
 
+  Stream<BluetoothDiscoveryResult> discoverDevices() {
+    return FlutterBluetoothSerial.instance.startDiscovery();
+  }
+
+  Future<bool> bondDevice(String address) async {
+    try {
+      final bonded =
+          await FlutterBluetoothSerial.instance.bondDeviceAtAddress(address);
+      return bonded ?? false;
+    } catch (e) {
+      print('Bonding failed: $e');
+      return false;
+    }
+  }
+
   Future<double> captureWeight({ScaleSettings? settings}) async {
     final config = settings ?? await loadSettings();
 

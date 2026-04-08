@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../services/scale_service.dart';
@@ -27,6 +29,10 @@ class _ScaleSettingsScreenState extends State<ScaleSettingsScreen> {
   final TextEditingController _requestController = TextEditingController();
   final TextEditingController _timeoutController = TextEditingController();
 
+  List<BluetoothDiscoveryResult> _discoveredDevices = [];
+  bool _isScanning = false;
+  StreamSubscription? _discoveryStreamSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +41,7 @@ class _ScaleSettingsScreenState extends State<ScaleSettingsScreen> {
 
   @override
   void dispose() {
+    _discoveryStreamSubscription?.cancel();
     _baudController.dispose();
     _requestController.dispose();
     _timeoutController.dispose();
@@ -124,6 +131,64 @@ class _ScaleSettingsScreenState extends State<ScaleSettingsScreen> {
       ).showSnackBar(SnackBar(content: Text('Machine read failed: $e')));
     } finally {
       if (mounted) setState(() => _testing = false);
+    }
+  }
+
+  Future<void> _startDiscovery() async {
+    setState(() {
+      _discoveredDevices = [];
+      _isScanning = true;
+    });
+
+    _discoveryStreamSubscription?.cancel();
+    _discoveryStreamSubscription = _scaleService.discoverDevices().listen(
+      (r) {
+        setState(() {
+          final existingIndex = _discoveredDevices.indexWhere(
+            (element) => element.device.address == r.device.address,
+          );
+          if (existingIndex >= 0) {
+            _discoveredDevices[existingIndex] = r;
+          } else {
+            _discoveredDevices.add(r);
+          }
+        });
+      },
+      onDone: () {
+        if (mounted) setState(() => _isScanning = false);
+      },
+      onError: (e) {
+        if (mounted) setState(() => _isScanning = false);
+        debugPrint('Discovery error: $e');
+      },
+    );
+  }
+
+  Future<void> _pairAndSelect(BluetoothDevice device) async {
+    setState(() => _loading = true);
+    try {
+      final success = await _scaleService.bondDevice(device.address);
+      if (success) {
+        setState(() {
+          _selectedBluetoothAddress = device.address;
+        });
+        await _load();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Successfully paired and selected: ${device.name ?? device.address}',
+            ),
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pairing failed or cancelled')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -218,14 +283,65 @@ class _ScaleSettingsScreenState extends State<ScaleSettingsScreen> {
                         border: OutlineInputBorder(),
                       ),
                     ),
-                  if (_settings.connectionType == 'bluetooth')
+                  if (_settings.connectionType == 'bluetooth') ...[
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: Text(
-                        'Pair the weighing machine in Android Bluetooth settings first.',
+                        'Pair the weighing machine in Android Bluetooth settings first, or scan below.',
                         style: TextStyle(color: Colors.black54, fontSize: 12),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Available Devices',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        TextButton.icon(
+                          onPressed: _isScanning ? null : _startDiscovery,
+                          icon: _isScanning
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.search),
+                          label: Text(
+                            _isScanning ? 'Scanning...' : 'Scan for Devices',
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_discoveredDevices.isEmpty && !_isScanning)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'No new devices found. Ensure the scale is in pairing mode.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ),
+                    ..._discoveredDevices
+                        .where(
+                      (d) => !_bluetoothDevices
+                          .any((p) => p.address == d.device.address),
+                    )
+                        .map(
+                      (r) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.bluetooth),
+                        title: Text(r.device.name ?? 'Unknown Device'),
+                        subtitle: Text(r.device.address),
+                        trailing: ElevatedButton(
+                          onPressed: () => _pairAndSelect(r.device),
+                          child: const Text('Pair & Select'),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (_settings.connectionType == 'usb')
                     const SizedBox(height: 12),
                   TextFormField(
