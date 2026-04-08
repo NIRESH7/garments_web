@@ -45,14 +45,18 @@ class OutwardPrintService {
 
     final items = outward['items'] as List<dynamic>? ?? [];
 
-    // Process items for table: Aggregate by color across all sets
-    final Map<String, Map<String, dynamic>> colorSummary = {};
+    // Process items for table: Include Set, Rack, Pallet Info
+    final List<Map<String, dynamic>> flatItems = [];
     double totalWeight = 0;
     int totalRolls = 0;
     double totalMeters = 0;
 
     for (var set in items) {
+      final setNo = set['set_no']?.toString() ?? 'N/A';
+      final rack = set['rack_name']?.toString() ?? 'N/A';
+      final pallet = set['pallet_number']?.toString() ?? 'N/A';
       final colours = set['colours'] as List<dynamic>? ?? [];
+
       for (var col in colours) {
         final name = col['colour']?.toString() ?? 'N/A';
         final wt = (col['weight'] as num?)?.toDouble() ?? 0;
@@ -68,21 +72,32 @@ class OutwardPrintService {
           meters = (wt * 1000.0) / (gsm * (dia * 2.0 / 39.37));
         }
 
-        if (!colorSummary.containsKey(name)) {
-          colorSummary[name] = {
-            'colour': name,
-            'weight': 0.0,
-            'rolls': 0,
-            'meters': 0.0
-          };
-        }
-        colorSummary[name]!['weight'] += wt;
-        colorSummary[name]!['rolls'] += r;
-        colorSummary[name]!['meters'] += double.parse(meters.toStringAsFixed(1));
+        flatItems.add({
+          'setNo': setNo,
+          'rack': rack,
+          'pallet': pallet,
+          'colour': name,
+          'weight': wt,
+          'rolls': r,
+          'meters': meters,
+        });
 
         totalWeight += wt;
         totalRolls += r;
         totalMeters += double.parse(meters.toStringAsFixed(1));
+      }
+    }
+
+    // Extract distinct Set, Rack, Pallet info for the header
+    final Set<String> setNos = {};
+    final Set<String> racks = {};
+    final Set<String> pallets = {};
+
+    for (var set in items) {
+      if (set['set_no'] != null) setNos.add(set['set_no'].toString());
+      if (set['rack_name'] != null) racks.add(set['rack_name'].toString());
+      if (set['pallet_number'] != null) {
+        pallets.add(set['pallet_number'].toString());
       }
     }
 
@@ -95,10 +110,16 @@ class OutwardPrintService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               PrintUtils.buildCompanyHeader(boldFont, font),
-              _buildHeader(outward, boldFont),
+              _buildHeader(
+                outward,
+                boldFont,
+                setNo: setNos.join(', '),
+                rack: racks.join(', '),
+                pallet: pallets.join(', '),
+              ),
               pw.SizedBox(height: 20),
               _buildTable(
-                colorSummary.values.toList(),
+                flatItems,
                 totalWeight,
                 totalRolls,
                 totalMeters,
@@ -125,7 +146,13 @@ class OutwardPrintService {
     return pdf;
   }
 
-  pw.Widget _buildHeader(Map<String, dynamic> outward, pw.Font boldFont) {
+  pw.Widget _buildHeader(
+    Map<String, dynamic> outward,
+    pw.Font boldFont, {
+    String? setNo,
+    String? rack,
+    String? pallet,
+  }) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
@@ -145,6 +172,9 @@ class OutwardPrintService {
             pw.Text('Lot Name: ${outward['lotName'] ?? 'N/A'}'),
             pw.Text('Lot No: ${outward['lotNo'] ?? 'N/A'}'),
             pw.Text('DIA: ${outward['dia'] ?? 'N/A'}'),
+            if (setNo != null && setNo.isNotEmpty) pw.Text('Set No: $setNo'),
+            if (rack != null && rack.isNotEmpty) pw.Text('Rack: $rack'),
+            if (pallet != null && pallet.isNotEmpty) pw.Text('Pallet: $pallet'),
           ],
         ),
         pw.Column(
@@ -165,7 +195,7 @@ class OutwardPrintService {
   }
 
   pw.Widget _buildTable(
-    List<Map<String, dynamic>> summary,
+    List<Map<String, dynamic>> flatItems,
     double totalWt,
     int totalRolls,
     double totalMeters,
@@ -175,7 +205,7 @@ class OutwardPrintService {
     return pw.Table.fromTextArray(
       headers: ['Colour', 'Total Rolls', 'Total Weight (Kg)', 'Total Meter'],
       data: [
-        ...summary.map(
+        ...flatItems.map(
           (row) => [
             row['colour'],
             row['rolls'].toString(),
