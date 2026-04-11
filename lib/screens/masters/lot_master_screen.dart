@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../services/mobile_api_service.dart';
-
+import '../../core/theme/color_palette.dart';
+import '../../core/constants/layout_constants.dart';
 import '../../widgets/custom_dropdown_field.dart';
+import '../../widgets/responsive_wrapper.dart';
 
 class LotMasterScreen extends StatefulWidget {
   const LotMasterScreen({super.key});
@@ -29,36 +33,34 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
   }
 
   Future<void> _loadDropdowns() async {
-    final parties = await _api.getParties();
-    final categories = await _api.getCategories();
+    try {
+      final parties = await _api.getParties();
+      final categories = await _api.getCategories();
 
-    final List<String> extractedProcesses = [];
-    final processMatches = categories.where((c) {
-      final String catName = (c['name'] ?? '').toString().trim().toLowerCase();
-      return catName == 'process';
-    });
+      final List<String> extractedProcesses = [];
+      final processMatches = categories.where((c) {
+        final String catName = (c['name'] ?? '').toString().trim().toLowerCase();
+        return catName == 'process';
+      });
 
-    for (var cat in processMatches) {
-      final dynamic rawValues = cat['values'];
-      if (rawValues is List) {
-        for (var v in rawValues) {
-          if (v is Map) {
-            extractedProcesses.add((v['name'] ?? '').toString());
-          } else if (v != null) {
-            extractedProcesses.add(v.toString());
+      for (var cat in processMatches) {
+        final dynamic rawValues = cat['values'];
+        if (rawValues is List) {
+          for (var v in rawValues) {
+            if (v is Map) { extractedProcesses.add((v['name'] ?? '').toString()); }
+            else if (v != null) { extractedProcesses.add(v.toString()); }
           }
         }
       }
-    }
 
-    setState(() {
-      _parties = parties.map((m) => m['name'] as String).toList();
-      _processes = extractedProcesses
-          .where((s) => s.isNotEmpty)
-          .toSet()
-          .toList();
-      _isLoading = false;
-    });
+      setState(() {
+        _parties = parties.map((m) => m['name'] as String).toList();
+        _processes = extractedProcesses.where((s) => s.isNotEmpty).toSet().toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _save() async {
@@ -66,32 +68,24 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
       setState(() => _isSaving = true);
       _formKey.currentState!.save();
       final lotData = {
-        'lotNumber': _lotNumberController.text,
+        'lotNumber': _lotNumberController.text.trim(),
         'partyName': _partyName!,
         'process': _process!,
-        'remarks': _remarksController.text,
+        'remarks': _remarksController.text.trim(),
       };
 
       try {
         final success = await _api.createLot(lotData);
         if (success) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Lot created successfully in Backend'),
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lot identification successfully registered'), backgroundColor: ColorPalette.success));
           Navigator.pop(context);
         } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Failed to create lot')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registry allocation failed'), backgroundColor: ColorPalette.error));
         }
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registry error: $e'), backgroundColor: ColorPalette.error));
       } finally {
         if (mounted) setState(() => _isSaving = false);
       }
@@ -100,97 +94,181 @@ class _LotMasterScreenState extends State<LotMasterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = LayoutConstants.isMobile(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Lot Master')),
+      backgroundColor: ColorPalette.background,
+      appBar: AppBar(
+        title: Text(
+          'Lot Registration',
+          style: TextStyle(fontWeight: FontWeight.w800, color: ColorPalette.textPrimary, fontSize: isMobile ? 18 : 22),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: ColorPalette.textPrimary),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextFormField(
-                      controller: _lotNumberController,
-                      decoration: const InputDecoration(
-                        labelText: 'Lot Number / Name',
+          : ResponsiveWrapper(
+              child: SingleChildScrollView(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: ColorPalette.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(LucideIcons.binary, size: 20, color: ColorPalette.primary),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'LOT SPECIFICATIONS',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: ColorPalette.textMuted),
+                          ),
+                        ],
                       ),
-                      validator: (val) => val!.isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildDropdown(
-                      'Party Name',
-                      _parties,
-                      _partyName,
-                      (val) => setState(() => _partyName = val),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildDropdown(
-                      'Process Type',
-                      _processes,
-                      _process,
-                      (val) => setState(() => _process = val),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _remarksController,
-                      decoration: const InputDecoration(
-                        labelText: 'Remarks (Optional)',
-                      ),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 40),
-                    ElevatedButton(
-                      onPressed: _isSaving ? null : _save,
-                      child: _isSaving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                      const SizedBox(height: 32),
+                      // Form Card
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: ColorPalette.softShadow,
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            if (!isMobile) ...[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: _buildLotField()),
+                                  const SizedBox(width: 24),
+                                  Expanded(child: _buildPartyDropdown()),
+                                ],
                               ),
-                            )
-                          : const Text('Create Lot'),
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue.withOpacity(0.1)),
-                      ),
-                      child: const Text(
-                        'Note: Dia and Colour are captured during inward transactions, not at lot creation.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w500,
+                              const SizedBox(height: 24),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: _buildProcessDropdown()),
+                                  const SizedBox(width: 24),
+                                  const Spacer(),
+                                ],
+                              ),
+                            ] else ...[
+                              _buildLotField(),
+                              const SizedBox(height: 24),
+                              _buildPartyDropdown(),
+                              const SizedBox(height: 24),
+                              _buildProcessDropdown(),
+                            ],
+                            const SizedBox(height: 24),
+                            _buildRemarksField(),
+                            const SizedBox(height: 48),
+                            SizedBox(
+                              width: double.infinity,
+                              child: _buildSubmitButton(),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 32),
+                      // Info Tip
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: ColorPalette.primary.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: ColorPalette.primary.withOpacity(0.05)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(LucideIcons.info, size: 18, color: ColorPalette.primary),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                'Note: Secondary parameters (Dia & Colour) are automatically associated during inward transactions.',
+                                style: TextStyle(fontSize: 13, color: ColorPalette.textSecondary, height: 1.5, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
               ),
             ),
     );
   }
 
-  Widget _buildDropdown(
-    String label,
-    List<String> items,
-    String? value,
-    Function(String?) onChanged,
-  ) {
+  Widget _buildLotField() {
+    return TextFormField(
+      controller: _lotNumberController,
+      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+      decoration: const InputDecoration(
+        labelText: 'Lot Identifier',
+        hintText: 'Reference number/name',
+        prefixIcon: Icon(LucideIcons.hash, size: 18),
+      ),
+      validator: (val) => val!.isEmpty ? 'Identifier required' : null,
+    );
+  }
+
+  Widget _buildPartyDropdown() {
     return CustomDropdownField(
-      label: label,
-      items: items,
-      value: value,
-      onChanged: onChanged,
-      validator: (val) => val == null || val.isEmpty ? 'Required' : null,
-      hint: 'Select $label',
+      label: 'Associated Entity',
+      items: _parties,
+      value: _partyName,
+      onChanged: (val) => setState(() => _partyName = val),
+      validator: (val) => val == null || val.isEmpty ? 'Entity selection required' : null,
+      hint: 'Select party',
+    );
+  }
+
+  Widget _buildProcessDropdown() {
+    return CustomDropdownField(
+      label: 'Assigned Process Type',
+      items: _processes,
+      value: _process,
+      onChanged: (val) => setState(() => _process = val),
+      validator: (val) => val == null || val.isEmpty ? 'Process context required' : null,
+      hint: 'Select process',
+    );
+  }
+
+  Widget _buildRemarksField() {
+    return TextFormField(
+      controller: _remarksController,
+      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+      decoration: const InputDecoration(
+        labelText: 'Technical Remarks',
+        hintText: 'Optional documentation details',
+        prefixIcon: Icon(LucideIcons.fileText, size: 18),
+      ),
+      maxLines: 3,
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return ElevatedButton(
+      onPressed: _isSaving ? null : _save,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        backgroundColor: ColorPalette.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 0,
+      ),
+      child: _isSaving
+          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : const Text('FINALIZE REGISTRATION', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
     );
   }
 }

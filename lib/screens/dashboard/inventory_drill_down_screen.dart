@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:printing/printing.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
 import '../../services/report_print_service.dart';
+import '../../widgets/responsive_wrapper.dart';
 
 class InventoryDrillDownScreen extends StatefulWidget {
   final String type; // 'opening', 'inward', 'outward', 'closing'
@@ -35,6 +37,8 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   final _printService = ReportPrintService();
   List<dynamic> _data = [];
   bool _isLoading = true;
+  int _currentPage = 0;
+  static const int _pageSize = 10;
 
   @override
   void initState() {
@@ -43,7 +47,10 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   }
 
   Future<void> _fetchData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _currentPage = 0;
+    });
     try {
       final res = await _api.getInventoryDrillDown(
         type: widget.type,
@@ -68,6 +75,15 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
     }
   }
 
+  List<dynamic> get _paginatedData {
+    int start = _currentPage * _pageSize;
+    int end = start + _pageSize;
+    if (end > _data.length) end = _data.length;
+    return _data.sublist(start, end);
+  }
+
+  int get _totalPages => (_data.length / _pageSize).ceil();
+
   String get _title {
     String t = widget.type.toUpperCase();
     if (widget.lotName != null) t = widget.lotName!;
@@ -82,7 +98,6 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
     if (widget.lotNo == null) return 'LOT NUMBER';
     if (widget.dia == null) return 'DIA';
     
-    // Check if the current data contains color-level markers (from skipped Set level)
     final bool isColorLevelFromSkip = _data.isNotEmpty && _data.any((item) => item['isColorLevel'] == true);
     if (widget.setNo == null && !isColorLevelFromSkip) return 'SET';
     
@@ -103,43 +118,42 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(
-          _title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        elevation: 0,
+        title: Text(_title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
         backgroundColor: Colors.white,
         foregroundColor: ColorPalette.textPrimary,
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.printer, size: 20),
+            icon: const Icon(LucideIcons.printer, size: 18),
             onPressed: () => _handlePrint(share: false),
             tooltip: 'Print PDF',
           ),
           IconButton(
-            icon: const Icon(LucideIcons.share2, size: 20),
+            icon: const Icon(LucideIcons.share2, size: 18),
             onPressed: () => _handlePrint(share: true),
             tooltip: 'Share PDF',
           ),
           IconButton(
-            icon: const Icon(LucideIcons.refreshCw, size: 20),
+            icon: const Icon(LucideIcons.refreshCw, size: 18),
             onPressed: _fetchData,
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          _buildPathBreadcrumbs(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _data.isEmpty
-                    ? _buildEmptyState()
-                    : _buildDataTable(),
-          ),
-        ],
+      body: ResponsiveWrapper(
+        child: Column(
+          children: [
+            _buildPathBreadcrumbs(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _data.isEmpty
+                      ? _buildEmptyState()
+                      : _buildDataTable(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -153,8 +167,8 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
 
     return Container(
       width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: ColorPalette.background,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -164,14 +178,18 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
               children: [
                 Text(
                   entry.value,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isLast ? FontWeight.bold : FontWeight.normal,
-                    color: isLast ? _themeColor : Colors.grey,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: isLast ? FontWeight.w800 : FontWeight.w600,
+                    color: isLast ? _themeColor : ColorPalette.textMuted,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 if (!isLast)
-                  const Icon(LucideIcons.chevronRight, size: 14, color: Colors.grey),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(LucideIcons.chevronRight, size: 12, color: ColorPalette.textMuted),
+                  ),
               ],
             );
           }).toList(),
@@ -185,11 +203,11 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.packageOpen, size: 64, color: Colors.grey.shade300),
+          Icon(LucideIcons.packageOpen, size: 48, color: ColorPalette.border),
           const SizedBox(height: 16),
-          const Text(
-            'No inventory data found',
-            style: TextStyle(color: Colors.grey, fontSize: 16),
+          Text(
+            'No inventory data available.',
+            style: GoogleFonts.inter(color: ColorPalette.textMuted, fontSize: 14),
           ),
         ],
       ),
@@ -197,163 +215,228 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   }
 
   Widget _buildDataTable() {
-    return Column(
-      children: [
-        // Header Row
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: _themeColor.withOpacity(0.05),
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-          ),
-          child: Row(
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: ColorPalette.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Header Row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC), // Ultra-clean slate header
+                border: Border(bottom: BorderSide(color: ColorPalette.border.withOpacity(0.8))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Text(_levelLabel,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 10, color: ColorPalette.textMuted, letterSpacing: 0.8)),
+                  ),
+                  Expanded(
+                    flex: widget.setNo != null ? 2 : 1,
+                    child: Text('ROLLS',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 10, color: ColorPalette.textMuted, letterSpacing: 0.8)),
+                  ),
+                  if (widget.setNo != null || (_data.isNotEmpty && _data.any((i) => i['isColorLevel'] == true)))
+                    Expanded(
+                      flex: 2,
+                      child: Text(widget.type == 'inward' ? 'INW DATE' : 'OUT DATE',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 10, color: ColorPalette.textMuted, letterSpacing: 0.8)),
+                    ),
+                  Expanded(
+                    flex: 2,
+                    child: Text('WEIGHT',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 10, color: ColorPalette.textMuted, letterSpacing: 0.8)),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text('VALUE',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 10, color: ColorPalette.textMuted, letterSpacing: 0.8)),
+                  ),
+                  const SizedBox(width: 32),
+                ],
+              ),
+            ),
+            // Data Body
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: _paginatedData.length,
+                itemBuilder: (context, index) {
+                  final item = _paginatedData[index];
+                  final bool canDrill = !(widget.setNo != null || item['isColorLevel'] == true);
+                  final bool isAlternate = index % 2 != 0;
+                  
+                  return InkWell(
+                    onTap: canDrill ? () => _navigateToNextLevel(item) : null,
+                    hoverColor: ColorPalette.primary.withOpacity(0.04),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: isAlternate ? const Color(0xFFFDFDFD) : Colors.white,
+                        border: Border(bottom: BorderSide(color: ColorPalette.border.withOpacity(0.5))),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item['name'] ?? 'N/A',
+                                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13, color: ColorPalette.textPrimary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (!canDrill) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Rack: ${item['rack'] ?? 'N/A'} | Pallet: ${item['pallet'] ?? 'N/A'}',
+                                    style: GoogleFonts.inter(fontSize: 10, color: ColorPalette.textMuted, fontWeight: FontWeight.w500),
+                                  ),
+                                  Text(
+                                    'GSM: ${item['gsm'] ?? 'N/A'} | Inw: ${item['inwardNo'] ?? 'N/A'}',
+                                    style: GoogleFonts.inter(fontSize: 10, color: ColorPalette.textMuted, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: (widget.setNo != null || item['isColorLevel'] == true) ? 2 : 1,
+                            child: Text(
+                              item['totalRolls'].toString(),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          if (widget.setNo != null || item['isColorLevel'] == true)
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                item['date'] != null ? FormatUtils.formatDate(item['date']) : 'N/A',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(fontSize: 12),
+                              ),
+                            ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '${item['totalWeight']} Kg',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '₹${FormatUtils.formatCurrency(item['totalValue'])}',
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: ColorPalette.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 24,
+                            alignment: Alignment.centerRight,
+                            child: canDrill 
+                                ? Icon(LucideIcons.chevronRight, size: 14, color: ColorPalette.primary.withOpacity(0.3))
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            _buildPaginationFooter(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationFooter() {
+    if (_totalPages <= 1) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(top: BorderSide(color: ColorPalette.border)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
             children: [
-              Expanded(
-                flex: 4,
-                child: Text(_levelLabel,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+              Text(
+                'SHOWING ',
+                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
               ),
-              Expanded(
-                flex: widget.setNo != null ? 2 : 1,
-                child: Text('ROLLS',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+              Text(
+                '${(_currentPage * _pageSize) + 1} - ${(_currentPage * _pageSize) + _paginatedData.length}',
+                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary),
               ),
-              if (widget.setNo != null || (_data.isNotEmpty && _data.any((i) => i['isColorLevel'] == true)))
-                Expanded(
-                  flex: 2,
-                  child: Text(widget.type == 'inward' ? 'INW DATE' : 'OUT DATE',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
-                ),
-              Expanded(
-                flex: 2,
-                child: Text('WEIGHT',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
-              ),
-              if (widget.lotName != null && widget.lotNo == null)
-                Expanded(
-                  flex: 1,
-                  child: Text('DAYS',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
-                ),
-              Expanded(
-                flex: 2,
-                child: Text('VALUE',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+              Text(
+                ' OF ${_data.length}',
+                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
               ),
             ],
           ),
-        ),
-        // Data Body
-        Expanded(
-          child: ListView.separated(
-            padding: EdgeInsets.zero,
-            itemCount: _data.length,
-            separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade100),
-            itemBuilder: (context, index) {
-              final item = _data[index];
-              return InkWell(
-                onTap: (widget.setNo != null || item['isColorLevel'] == true) ? null : () => _navigateToNextLevel(item),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  color: Colors.white,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item['name'] ?? 'N/A',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (widget.setNo != null || item['isColorLevel'] == true) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'Rack: ${item['rack'] ?? 'N/A'} | Pallet: ${item['pallet'] ?? 'N/A'}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
-                              ),
-                              Text(
-                                'GSM: ${item['gsm'] ?? 'N/A'} | Inw: ${item['inwardNo'] ?? 'N/A'}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
-                              ),
-                              if (item['date'] != null)
-                                Text(
-                                  'Date: ${FormatUtils.formatDate(item['date'])}',
-                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                ),
-                            ],
-                            if (widget.setNo == null && item['isColorLevel'] != true)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Tap to view details',
-                                  style: TextStyle(fontSize: 10, color: _themeColor.withOpacity(0.7)),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: (widget.setNo != null || item['isColorLevel'] == true) ? 2 : 1,
-                        child: Text(
-                          item['totalRolls'].toString(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ),
-                      if (widget.setNo != null || item['isColorLevel'] == true)
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            item['date'] != null ? FormatUtils.formatDate(item['date']) : 'N/A',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          '${item['totalWeight']} Kg',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                      if (widget.lotName != null && widget.lotNo == null)
-                        Expanded(
-                          flex: 1,
-                          child: Text(
-                            (item['days'] ?? '0').toString(),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          '₹${FormatUtils.formatCurrency(item['totalValue'])}',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: ColorPalette.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+          Row(
+            children: [
+              _buildPaginationButton(
+                LucideIcons.chevronLeft,
+                _currentPage > 0 ? () => setState(() => _currentPage--) : null,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Page ${_currentPage + 1} of $_totalPages',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
+              ),
+              const SizedBox(width: 12),
+              _buildPaginationButton(
+                LucideIcons.chevronRight,
+                _currentPage < _totalPages - 1 ? () => setState(() => _currentPage++) : null,
+              ),
+            ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationButton(IconData icon, VoidCallback? onTap) {
+    bool isEnabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          border: Border.all(color: isEnabled ? ColorPalette.border : Colors.grey.shade100),
+          borderRadius: BorderRadius.circular(6),
         ),
-      ],
+        child: Icon(icon, size: 16, color: isEnabled ? ColorPalette.textPrimary : Colors.grey.shade300),
+      ),
     );
   }
 
@@ -377,7 +460,6 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   Future<void> _handlePrint({bool share = false}) async {
     if (_data.isEmpty) return;
 
-    final subtitle = _buildPathBreadcrumbs().toString(); // Or a custom one
     final headers = [
       _levelLabel,
       'ROLLS',

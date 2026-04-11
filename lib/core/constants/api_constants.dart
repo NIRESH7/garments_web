@@ -94,19 +94,18 @@ class ApiConstants {
     if (path == null || path.toString().isEmpty) return '';
     String imageUrl = path.toString();
 
-    // If it's a full S3 URL or already absolute, return as is
-    if (imageUrl.startsWith('http')) return imageUrl;
-
-    // Handle relative paths: remove leading slash
-    imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-
-    // Special Check for S3 URLs to solve CORS on Web
-    if (imageUrl.startsWith('https://garments-app-storage.s3.us-east-1.amazonaws.com')) {
-        // Return proxied URL
-        return '${ApiConstants.serverUrl}/api/proxy-image?url=$imageUrl';
+    // 1. S3 Proxy Check (Priority for Web CORS)
+    if (imageUrl.contains('s3.us-east-1.amazonaws.com')) {
+      return '${ApiConstants.serverUrl}/api/proxy-image?url=$imageUrl';
     }
 
-    // If the path starts with 'uploads/', it's already properly formatted relative to serverUrl
+    // 2. Absolute URL check (External images)
+    if (imageUrl.startsWith('http')) return imageUrl;
+
+    // 3. Relative path handling
+    imageUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+
+    // 4. Server uploads fallback
     return '${ApiConstants.serverUrl}/$imageUrl';
   }
 }

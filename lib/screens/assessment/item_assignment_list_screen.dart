@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:intl/intl.dart';
+
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/constants/api_constants.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:intl/intl.dart';
+import '../../core/constants/layout_constants.dart';
+import '../../core/layout/web_layout_wrapper.dart';
+import '../../services/lot_allocation_print_service.dart';
 import 'cutting_master_form_screen.dart';
 import 'accessories_master_form_screen.dart';
-import '../../services/lot_allocation_print_service.dart';
+
 
 class ItemAssignmentListScreen extends StatefulWidget {
   const ItemAssignmentListScreen({super.key});
@@ -101,24 +108,42 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isWeb = LayoutConstants.isWeb(context);
+    
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        backgroundColor: isWeb ? ColorPalette.background : ColorPalette.background,
         appBar: AppBar(
-          title: const Text('Item Assignments'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Cutting Master'),
-              Tab(text: 'Accessories Master'),
-            ],
+          title: Text('LOGISTICS ASSIGNMENT', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1)),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(50),
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: isWeb ? 0 : 24, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: TabBar(
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: ColorPalette.primary.withOpacity(0.1),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                labelColor: ColorPalette.primary,
+                unselectedLabelColor: ColorPalette.textSecondary,
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+                tabs: const [
+                  Tab(text: 'CUTTING MASTER'),
+                  Tab(text: 'ACCESSORIES'),
+                ],
+              ),
+            ),
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildCuttingMasterList(),
-            _buildAccessoriesMasterList(),
-          ],
-        ),
+        body: isWeb ? _buildWebLayout() : _buildMobileLayout(),
         floatingActionButton: Builder(
           builder: (context) => FloatingActionButton.extended(
             onPressed: () async {
@@ -132,314 +157,45 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
               );
               if (result == true) _loadData();
             },
-            label: const Text('Add Assignment'),
-            icon: const Icon(Icons.add),
+            backgroundColor: ColorPalette.primary,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            label: Text(isWeb ? 'NEW ASSIGNMENT' : 'NEW', style: const TextStyle(fontWeight: FontWeight.w700)),
+            icon: Icon(LucideIcons.plus, size: 18),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCuttingMasterList() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_cuttingMasters.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.assignment_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            const Text('No cutting master entries found', style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-
-    final cutting = _cuttingMasters ?? [];
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: cutting.length,
-        itemBuilder: (context, index) {
-          final entry = cutting[index];
-          final String itemName = entry['itemName'] ?? 'Unknown Item';
-          final String size = entry['size'] ?? 'N/A';
-          final String lotName = entry['lotName'] ?? 'N/A';
-          final String date = entry['createdAt'] != null
-              ? DateFormat('dd MMM yyyy').format(DateTime.parse(entry['createdAt']))
-              : 'N/A';
-          final String? imageUrl = entry['itemImage'];
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFF1F5F9)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F172A).withOpacity(0.04),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(28),
-              onTap: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CuttingMasterFormScreen(entryId: entry['_id'])),
-                );
-                if (result == true) _loadData();
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            color: const Color(0xFF3B82F6).withOpacity(0.08),
-                          ),
-                          child: (imageUrl != null && imageUrl.isNotEmpty)
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Image.network(
-                                    ApiConstants.getImageUrl(imageUrl),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => const Icon(Icons.style_outlined, color: Color(0xFF3B82F6)),
-                                  ),
-                                )
-                              : const Icon(Icons.style_outlined, color: Color(0xFF3B82F6), size: 32),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                itemName,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.5),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _infoChip(Icons.straighten_outlined, size, Colors.orange),
-                                  _infoChip(Icons.label_outline, lotName, Colors.blue),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade400),
-                                  const SizedBox(width: 6),
-                                  Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            _actionIcon(Icons.share_outlined, Colors.green, () => _shareCutting(entry)),
-                            const SizedBox(width: 8),
-                            _actionIcon(Icons.print_outlined, Colors.purple, () => _print(entry, true)),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            _actionIcon(Icons.edit_outlined, Colors.blue, () async {
-                              final result = await Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => CuttingMasterFormScreen(entryId: entry['_id'])),
-                              );
-                              if (result == true) _loadData();
-                            }),
-                            const SizedBox(width: 8),
-                            _actionIcon(Icons.delete_outline, Colors.red, () => _deleteCutting(entry['_id'])),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildAccessoriesMasterList() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    final accessories = _accessoriesMasters ?? [];
-    if (accessories.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            const Text('No accessories master entries found', style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: accessories.length,
-        itemBuilder: (context, index) {
-          final entry = accessories[index];
-          final groups = (entry['groupSetup'] as List?)?.map((e) => e['group']).toList().join(', ') ?? '';
-          final items = (entry['itemAssignment'] as List?)?.map((e) => e['itemName']).toList().join(', ') ?? '';
-          final String date = entry['createdAt'] != null
-              ? DateFormat('dd MMM yyyy').format(DateTime.parse(entry['createdAt']))
-              : 'N/A';
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFF1F5F9)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F172A).withOpacity(0.04),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(28),
-              onTap: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => AccessoriesMasterFormScreen(editEntry: entry)),
-                );
-                if (result == true) _loadData();
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            color: const Color(0xFF10B981).withOpacity(0.08),
-                          ),
-                          child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF10B981), size: 32),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                groups.isEmpty ? 'Accessories Master' : groups,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.5),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Items: ${items.isEmpty ? "None" : items}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 13),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade400),
-                                  const SizedBox(width: 6),
-                                  Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            _actionIcon(Icons.share_outlined, Colors.green, () => _shareAccessory(entry)),
-                            const SizedBox(width: 8),
-                            _actionIcon(Icons.print_outlined, Colors.purple, () => _print(entry, false)),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            _actionIcon(Icons.edit_outlined, Colors.blue, () async {
-                              final result = await Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => AccessoriesMasterFormScreen(editEntry: entry)),
-                              );
-                              if (result == true) _loadData();
-                            }),
-                            const SizedBox(width: 8),
-                            _actionIcon(Icons.delete_outline, Colors.red, () => _deleteAccessory(entry['_id'])),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _infoChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildWebLayout() {
+    return WebLayoutWrapper(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
           Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: color,
+            'Item Assignment Management',
+            style: GoogleFonts.inter(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: ColorPalette.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Manage cutting protocols and accessory assignments',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: ColorPalette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildCuttingMasterList(),
+                _buildAccessoriesMasterList(),
+              ],
             ),
           ),
         ],
@@ -447,30 +203,284 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> {
     );
   }
 
-  Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Icon(icon, size: 20, color: color),
+  Widget _buildMobileLayout() {
+    return TabBarView(
+      children: [
+        _buildCuttingMasterList(),
+        _buildAccessoriesMasterList(),
+      ],
+    );
+  }
+
+  Widget _buildCuttingMasterList() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_cuttingMasters.isEmpty) return _buildEmptyState(LucideIcons.scissors, 'No cutting protocols defined');
+
+    final isWeb = LayoutConstants.isWeb(context);
+    
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: isWeb
+          ? GridView.builder(
+              padding: const EdgeInsets.all(24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 24,
+                mainAxisSpacing: 24,
+                mainAxisExtent: 200,
+              ),
+              itemCount: _cuttingMasters.length,
+              itemBuilder: (context, index) {
+                final entry = _cuttingMasters[index];
+                return _buildAssignmentCard(
+                  title: entry['itemName'] ?? 'Unnamed Item',
+                  subtitle: 'Lot: ${entry['lotName']} • Size: ${entry['size']}',
+                  date: entry['createdAt'],
+                  imageUrl: entry['itemImage'],
+                  icon: LucideIcons.scissors,
+                  color: Colors.blue,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => CuttingMasterFormScreen(entryId: entry['_id'])),
+                    );
+                    if (result == true) _loadData();
+                  },
+                  onDelete: () => _deleteCutting(entry['_id']),
+                  onShare: () => _shareCutting(entry),
+                  onPrint: () => _print(entry, true),
+                ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.05);
+              },
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(24),
+              itemCount: _cuttingMasters.length,
+              itemBuilder: (context, index) {
+                final entry = _cuttingMasters[index];
+                return _buildAssignmentCard(
+                  title: entry['itemName'] ?? 'Unnamed Item',
+                  subtitle: 'Lot: ${entry['lotName']} • Size: ${entry['size']}',
+                  date: entry['createdAt'],
+                  imageUrl: entry['itemImage'],
+                  icon: LucideIcons.scissors,
+                  color: Colors.blue,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => CuttingMasterFormScreen(entryId: entry['_id'])),
+                    );
+                    if (result == true) _loadData();
+                  },
+                  onDelete: () => _deleteCutting(entry['_id']),
+                  onShare: () => _shareCutting(entry),
+                  onPrint: () => _print(entry, true),
+                ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.05);
+              },
+            ),
+    );
+  }
+
+  Widget _buildAccessoriesMasterList() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_accessoriesMasters.isEmpty) return _buildEmptyState(LucideIcons.package, 'No accessory matrix found');
+
+    final isWeb = LayoutConstants.isWeb(context);
+    
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: isWeb
+          ? GridView.builder(
+              padding: const EdgeInsets.all(24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 24,
+                mainAxisSpacing: 24,
+                mainAxisExtent: 200,
+              ),
+              itemCount: _accessoriesMasters.length,
+              itemBuilder: (context, index) {
+                final entry = _accessoriesMasters[index];
+                final groups = (entry['groupSetup'] as List?)?.map((e) => e['group']).toList().join(', ') ?? '';
+                final items = (entry['itemAssignment'] as List?)?.map((e) => e['itemName']).toList().join(', ') ?? '';
+
+                return _buildAssignmentCard(
+                  title: groups.isEmpty ? 'Accessories Protocol' : groups,
+                  subtitle: 'Items: ${items.isEmpty ? "All" : items}',
+                  date: entry['createdAt'],
+                  icon: LucideIcons.package,
+                  color: ColorPalette.success,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => AccessoriesMasterFormScreen(editEntry: entry)),
+                    );
+                    if (result == true) _loadData();
+                  },
+                  onDelete: () => _deleteAccessory(entry['_id']),
+                  onShare: () => _shareAccessory(entry),
+                  onPrint: () => _print(entry, false),
+                ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.05);
+              },
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(24),
+              itemCount: _accessoriesMasters.length,
+              itemBuilder: (context, index) {
+                final entry = _accessoriesMasters[index];
+                final groups = (entry['groupSetup'] as List?)?.map((e) => e['group']).toList().join(', ') ?? '';
+                final items = (entry['itemAssignment'] as List?)?.map((e) => e['itemName']).toList().join(', ') ?? '';
+
+                return _buildAssignmentCard(
+                  title: groups.isEmpty ? 'Accessories Protocol' : groups,
+                  subtitle: 'Items: ${items.isEmpty ? "All" : items}',
+                  date: entry['createdAt'],
+                  icon: LucideIcons.package,
+                  color: ColorPalette.success,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => AccessoriesMasterFormScreen(editEntry: entry)),
+                    );
+                    if (result == true) _loadData();
+                  },
+                  onDelete: () => _deleteAccessory(entry['_id']),
+                  onShare: () => _shareAccessory(entry),
+                  onPrint: () => _print(entry, false),
+                ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.05);
+              },
+            ),
+    );
+  }
+
+  Widget _buildEmptyState(IconData icon, String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 64, color: ColorPalette.textMuted.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          Text(message, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary)),
+        ],
       ),
     );
   }
 
-  Widget _placeholderIcon() {
+  Widget _buildAssignmentCard({
+    required String title,
+    required String subtitle,
+    required dynamic date,
+    String? imageUrl,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    required VoidCallback onDelete,
+    required VoidCallback onShare,
+    required VoidCallback onPrint,
+  }) {
+    final formattedDate = date != null ? DateFormat('dd MMM yyyy').format(DateTime.parse(date.toString())) : 'N/A';
+
     return Container(
-      width: 50,
-      height: 50,
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: ColorPalette.softShadow,
       ),
-      child: const Icon(Icons.image_outlined, color: Colors.grey),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _buildCardImage(imageUrl, icon, color),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16, color: ColorPalette.textPrimary),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13, color: ColorPalette.textSecondary),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(LucideIcons.calendar, size: 12, color: ColorPalette.textMuted),
+                            const SizedBox(width: 6),
+                            Text(formattedDate, style: const TextStyle(fontSize: 11, color: ColorPalette.textMuted, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _actionIcon(LucideIcons.share2, Colors.green, onShare),
+                  const SizedBox(width: 8),
+                  _actionIcon(LucideIcons.printer, Colors.purple, onPrint),
+                  const Spacer(),
+                  _actionIcon(LucideIcons.pencil, Colors.blue, onTap),
+                  const SizedBox(width: 8),
+                  _actionIcon(LucideIcons.trash2, ColorPalette.error, onDelete),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardImage(String? imageUrl, IconData fallbackIcon, Color color) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.1)),
+      ),
+      child: (imageUrl != null && imageUrl.isNotEmpty)
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.network(
+                ApiConstants.getImageUrl(imageUrl),
+                fit: BoxFit.cover,
+                errorBuilder: (c, e, s) => Icon(fallbackIcon, color: color, size: 24),
+              ),
+            )
+          : Icon(fallbackIcon, color: color, size: 24),
+    );
+  }
+
+  Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 16, color: color),
+      ),
     );
   }
 }

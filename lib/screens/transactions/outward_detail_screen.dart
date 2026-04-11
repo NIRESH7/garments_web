@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/theme/color_palette.dart';
 import '../../services/outward_print_service.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
+import '../../widgets/responsive_wrapper.dart';
 
 class OutwardDetailScreen extends StatefulWidget {
   final Map<String, dynamic> outward;
@@ -119,50 +123,53 @@ class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: ColorPalette.background,
       appBar: AppBar(
-        title: const Text('Outward Details'),
-        backgroundColor: Colors.orange,
+        title: Text('OUTWARD ANALYSIS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1)),
+        backgroundColor: Colors.white,
+        foregroundColor: ColorPalette.textPrimary,
         actions: [
           if (_isRecovering)
-            const Center(
+            Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
+                   width: 16,
+                   height: 16,
+                   child: CircularProgressIndicator(
+                     color: ColorPalette.primary,
+                     strokeWidth: 2,
+                   ),
                 ),
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: () => _printReport(context),
-            tooltip: 'Print Report',
+            onPressed: () => OutwardPrintService().printOutwardReport(_outward),
+            icon: Icon(LucideIcons.printer, size: 18),
           ),
           IconButton(
-            icon: const Icon(Icons.share),
             onPressed: () => _shareDetails(context),
-            tooltip: 'Share Details',
+            icon: Icon(LucideIcons.share2, size: 18),
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeaderCard(),
-            const SizedBox(height: 16),
-            _buildPartyCard(),
-            const SizedBox(height: 16),
-            _buildItemsCard(),
-            const SizedBox(height: 16),
-            _buildSignaturesCard(),
-            const SizedBox(height: 32),
-          ],
+      body: ResponsiveWrapper(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeaderCard(),
+              const SizedBox(height: 16),
+              _buildPartyCard(),
+              const SizedBox(height: 16),
+              _buildItemsCard(),
+              const SizedBox(height: 16),
+              _buildSignaturesCard(),
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );

@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../core/theme/color_palette.dart';
-import '../../services/mobile_api_service.dart';
-import '../../widgets/custom_dropdown_field.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+
+import '../../core/theme/color_palette.dart';
+import '../../core/constants/layout_constants.dart';
+import '../../core/layout/web_layout_wrapper.dart';
+import '../../services/mobile_api_service.dart';
+import '../../widgets/custom_dropdown_field.dart';
 import '../../utils/print_utils.dart';
+
 
 class GodownStockReportScreen extends StatefulWidget {
   const GodownStockReportScreen({super.key});
@@ -167,36 +172,233 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isWeb = LayoutConstants.isWeb(context);
+    
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: isWeb ? ColorPalette.background : ColorPalette.background,
       appBar: AppBar(
-        title: const Text('Godown Stock (Min/Max)'),
-        elevation: 0,
+        title: Text('STOCK FORECASTING', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1)),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.printer, size: 20),
+            icon: const Icon(LucideIcons.printer, size: 18),
             onPressed: () async => Printing.layoutPdf(
               onLayout: (format) async => (await _generatePDF()).save(),
             ),
           ),
           IconButton(
-            icon: const Icon(LucideIcons.share2, size: 20),
+            icon: const Icon(LucideIcons.share2, size: 18),
             onPressed: _shareReport,
           ),
           IconButton(
-            icon: const Icon(LucideIcons.refreshCw, size: 20),
+            icon: const Icon(LucideIcons.refreshCw, size: 18),
             onPressed: _fetchReport,
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Column(
+      body: isWeb ? _buildWebLayout() : _buildMobileLayout(),
+    );
+  }
+
+  Widget _buildWebLayout() {
+    return WebLayoutWrapper(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'Stock Forecasting Report',
+            style: GoogleFonts.inter(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: ColorPalette.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Monitor inventory levels and replenishment requirements',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: ColorPalette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 24),
           _buildFilters(),
+          const SizedBox(height: 16),
           _buildSummaryHeader(),
+          const SizedBox(height: 24),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _buildReportTable(),
+                : _buildWebReportTable(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        _buildFilters(),
+        _buildSummaryHeader(),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _buildReportTable(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWebReportTable() {
+    if (_reportData.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.package2, size: 64, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              'No stock movements captured yet',
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Table Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: ColorPalette.background,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Expanded(flex: 2, child: Text('LOT/DIA', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                  Expanded(flex: 2, child: Text('CURRENT STOCK', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                  Expanded(flex: 1, child: Text('MIN', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                  Expanded(flex: 1, child: Text('MAX', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                  Expanded(flex: 1, child: Text('NEED WT', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                  Expanded(flex: 1, child: Text('NEED ROLL', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                  Expanded(flex: 1, child: Text('STATUS', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Table Rows
+            Expanded(
+              child: ListView.separated(
+                itemCount: _reportData.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) => _buildWebReportRow(_reportData[index]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebReportRow(Map<String, dynamic> item) {
+    final status = item['status'];
+    Color statusColor = Colors.green;
+    if (status == 'LOW STOCK') statusColor = Colors.red;
+    if (status == 'HIGH STOCK') statusColor = Colors.orange;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['lotName'],
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                Text(
+                  'DIA ${item['dia']}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item['currentWeight'].toStringAsFixed(1)}kg',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                if (item['outsideInput'] != 0)
+                  Text(
+                    'Adj: ${item['outsideInput']}kg',
+                    style: const TextStyle(fontSize: 10, color: Colors.blue),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${item['minWeight']}',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${item['maxWeight']}',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${item['needWeight'].toStringAsFixed(1)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: ColorPalette.primary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${(item['needWeight'] / 20).toStringAsFixed(1)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                status,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -451,11 +653,13 @@ class _SummaryBox extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
+
   const _SummaryBox({
+    Key? key,
     required this.label,
     required this.count,
     required this.color,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

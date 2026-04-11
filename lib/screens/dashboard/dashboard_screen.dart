@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/constants/layout_constants.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
+import '../../widgets/responsive_layout_shell.dart';
 import '../masters/masters_dashboard.dart';
 import '../transactions/lot_inward_screen.dart';
 import '../transactions/lot_outward_screen.dart';
@@ -32,6 +35,9 @@ import '../packing/iron_packing_dc_screen.dart';
 import '../reports/cut_stock_report_screen.dart';
 import '../reports/cutting_entry_report_screen.dart';
 // ────────────────────────────────────────────────────────────────────────
+import '../settings/scale_settings_screen.dart';
+import '../settings/theme_settings_screen.dart';
+import '../chat/chat_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -42,86 +48,149 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _pageIndex = 0;
+  final GlobalKey<InwardListScreenState> _inwardKey = GlobalKey<InwardListScreenState>();
+
+  String _getShellTitle() {
+    switch (_pageIndex) {
+      case 0: return 'Executive Dashboard';
+      case 1: return 'Masters Dashboard';
+      case 2: return 'Inward Transactions';
+      case 3: return 'Outward Transactions';
+      case 4: return 'Task Management';
+      case 5: return 'Item Assignments';
+      case 6: return 'Cutting Planning';
+      case 7: return 'Reports Dashboard';
+      default: return 'Executive Dashboard';
+    }
+  }
+
+  List<Widget>? _getHeaderActions() {
+    if (_pageIndex == 2) {
+      return [
+        IconButton(
+          onPressed: () => _inwardKey.currentState?.fetchInwards(),
+          icon: const Icon(LucideIcons.refreshCw, size: 16, color: ColorPalette.textMuted),
+          tooltip: 'REFRESH INWARDS',
+        ),
+      ];
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ColorPalette.background,
-      body: IndexedStack(
-        index: _pageIndex,
-        children: [
-          const _DynamicDataHomeTab(),
-          const MastersDashboard(),
-          const _TransactionPlaceholder(),
-          const ItemAssignmentListScreen(),
-          const ReportsDashboard(),
-        ],
-      ),
-      drawer: const AppDrawer(),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: CurvedNavigationBar(
-          backgroundColor: Colors.transparent,
-          color: Colors.white,
-          buttonBackgroundColor: Colors.white,
-          height: 65,
-          index: _pageIndex,
-          items: <Widget>[
-            Icon(
-              LucideIcons.home,
-              size: 26,
-              color: _pageIndex == 0
-                  ? Theme.of(context).primaryColor
-                  : ColorPalette.textSecondary,
-            ),
-            Icon(
-              LucideIcons.database,
-              size: 26,
-              color: _pageIndex == 1
-                  ? Theme.of(context).primaryColor
-                  : ColorPalette.textSecondary,
-            ),
-            Icon(
-              LucideIcons.arrowUpDown,
-              size: 26,
-              color: _pageIndex == 2
-                  ? Theme.of(context).primaryColor
-                  : ColorPalette.textSecondary,
-            ),
-            Icon(
-              LucideIcons.clipboardCheck,
-              size: 26,
-              color: _pageIndex == 3
-                  ? Theme.of(context).primaryColor
-                  : ColorPalette.textSecondary,
-            ),
-            Icon(
-              LucideIcons.barChart3,
-              size: 26,
-              color: _pageIndex == 4
-                  ? Theme.of(context).primaryColor
-                  : ColorPalette.textSecondary,
-            ),
-          ],
-          animationDuration: const Duration(milliseconds: 300),
-          onTap: (index) {
-            if (index == 2) {
-              _showTransactionsMenu(context);
-            } else {
-              setState(() {
-                _pageIndex = index;
-              });
+    return ResponsiveLayoutShell(
+      title: _getShellTitle(),
+      headerActions: _getHeaderActions(),
+      selectedIndex: _pageIndex,
+      onIndexChanged: (index) {
+        if (LayoutConstants.isWeb(context)) {
+          if (index >= 9) {
+            // Handle System/Settings as Navigation
+            Widget target;
+            switch (index) {
+              case 9: target = const ScaleSettingsScreen(); break;
+              case 10: target = const ThemeSettingsScreen(); break;
+              case 11: target = const ChatScreen(); break;
+              default: return;
             }
-          },
+            Navigator.push(context, MaterialPageRoute(builder: (context) => target));
+            return;
+          }
+          setState(() => _pageIndex = index);
+        } else {
+          if (index == 2) {
+            _showTransactionsMenu(context);
+          } else {
+            setState(() {
+              _pageIndex = index;
+            });
+          }
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: IndexedStack(
+          index: _pageIndex >= 9 ? 0 : _pageIndex, // Keep on home if navigating away
+          children: [
+            const _DynamicDataHomeTab(),              // 0
+            const MastersDashboard(),                 // 1
+            InwardListScreen(key: _inwardKey),        // 2
+            const OutwardListScreen(),                // 3
+            const WorkerTaskDashboardScreen(),        // 4
+            const ItemAssignmentListScreen(),         // 5
+            const CuttingOrderPlanningScreen(),       // 6
+            const ReportsDashboard(),                 // 7
+            const _HistoryPlaceholder(),              // 8
+          ],
         ),
+        bottomNavigationBar: LayoutConstants.isMobile(context) 
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: CurvedNavigationBar(
+                backgroundColor: Colors.transparent,
+                color: Colors.white,
+                buttonBackgroundColor: Colors.white,
+                height: 65,
+                index: _pageIndex,
+                items: <Widget>[
+                  Icon(
+                    LucideIcons.home,
+                    size: 26,
+                    color: _pageIndex == 0
+                        ? Theme.of(context).primaryColor
+                        : ColorPalette.textSecondary,
+                  ),
+                  Icon(
+                    LucideIcons.database,
+                    size: 26,
+                    color: _pageIndex == 1
+                        ? Theme.of(context).primaryColor
+                        : ColorPalette.textSecondary,
+                  ),
+                  Icon(
+                    LucideIcons.arrowUpDown,
+                    size: 26,
+                    color: _pageIndex == 2
+                        ? Theme.of(context).primaryColor
+                        : ColorPalette.textSecondary,
+                  ),
+                  Icon(
+                    LucideIcons.clipboardCheck,
+                    size: 26,
+                    color: _pageIndex == 3
+                        ? Theme.of(context).primaryColor
+                        : ColorPalette.textSecondary,
+                  ),
+                  Icon(
+                    LucideIcons.barChart3,
+                    size: 26,
+                    color: _pageIndex == 4
+                        ? Theme.of(context).primaryColor
+                        : ColorPalette.textSecondary,
+                  ),
+                ],
+                animationDuration: const Duration(milliseconds: 300),
+                onTap: (index) {
+                  if (index == 2) {
+                    _showTransactionsMenu(context);
+                  } else {
+                    setState(() {
+                      _pageIndex = index;
+                    });
+                  }
+                },
+              ),
+            )
+          : null,
       ),
     );
   }
@@ -468,210 +537,95 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isWeb = LayoutConstants.isWeb(context);
+    
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _fetchStats,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(isWeb ? 32.0 : 24.0),
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Stock Summary',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: ColorPalette.textPrimary,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isWeb ? LayoutConstants.maxContentWidth : double.infinity,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Stock Summary',
+                      style: GoogleFonts.inter(
+                        fontSize: isWeb ? 24 : 18,
+                        fontWeight: FontWeight.w700,
+                        color: ColorPalette.textPrimary,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(LucideIcons.filter),
-                    onPressed: _showFilterDialog,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ],
-              ),
-              if (_startDate != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Chip(
-                    label: Text(
-                      '${_startDate!.day}/${_startDate!.month} - ${_endDate!.day}/${_endDate!.month}',
+                    InkWell(
+                      onTap: _showFilterDialog,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: ColorPalette.border),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(LucideIcons.filter, size: 14, color: ColorPalette.textSecondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'FILTER',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: ColorPalette.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    onDeleted: () {
-                      setState(() {
-                        _startDate = null;
-                        _endDate = null;
-                      });
-                      _fetchStats();
-                    },
-                  ),
+                  ],
                 ),
-              const SizedBox(height: 24),
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildStockSummaryGrid(),
-              if ((_stats['low_stock_count'] ?? 0) > 0) ...[
-                const SizedBox(height: 24),
-                _buildStockAlertBanner(),
+                if (_startDate != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Chip(
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: ColorPalette.border),
+                      label: Text(
+                        '${_startDate!.day}/${_startDate!.month} - ${_endDate!.day}/${_endDate!.month}',
+                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      onDeleted: () {
+                        setState(() {
+                          _startDate = null;
+                          _endDate = null;
+                        });
+                        _fetchStats();
+                      },
+                    ),
+                  ),
+                SizedBox(height: isWeb ? 32 : 20),
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildStockSummaryGrid(),
+                if ((_stats['low_stock_count'] ?? 0) > 0) ...[
+                  SizedBox(height: isWeb ? 32 : 24),
+                  _buildStockAlertBanner(),
+                ],
+                SizedBox(height: isWeb ? 48 : 40),
+                _buildRecentInwards(),
+                SizedBox(height: isWeb ? 80 : 120),
               ],
-              const SizedBox(height: 40),
-              _buildRecentInwards(),
-              const SizedBox(height: 120),
-            ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => Scaffold.of(context).openDrawer(),
-              icon: const Icon(LucideIcons.menu, size: 24),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: ColorPalette.softShadow,
-              ),
-              child: CircleAvatar(
-                radius: 24,
-                backgroundColor: Theme.of(
-                  context,
-                ).primaryColor.withOpacity(0.1),
-                backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                    ? NetworkImage(ApiConstants.getImageUrl(_avatarUrl))
-                    : null,
-                child: _avatarUrl == null || _avatarUrl!.isEmpty
-                    ? Text(
-                        _userName.substring(0, 1).toUpperCase(),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'PRODUCTION',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade400,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Hi, $_userName',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const NotificationsScreen(),
-                ),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: ColorPalette.softShadow,
-                ),
-                child: Badge(
-                  label: Text(_unreadCount),
-                  child: const Icon(
-                    LucideIcons.bell,
-                    size: 22,
-                    color: ColorPalette.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Logout'),
-                    content: const Text('Are you sure you want to logout?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          ref.read(themeProvider.notifier).resetTheme();
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const LoginScreen(),
-                            ),
-                            (route) => false,
-                          );
-                        },
-                        child: const Text(
-                          'Logout',
-                          style: TextStyle(color: ColorPalette.error),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: ColorPalette.softShadow,
-                ),
-                child: const Icon(
-                  LucideIcons.logOut,
-                  size: 22,
-                  color: ColorPalette.error,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -734,13 +688,14 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
   }
 
   Widget _buildStockSummaryGrid() {
+    final isWeb = LayoutConstants.isWeb(context);
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
+      crossAxisCount: isWeb ? 4 : 2,
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
-      childAspectRatio: 0.9,
+      childAspectRatio: isWeb ? 1.6 : 2.2,
       children: [
         _StockCard(
           title: 'Opening Stock',
@@ -888,8 +843,8 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: ColorPalette.softShadow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ColorPalette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -897,60 +852,100 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Recent Inwards',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: ColorPalette.textPrimary,
+              Text(
+                'RECENT INWARD TRANSACTIONS',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10,
+                  letterSpacing: 0.5,
+                  color: ColorPalette.textMuted,
                 ),
               ),
-              Icon(LucideIcons.history, size: 16, color: Colors.grey.shade400),
+              Icon(LucideIcons.history, size: 14, color: ColorPalette.textMuted),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           if (_recentInwards.isEmpty)
-            const Text(
-              'No recent inward transactions found.',
-              style: TextStyle(color: ColorPalette.textMuted, fontSize: 13),
-            ),
-          ..._recentInwards.map(
-            (inward) => Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No recent transactions found.',
+                  style: GoogleFonts.inter(color: ColorPalette.textMuted, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _recentInwards.length,
+              separatorBuilder: (context, index) => const Divider(height: 1, color: ColorPalette.border, thickness: 0.5),
+              itemBuilder: (context, index) {
+                final inward = _recentInwards[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
                     children: [
-                      Text(
-                        'Lot #${inward['lot_number']}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: ColorPalette.primary.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(LucideIcons.package, size: 16, color: ColorPalette.primary),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Lot #${inward['lot_number']}',
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: ColorPalette.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              '${inward['from_party']}'.toUpperCase(),
+                              style: GoogleFonts.inter(
+                                color: ColorPalette.textMuted,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Text(
-                        '${inward['from_party']}',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${FormatUtils.formatWeight(inward['total_weight'])} Kg',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: ColorPalette.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'INWARD SUCCESS',
+                            style: GoogleFonts.inter(
+                              color: ColorPalette.success,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  Text(
-                    '${FormatUtils.formatWeight(inward['total_weight'])} Kg',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: ColorPalette.success,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-          ),
         ],
       ),
     );
@@ -982,11 +977,12 @@ class _StockCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: ColorPalette.softShadow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: ColorPalette.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -994,51 +990,38 @@ class _StockCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: color.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, color: color, size: 18),
+                  child: Icon(icon, color: color, size: 16),
                 ),
-                Expanded(
-                  child: Text(
-                    title.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade400,
-                      letterSpacing: 0.5,
-                    ),
-                    textAlign: TextAlign.right,
-                    overflow: TextOverflow.ellipsis,
+                Text(
+                  title.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: ColorPalette.textMuted,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],
             ),
-            const Spacer(),
+            const SizedBox(height: 12),
             Text(
               '${FormatUtils.formatWeight(weight)} Kg',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
                 color: ColorPalette.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              '${FormatUtils.formatQuantity(rolls)} Rolls',
-              style: TextStyle(
-                fontSize: 13,
+              '${FormatUtils.formatQuantity(rolls)} ROLLS',
+              style: GoogleFonts.inter(
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade500,
-                fontWeight: FontWeight.w500,
+                color: ColorPalette.textSecondary,
               ),
             ),
           ],
@@ -1119,7 +1102,11 @@ class _TransactionTile extends StatelessWidget {
 class _TransactionPlaceholder extends StatelessWidget {
   const _TransactionPlaceholder();
   @override
-  Widget build(BuildContext context) {
-    return const SizedBox.shrink();
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+class _HistoryPlaceholder extends StatelessWidget {
+  const _HistoryPlaceholder();
+  @override
+  Widget build(BuildContext context) => const Center(child: Text("History Module Coming Soon"));
 }

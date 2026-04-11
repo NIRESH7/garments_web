@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
+import '../../core/theme/color_palette.dart';
+import '../../core/constants/layout_constants.dart';
+import '../../widgets/responsive_wrapper.dart';
 import '../../services/mobile_api_service.dart';
 import 'outward_detail_screen.dart';
 import 'lot_outward_screen.dart';
+import '../../widgets/modern_data_table.dart';
 
 class OutwardListScreen extends StatefulWidget {
   const OutwardListScreen({super.key});
@@ -12,20 +20,32 @@ class OutwardListScreen extends StatefulWidget {
 
 class _OutwardListScreenState extends State<OutwardListScreen> {
   final _api = MobileApiService();
-  List<dynamic> _outwards = [];
+  final _searchController = TextEditingController();
+  List<Map<String, dynamic>> _outwards = [];
+  String _searchQuery = '';
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _fetchOutwards();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchOutwards() async {
+    setState(() => _isLoading = true);
     try {
       final res = await _api.getOutwards();
       setState(() {
-        _outwards = res;
+        _outwards = List<Map<String, dynamic>>.from(res);
         _isLoading = false;
       });
     } catch (e) {
@@ -33,223 +53,199 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
     }
   }
 
+  List<Map<String, dynamic>> get _filteredOutwards {
+    if (_searchQuery.isEmpty) return _outwards;
+    return _outwards.where((item) {
+      final lotName = item['lotName']?.toString().toLowerCase() ?? '';
+      final dcNo = item['dcNo']?.toString().toLowerCase() ?? '';
+      final party = item['partyName']?.toString().toLowerCase() ?? '';
+      return lotName.contains(_searchQuery) ||
+          dcNo.contains(_searchQuery) ||
+          party.contains(_searchQuery);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = LayoutConstants.isMobile(context);
+
     return Scaffold(
+      backgroundColor: ColorPalette.background,
       appBar: AppBar(
-        title: const Text('Outward List'),
-        backgroundColor: Colors.orange,
+        toolbarHeight: 64,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'DISPATCH LOGISTICS',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                color: ColorPalette.textPrimary,
+                fontSize: 16,
+                letterSpacing: 0.5,
+              ),
+            ),
+            Text(
+              'OUTWARD SHIPMENT REGISTRY',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: ColorPalette.textMuted,
+                fontSize: 9,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        iconTheme: const IconThemeData(color: ColorPalette.textPrimary, size: 20),
         actions: [
+          _buildSearchOverlay(isMobile),
           IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const LotOutwardScreen(),
-                ),
-              );
-              _fetchOutwards();
-            },
+            onPressed: _fetchOutwards,
+            icon: const Icon(LucideIcons.refreshCw, size: 16, color: ColorPalette.textMuted),
           ),
+          Gaps.w16,
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _fetchOutwards,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _outwards.isEmpty
-            ? const Center(child: Text('No outward entries found'))
-            : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: _outwards.length,
-                itemBuilder: (context, index) {
-                  final item = _outwards[index];
-                  final hasIncharge =
-                      item['lotInchargeSignature'] != null &&
-                      item['lotInchargeSignature'].toString().isNotEmpty;
-                  final hasAuthorized =
-                      item['authorizedSignature'] != null &&
-                      item['authorizedSignature'].toString().isNotEmpty;
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const LotOutwardScreen()),
+        ).then((_) => _fetchOutwards()),
+        backgroundColor: ColorPalette.textPrimary,
+        child: const Icon(LucideIcons.plus, color: Colors.white),
+      ),
+      body: ResponsiveWrapper(
+        maxWidth: 1400,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildStatsHeader(),
+              Gaps.h24,
+              _isLoading
+                  ? const Center(child: Padding(padding: EdgeInsets.all(64.0), child: CircularProgressIndicator()))
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: ColorPalette.border),
                       ),
-                      leading: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.local_shipping,
-                          color: Colors.orange,
-                        ),
-                      ),
-                      title: Text(
-                        'DC: ${item['dcNo'] ?? 'N/A'}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            'Lot: ${item['lotNo']} - ${item['lotName']}\nParty: ${item['partyName']}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _buildSignIndicator(
-                                Icons.person_pin,
-                                hasIncharge,
-                                'Incharge',
-                              ),
-                              const SizedBox(width: 8),
-                              _buildSignIndicator(
-                                Icons.verified_user,
-                                hasAuthorized,
-                                'Auth',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert),
-                        onSelected: (value) async {
-                          if (value == 'edit') {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    LotOutwardScreen(editOutward: item),
-                              ),
-                            );
-                            _fetchOutwards();
-                          } else if (value == 'delete') {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Confirm Delete'),
-                                content: const Text(
-                                  'Are you sure you want to delete this outward entry?',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: Colors.red,
-                                    ),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm == true) {
-                              final success = await _api.deleteOutward(
-                                item['_id'],
-                              );
-                              if (success) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Outward entry deleted'),
-                                    ),
-                                  );
-                                }
-                                _fetchOutwards();
-                              } else {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Failed to delete entry'),
-                                    ),
-                                  );
-                                }
-                              }
-                            }
-                          }
+                      clipBehavior: Clip.antiAlias,
+                      child: ModernDataTable(
+                        columns: const ['dcNo', 'lotName', 'partyName', 'process'],
+                        columnIcons: const {
+                          'dcNo': LucideIcons.fileText,
+                          'lotName': LucideIcons.package,
+                          'partyName': LucideIcons.briefcase,
+                          'process': LucideIcons.activity,
                         },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit, size: 20),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 20, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      onTap: () async {
-                        await Navigator.push(
+                        rows: _filteredOutwards.map((item) {
+                          return {
+                            ...item,
+                            'dcNo': item['dcNo'] ?? 'N/A',
+                            'lotName': item['lotName'] ?? 'No Lot',
+                            'partyName': item['partyName'] ?? 'N/A',
+                            'process': item['process'] ?? 'N/A',
+                          };
+                        }).toList(),
+                        onView: (item) => Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                OutwardDetailScreen(outward: item),
-                          ),
-                        );
-                        _fetchOutwards();
-                      },
+                          MaterialPageRoute(builder: (context) => OutwardDetailScreen(outward: item)),
+                        ),
+                        onEdit: (item) => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => LotOutwardScreen(editOutward: item)),
+                        ).then((_) => _fetchOutwards()),
+                        onDelete: _showDeleteDialog,
+                        emptyMessage: _searchQuery.isEmpty
+                            ? 'No dispatch records identified'
+                            : 'No matches found for "$_searchQuery"',
+                      ),
                     ),
-                  );
-                },
-              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildSignIndicator(IconData icon, bool active, String label) {
+  Widget _buildStatsHeader() {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color: active ? Colors.orange : Colors.grey.withOpacity(0.5),
-        ),
-        const SizedBox(width: 2),
         Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: active ? Colors.orange : Colors.grey.withOpacity(0.5),
-            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          'SHIPMENT RECORDS',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: ColorPalette.textPrimary,
+            letterSpacing: -0.2,
           ),
         ),
+        Gaps.w12,
+        Text(
+          '(${_filteredOutwards.length} ENTRIES)',
+          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted),
+        ),
       ],
+    );
+  }
+
+  Widget _buildSearchOverlay(bool isMobile) {
+    if (isMobile) return const SizedBox.shrink();
+    return Container(
+      width: 240,
+      height: 36,
+      margin: const EdgeInsets.only(right: 16),
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          hintText: 'Search shipment...',
+          hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted),
+          prefixIcon: const Icon(LucideIcons.search, size: 14, color: ColorPalette.textMuted),
+          filled: true,
+          fillColor: ColorPalette.background,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteDialog(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Neutralize Record?', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        content: const Text('This action will remove the dispatch record and restore balances. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Dismiss', style: GoogleFonts.inter(color: ColorPalette.textMuted))),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await _api.deleteOutward(item['_id']);
+              if (success) {
+                _fetchOutwards();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Dispatch record neutralized'), backgroundColor: ColorPalette.error),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: ColorPalette.error),
+            child: Text('Confirm', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }

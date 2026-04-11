@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../../core/theme/color_palette.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
+import '../../widgets/responsive_wrapper.dart';
+import '../../core/constants/layout_constants.dart';
 import 'lot_inward_screen.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-
 import '../../services/inward_print_service.dart';
 
 class InwardDetailScreen extends StatefulWidget {
@@ -30,326 +35,352 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final stickers = _extractStickers();
+    final isWeb = LayoutConstants.isWeb(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inward Details'),
-        backgroundColor: Colors.green,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => _editInward(context),
-            tooltip: 'Edit Inward',
+      backgroundColor: ColorPalette.background,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: ColorPalette.border)),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () => _deleteInward(context),
-            tooltip: 'Delete Inward',
-          ),
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: () => _printReport(context),
-            tooltip: 'Print Report',
-          ),
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () => _shareDetails(context),
-            tooltip: 'Share Details',
-          ),
-        ],
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildHeaderCard(),
-                const SizedBox(height: 16),
-                _buildPartyCard(),
-                const SizedBox(height: 16),
-                _buildQualityCard(),
-                const SizedBox(height: 16),
-                _buildCheckCard(
-                  title: 'GSM Check',
-                  statusField: 'gsmStatus',
-                  imageField: 'gsmImage',
-                ),
-                const SizedBox(height: 16),
-                _buildCheckCard(
-                  title: 'Shade Matching',
-                  statusField: 'shadeStatus',
-                  imageField: 'shadeImage',
-                ),
-                const SizedBox(height: 16),
-                _buildCheckCard(
-                  title: 'Washing Check',
-                  statusField: 'washingStatus',
-                  imageField: 'washingImage',
-                ),
-                const SizedBox(height: 16),
-                if (inward['complaintText'] != null &&
-                    inward['complaintText'].toString().isNotEmpty)
-                  _buildComplaintCard(),
-                const SizedBox(height: 16),
-                _buildDiaEntriesCard(),
-                const SizedBox(height: 16),
-                _buildSignaturesCard(),
-                const SizedBox(height: 16),
-                _buildStickerHeader(context, stickers),
-              ]),
+          child: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              icon: const Icon(LucideIcons.arrowLeft, size: 18, color: ColorPalette.textPrimary),
+              onPressed: () => Navigator.pop(context),
             ),
+            title: Text(
+              'INWARD ANALYSIS',
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: ColorPalette.textPrimary,
+                letterSpacing: 1.0,
+              ),
+            ),
+            actions: [
+              _buildActionIcon(LucideIcons.pencil, () => _editInward(context), 'EDIT'),
+              _buildActionIcon(LucideIcons.printer, () => _printReport(context), 'PRINT'),
+              _buildActionIcon(LucideIcons.share2, () => _shareDetails(context), 'SHARE'),
+              _buildActionIcon(LucideIcons.trash2, () => _deleteInward(context), 'DELETE', color: ColorPalette.error),
+              const SizedBox(width: 16),
+            ],
           ),
-          if (_showStickers && stickers.isNotEmpty)
+        ),
+      ),
+      body: ResponsiveWrapper(
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(
+                horizontal: isWeb ? 40 : 16,
+                vertical: 24,
+              ),
               sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) =>
-                      _buildStickerItem(context, stickers[index]),
-                  childCount: stickers.length,
-                ),
+                delegate: SliverChildListDelegate([
+                  _buildSectionHeader('LOT SPECIFICATIONS', LucideIcons.box),
+                  _buildModernHeaderGrid(isWeb),
+                  const SizedBox(height: 24),
+                  
+                  _buildSectionHeader('SOURCE & PRICING', LucideIcons.user),
+                  _buildModernPartyCard(),
+                  const SizedBox(height: 24),
+                  
+                  _buildSectionHeader('QUALITY PERFORMANCE', LucideIcons.shieldCheck),
+                  _buildProfessionalQualityDashboard(isWeb),
+                  const SizedBox(height: 24),
+                  
+                  _buildSectionHeader('DIA ENTRIES & DATA', LucideIcons.layers),
+                  _buildModernDiaEntriesCard(),
+                  const SizedBox(height: 24),
+                  
+                  _buildSectionHeader('AUTHORIZATIONS', LucideIcons.penTool),
+                  _buildModernSignaturesCard(),
+                  const SizedBox(height: 24),
+                  
+                  _buildStickerHeader(context, stickers),
+                ]),
               ),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            if (_showStickers && stickers.isNotEmpty)
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: isWeb ? 40 : 16),
+                sliver: isWeb 
+                  ? SliverGrid(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        mainAxisExtent: 460, // Increased to fit QR and Details without overflow
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildModernStickerItem(context, stickers[index]),
+                        childCount: stickers.length,
+                      ),
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _buildModernStickerItem(context, stickers[index]),
+                        ),
+                        childCount: stickers.length,
+                      ),
+                    ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionIcon(IconData icon, VoidCallback onTap, String tooltip, {Color? color}) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: color ?? ColorPalette.textPrimary),
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: ColorPalette.primary.withOpacity(0.7)),
+          const SizedBox(width: 8),
+          Text(
+            title.toUpperCase(),
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: ColorPalette.textMuted,
+              letterSpacing: 1.2,
+            ),
+          ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.05);
   }
 
-  Future<void> _shareDetails(BuildContext context) async {
-    try {
-      final service = InwardPrintService();
-      final pdfBytes = await service.generatePdfBytes(inward);
-
-      final filename = 'Lot_Inward_${inward['lotNo'] ?? 'Details'}.pdf';
-
-      await Share.shareXFiles(
-        [XFile.fromData(pdfBytes, mimeType: 'application/pdf', name: filename)],
-        text: 'Inward Details - Lot ${inward['lotNo'] ?? ''}',
-        subject: 'Lot Inward PDF',
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error preparing sharing details: $e")),
-        );
-      }
-    }
-  }
-
-  Widget _buildHeaderCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Lot Information',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            _buildInfoRow('Inward No', inward['inwardNo'] ?? 'N/A'),
-            _buildInfoRow('Lot Name', inward['lotName'] ?? 'N/A'),
-            _buildInfoRow('Lot No', inward['lotNo'] ?? 'N/A'),
-            _buildInfoRow('Inward Date', () {
-              try {
-                return DateFormat(
-                  'dd-MM-yyyy',
-                ).format(DateTime.parse(inward['inwardDate']));
-              } catch (e) {
-                return inward['inwardDate'] ?? 'N/A';
-              }
-            }()),
-            _buildInfoRow('In Time', inward['inTime'] ?? 'N/A'),
-            _buildInfoRow('Out Time', inward['outTime'] ?? 'N/A'),
-            _buildInfoRow('Vehicle No', inward['vehicleNo'] ?? 'N/A'),
-            _buildInfoRow('Party DC No', inward['partyDcNo'] ?? 'N/A'),
-          ],
-        ),
+  Widget _buildModernCard({required Widget child, Color? color, EdgeInsets? padding}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ColorPalette.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.01),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-    );
+      clipBehavior: Clip.antiAlias,
+      padding: padding,
+      child: child,
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.02);
   }
 
-  Widget _buildPartyCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Party Details',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            _buildInfoRow('From Party', inward['fromParty'] ?? 'N/A'),
-            _buildInfoRow('Process', inward['process'] ?? 'N/A'),
-            _buildInfoRow('Rate', '${inward['rate'] ?? 0}'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCheckCard({
-    required String title,
-    required String statusField,
-    required String imageField,
-  }) {
-    final status = inward[statusField] ?? 'OK';
-    final image = inward[imageField];
-
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            _buildInfoRow('Status', status),
-            if (image != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                '$title Image:',
-                style: const TextStyle(fontWeight: FontWeight.w500),
+  Widget _buildModernRow(String label, String value, {bool isStatus = false, Color? statusColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label.toUpperCase(),
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: ColorPalette.textMuted,
+                letterSpacing: 0.5,
               ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  ApiConstants.getImageUrl(image),
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (ctx, err, stack) => Container(
-                    height: 100,
-                    color: Colors.grey.shade100,
-                    child: const Center(
-                      child: Icon(Icons.broken_image, color: Colors.grey),
+            ),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                if (isStatus)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (statusColor ?? ColorPalette.success).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(100), // Pill style
+                    ),
+                    child: Text(
+                      value.toUpperCase(),
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: statusColor ?? ColorPalette.success,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    value,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: ColorPalette.textPrimary,
                     ),
                   ),
-                ),
-              ),
-            ],
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildQualityCard() {
-    return _buildCheckCard(
-      title: 'Quality Check',
-      statusField: 'qualityStatus',
-      imageField: 'qualityImage',
-    );
-  }
-
-  Widget _buildComplaintCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildModernHeaderGrid(bool isWeb) {
+    if (!isWeb) return _buildModernHeaderCard();
+    
+    return _buildModernCard(
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Complaint',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
+            Expanded(
+              child: Column(
+                children: [
+                  _buildModernRow('Inward No', inward['inwardNo'] ?? 'N/A'),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  _buildModernRow('Lot Name', inward['lotName'] ?? 'N/A'),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  _buildModernRow('Lot No', inward['lotNo'] ?? 'N/A'),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  _buildModernRow('Inward Date', _formatDate(inward['inwardDate'])),
+                ],
               ),
             ),
-            const Divider(),
-            _buildInfoRow('Remarks', inward['complaintText'] ?? ''),
-            if (inward['complaintImage'] != null) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Complaint Image:',
-                style: TextStyle(fontWeight: FontWeight.w500),
+            const VerticalDivider(width: 1, color: ColorPalette.border),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildModernRow('Time In', inward['inTime'] ?? 'N/A'),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  _buildModernRow('Time Out', inward['outTime'] ?? 'N/A'),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  _buildModernRow('Vehicle', inward['vehicleNo'] ?? 'N/A'),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  _buildModernRow('DC No', inward['partyDcNo'] ?? 'N/A'),
+                ],
               ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  ApiConstants.getImageUrl(inward['complaintImage']),
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDiaEntriesCard() {
-    final entries = inward['diaEntries'] as List<dynamic>? ?? [];
-    final storageDetails =
-        inward['storageDetails'] as List<dynamic>? ?? const [];
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'DIA Entries',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const Divider(),
-            if (entries.isEmpty)
-              const Text('No DIA entries found')
-            else
-              ...entries.map((entry) {
-                final dia = (entry as Map<String, dynamic>)['dia']?.toString();
-                Map<String, dynamic>? storageForDia;
-                if (dia != null && dia.isNotEmpty) {
-                  for (final s in storageDetails) {
-                    final sMap = s as Map<String, dynamic>;
-                    if (sMap['dia']?.toString() == dia) {
-                      storageForDia = sMap;
-                      break;
-                    }
-                  }
-                }
-                return _buildDiaEntryRow(entry, storageForDia);
-              }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDiaEntryRow(
-    Map<String, dynamic> entry,
-    Map<String, dynamic>? storage,
-  ) {
-    final rate = double.tryParse(entry['rate']?.toString() ?? '0') ?? 0;
-    final recWt = double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
-    final value = rate * recWt;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+  Widget _buildModernHeaderCard() {
+    return _buildModernCard(
+      child: Column(
+        children: [
+          _buildModernRow('Inward No', inward['inwardNo'] ?? 'N/A'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Lot Name', inward['lotName'] ?? 'N/A'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Lot No', inward['lotNo'] ?? 'N/A'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Inward Date', _formatDate(inward['inwardDate'])),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Time Log', '${inward['inTime'] ?? ''} - ${inward['outTime'] ?? ''}'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Vehicle No', inward['vehicleNo'] ?? 'N/A'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Party DC No', inward['partyDcNo'] ?? 'N/A'),
+        ],
       ),
+    );
+  }
+
+  Widget _buildModernPartyCard() {
+    return _buildModernCard(
+      child: Column(
+        children: [
+          _buildModernRow('From Party', inward['fromParty'] ?? 'N/A'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Process', inward['process'] ?? 'N/A'),
+          const Divider(height: 1, color: ColorPalette.border),
+          _buildModernRow('Contract Rate', FormatUtils.formatCurrency(double.tryParse(inward['rate']?.toString() ?? '0') ?? 0)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfessionalQualityDashboard(bool isWeb) {
+    return Column(
+      children: [
+        _buildModernCard(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                _buildQualityGridRow(
+                  isWeb,
+                  [
+                    _buildQualityTile('Quality Status', inward['qualityStatus'] ?? 'OK', inward['qualityImage']),
+                    _buildQualityTile('GSM Check', inward['gsmStatus'] ?? 'OK', inward['gsmImage']),
+                  ],
+                ),
+                const Divider(height: 1, color: ColorPalette.border),
+                _buildQualityGridRow(
+                  isWeb,
+                  [
+                    _buildQualityTile('Shade Match', inward['shadeStatus'] ?? 'OK', inward['shadeImage']),
+                    _buildQualityTile('Washing Check', inward['washingStatus'] ?? 'OK', inward['washingImage']),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (inward['complaintText'] != null && inward['complaintText'].toString().isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildComplaintHighlight(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildQualityGridRow(bool isWeb, List<Widget> children) {
+    if (!isWeb) {
+      return Column(children: [
+        children[0],
+        const Divider(height: 1, indent: 20, endIndent: 20, color: ColorPalette.border),
+        children[1],
+      ]);
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: children[0]),
+          const VerticalDivider(width: 1, color: ColorPalette.border),
+          Expanded(child: children[1]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQualityTile(String label, String status, String? image) {
+    final bool isError = status.toUpperCase() != 'OK';
+    return Padding(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -357,266 +388,540 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'DIA: ${entry['dia'] ?? 'N/A'}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                label.toUpperCase(),
+                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted, letterSpacing: 0.5),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (isError ? ColorPalette.error : ColorPalette.success).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: isError ? ColorPalette.error : ColorPalette.success),
                 ),
               ),
+            ],
+          ),
+          if (image != null) ...[
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: InkWell(
+                onTap: () => _viewFullImage(image),
+                child: Stack(
+                  children: [
+                    Image.network(
+                      ApiConstants.getImageUrl(image),
+                      height: 100,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(height: 80, color: ColorPalette.background, child: const Icon(LucideIcons.image, size: 16, color: ColorPalette.border)),
+                    ),
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(4)),
+                        child: const Icon(LucideIcons.maximize2, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _viewFullImage(String image) {
+     showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(icon: const Icon(LucideIcons.x, color: Colors.white), onPressed: () => Navigator.pop(context)),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: InteractiveViewer(
+                child: Image.network(ApiConstants.getImageUrl(image), fit: BoxFit.contain),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComplaintHighlight() {
+    return Container(
+      decoration: BoxDecoration(
+        color: ColorPalette.error.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ColorPalette.error.withOpacity(0.2)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.alertCircle, size: 14, color: ColorPalette.error),
+              const SizedBox(width: 8),
+              Text('COMPLAINT REMARKS', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.error, letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            inward['complaintText'] ?? '',
+            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernDiaEntriesCard() {
+    final entries = inward['diaEntries'] as List<dynamic>? ?? [];
+    return _buildModernCard(
+      child: Column(
+        children: [
+          if (entries.isEmpty)
+             Padding(
+                padding: const EdgeInsets.all(20),
+                child: Center(child: Text('NO ENTRIES RECORDED', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted))),
+              )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: entries.length,
+              separatorBuilder: (_, __) => const Divider(height: 1, color: ColorPalette.border),
+              itemBuilder: (context, index) {
+                final entry = entries[index] as Map<String, dynamic>;
+                return _buildModernDiaRow(entry);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernDiaRow(Map<String, dynamic> entry) {
+    final rate = double.tryParse(entry['rate']?.toString() ?? '0') ?? 0;
+    final recWt = double.tryParse(entry['recWt']?.toString() ?? '0') ?? 0;
+    final value = rate * recWt;
+    final dia = entry['dia']?.toString() ?? '';
+
+    // Extract storage details matching this DIA
+    final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
+    final matchingStorage = storageDetails.firstWhere((s) => s != null && s['dia']?.toString() == dia, orElse: () => null);
+    
+    // Clean Racks and Pallets to remove nulls
+    final String racks = (matchingStorage?['racks'] as List<dynamic>? ?? [])
+      .where((r) => r != null && r.toString().isNotEmpty && r.toString().toLowerCase() != 'null')
+      .join(', ');
+      
+    final String pallets = (matchingStorage?['pallets'] as List<dynamic>? ?? [])
+      .where((p) => p != null && p.toString().isNotEmpty && p.toString().toLowerCase() != 'null')
+      .join(', ');
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('DIA ${dia}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: ColorPalette.primary)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(LucideIcons.layers, size: 10, color: ColorPalette.textMuted),
+                            const SizedBox(width: 4),
+                            Text('RACKS: ${racks.isEmpty ? "NONE" : racks}', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted)),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(LucideIcons.package, size: 10, color: ColorPalette.textMuted),
+                            const SizedBox(width: 4),
+                            Text('PALLETS: ${pallets.isEmpty ? "NONE" : pallets}', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    'Rate: ${entry['rate'] ?? 0}',
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Val: ${FormatUtils.formatCurrency(value)}',
-                    style: const TextStyle(
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
+                  Text('VAL: ${FormatUtils.formatCurrency(value)}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: ColorPalette.primary)),
+                  Text('RATE: ${FormatUtils.formatCurrency(rate)}', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: ColorPalette.success)),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(
-                child: _buildSmallInfo('Rolls', '${entry['roll'] ?? 0}'),
-              ),
-              Expanded(child: _buildSmallInfo('Sets', '${entry['sets'] ?? 0}')),
+              _buildDataPoint('ROLLS', '${entry['roll'] ?? 0}'),
+              _buildDataPoint('SETS', '${entry['sets'] ?? 0}'),
+              _buildDataPoint('REC. WT', '${FormatUtils.formatWeight(entry['recWt'])} KG'),
+              _buildDataPoint('DEL. WT', '${FormatUtils.formatWeight(entry['delivWt'])} KG'),
             ],
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSmallInfo(
-                  'Del. Wt',
-                  '${FormatUtils.formatWeight(entry['delivWt'])} Kg', // Corrected key
-                ),
-              ),
-              Expanded(
-                child: _buildSmallInfo(
-                  'Rec. Wt',
-                  '${FormatUtils.formatWeight(entry['recWt'])} Kg',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSmallInfo(
-                  'Rec. Rolls',
-                  '${entry['recRoll'] ?? 0}',
-                ),
-              ),
-            ],
-          ),
-          if (storage != null) ...[
-            const SizedBox(height: 8),
-            const Divider(),
-            const Text(
-              'Storage Details',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(height: 4),
-            Builder(
-              builder: (_) {
-                final racks = (storage['racks'] as List<dynamic>? ?? [])
-                    .where((r) => r != null && r.toString().trim().isNotEmpty)
-                    .map((r) => r.toString())
-                    .toList();
-                final pallets = (storage['pallets'] as List<dynamic>? ?? [])
-                    .where((p) => p != null && p.toString().trim().isNotEmpty)
-                    .map((p) => p.toString())
-                    .toList();
-                final rows = storage['rows'] as List<dynamic>? ?? [];
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (racks.isNotEmpty)
-                      _buildSmallInfo('Racks', racks.join(', ')),
-                    if (pallets.isNotEmpty)
-                      _buildSmallInfo('Pallets', pallets.join(', ')),
-                    if (rows.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Sticker Sets',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      ...rows.map((r) {
-                        final rMap = r as Map<String, dynamic>;
-                        final colour = rMap['colour']?.toString() ?? '-';
-                        final stickerRollNo = rMap['rollNo']?.toString() ?? '';
-                        final weights =
-                            (rMap['setWeights'] as List<dynamic>? ?? [])
-                                .where(
-                                  (w) =>
-                                      w != null &&
-                                      w.toString().trim().isNotEmpty,
-                                )
-                                .map((w) => w.toString())
-                                .toList();
-                        final weightsText = weights.isEmpty
-                            ? '-'
-                            : weights.join(', ');
-                        final totalWt = rMap['totalWeight']?.toString() ?? '-';
-                        final displayLabel = stickerRollNo.isNotEmpty 
-                            ? 'Roll $stickerRollNo - $colour ($totalWt)'
-                            : 'Colour $colour ($totalWt)';
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: _buildSmallInfo(
-                            displayLabel,
-                            weightsText,
-                          ),
-                        );
-                      }),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ],
+          const SizedBox(height: 20),
+          _buildStickerSetBreakdown(matchingStorage),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildStickerSetBreakdown(Map<String, dynamic>? matchingStorage) {
+    if (matchingStorage == null) return const SizedBox.shrink();
+    final rows = matchingStorage['rows'] as List<dynamic>? ?? [];
+    if (rows.isEmpty) return const SizedBox.shrink();
 
-  Widget _buildSmallInfo(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
-      ),
-    );
-  }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32, color: ColorPalette.border),
+        Text('STICKER SETS BREAKDOWN', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 12),
+        ...rows.map((row) {
+          if (row == null) return const SizedBox.shrink();
+          final String colour = row['colour']?.toString() ?? 'N/A';
+          // Filter weights to remove empty or invalid entries
+          final weights = (row['setWeights'] as List<dynamic>? ?? [])
+            .where((w) => w != null && w.toString().trim().isNotEmpty && (double.tryParse(w.toString()) ?? 0) > 0)
+            .toList();
+            
+          if (weights.isEmpty) return const SizedBox.shrink();
 
-  Widget _buildSignaturesCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Signatures (E-Signature)',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-            const Divider(),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+          final double total = weights.fold(0.0, (sum, w) => sum + (double.tryParse(w?.toString() ?? '0') ?? 0.0));
+          
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSignatureItem(
-                  'Lot Incharge',
-                  inward['lotInchargeSignature'],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'ROLL ${weights.length} - ${colour.toUpperCase()} (${total.toStringAsFixed(1)})',
+                      style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: ColorPalette.textPrimary),
+                    ),
+                  ],
                 ),
-                _buildSignatureItem(
-                  'Authorized',
-                  inward['authorizedSignature'],
+                const SizedBox(height: 4),
+                Text(
+                  weights.join(', '),
+                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: ColorPalette.textSecondary, height: 1.4),
                 ),
-                _buildSignatureItem('MD', inward['mdSignature']),
               ],
             ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildDataPoint(String label, String value, {Color? color}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: color ?? ColorPalette.textPrimary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernSignaturesCard() {
+    return _buildModernCard(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildModernSignatureItem('LOT INCHARGE', inward['lotInchargeSignature']),
+            _buildModernSignatureItem('AUTHORIZED', inward['authorizedSignature']),
+            _buildModernSignatureItem('MANAGING DIR.', inward['mdSignature']),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSignatureItem(String label, String? imagePath) {
+  Widget _buildModernSignatureItem(String label, String? imagePath) {
     final bool hasImage = imagePath != null && imagePath.toString().isNotEmpty;
-
     return Column(
       children: [
         Container(
-          height: 60,
-          width: 90,
+          height: 80,
+          width: 100,
           decoration: BoxDecoration(
-            color: hasImage ? Colors.transparent : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: hasImage ? Colors.grey.shade200 : Colors.grey.shade100,
-            ),
+            color: hasImage ? Colors.transparent : ColorPalette.background,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: ColorPalette.border),
           ),
           child: hasImage
-              ? Image.network(
-                  ApiConstants.getImageUrl(imagePath),
-                  fit: BoxFit.contain,
-                  errorBuilder: (ctx, err, stack) => const Icon(
-                    Icons.broken_image,
-                    size: 20,
-                    color: Colors.grey,
-                  ),
-                )
-              : const Center(
-                  child: Text(
-                    "Missing",
-                    style: TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
-                ),
+              ? Image.network(ApiConstants.getImageUrl(imagePath), fit: BoxFit.contain)
+              : Center(child: Text("MISSING", style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.border))),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
-          ),
-        ),
+        const SizedBox(height: 8),
+        Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
       ],
     );
+  }
+
+  Widget _buildModernStickerItem(BuildContext context, Map<String, dynamic> item) {
+    return _buildModernCard(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStickerAttribute('LOT NO', item['lotNo']?.toString() ?? 'N/A'),
+                    _buildStickerAttribute('Lot Name', item['lotName']?.toString() ?? 'N/A'),
+                    _buildStickerAttribute('Dia', item['dia']?.toString() ?? 'N/A'),
+                    _buildStickerAttribute('Colour', item['colour']?.toString() ?? 'N/A'),
+                    _buildStickerAttribute('Set No', item['setNo']?.toString() ?? 'N/A'),
+                    _buildStickerAttribute('Roll Wt', '${item['weight']} kg'),
+                    _buildStickerAttribute('Date', item['date']?.toString() ?? 'N/A'),
+                  ],
+                ),
+              ),
+              Column(
+                children: [
+                  _buildActionIcon(LucideIcons.printer, () => _printSingleSticker(item), 'PRINT STICKER', color: ColorPalette.primary),
+                  _buildActionIcon(LucideIcons.share2, () => _shareSingleSticker(item), 'SHARE STICKER', color: ColorPalette.primary),
+                ],
+              ),
+            ],
+          ),
+          if (_showAllQRs) ...[
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: ColorPalette.border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: QrImageView(
+                data: '${item['lotNo']}|${item['setNo']}|${item['weight']}',
+                version: QrVersions.auto,
+                size: 140,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('SCAN FOR AUTH', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickerAttribute(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text('$label :', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: ColorPalette.textSecondary)),
+          ),
+          Expanded(
+            child: Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickerHeader(BuildContext context, List<Map<String, dynamic>> stickers) {
+    if (stickers.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ColorPalette.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('STICKER PREVIEWS', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: ColorPalette.textPrimary)),
+              TextButton.icon(
+                onPressed: () => setState(() => _showStickers = !_showStickers),
+                icon: Icon(_showStickers ? LucideIcons.eyeOff : LucideIcons.eye, size: 14),
+                label: Text(_showStickers ? "HIDE" : "SHOW"),
+                style: TextButton.styleFrom(
+                  foregroundColor: ColorPalette.primary,
+                  textStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          if (_showStickers) ...[
+            const Divider(height: 32, color: ColorPalette.border),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Show QR Codes', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary)),
+                      Text('Turn on to see scannable tags', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: ColorPalette.textMuted)),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _showAllQRs,
+                  onChanged: (v) => setState(() => _showAllQRs = v),
+                  activeColor: ColorPalette.primary,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms);
+  }
+
+  Future<void> _printSingleSticker(Map<String, dynamic> item) async {
+    try {
+      final doc = pw.Document();
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.roll80,
+          build: (pw.Context context) => pw.Padding(
+            padding: const pw.EdgeInsets.all(10),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('LOT STICKER', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                pw.Divider(),
+                _pwAttr('LOT NO', item['lotNo']),
+                _pwAttr('Lot Name', item['lotName']),
+                _pwAttr('Dia', item['dia']),
+                _pwAttr('Colour', item['colour']),
+                _pwAttr('Set No', item['setNo']),
+                _pwAttr('Weight', '${item['weight']} kg'),
+                pw.SizedBox(height: 10),
+                pw.Center(
+                  child: pw.BarcodeWidget(
+                    data: '${item['lotNo']}|${item['setNo']}|${item['weight']}',
+                    barcode: pw.Barcode.qrCode(),
+                    width: 100,
+                    height: 100,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await Printing.layoutPdf(onLayout: (format) async => doc.save(), name: 'Sticker_${item['setNo']}');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error printing sticker: $e')));
+    }
+  }
+
+  pw.Widget _pwAttr(String label, dynamic value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 2),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(width: 50, child: pw.Text('$label:', style: const pw.TextStyle(fontSize: 8))),
+          pw.Text(value?.toString() ?? '', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _shareSingleSticker(Map<String, dynamic> item) async {
+    try {
+       final doc = pw.Document();
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.roll80,
+          build: (pw.Context context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('LOT STICKER - ${item['lotNo']}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+              pw.SizedBox(height: 10),
+              pw.BarcodeWidget(
+                data: '${item['lotNo']}|${item['setNo']}|${item['weight']}',
+                barcode: pw.Barcode.qrCode(),
+                width: 80,
+                height: 80,
+              ),
+            ],
+          ),
+        ),
+      );
+      final bytes = await doc.save();
+      await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'application/pdf', name: 'Sticker_${item['setNo']}.pdf')]);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error sharing sticker: $e')));
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return 'N/A';
+    try {
+      return DateFormat('dd MMM yyyy').format(DateTime.parse(dateStr)).toUpperCase();
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  Future<void> _shareDetails(BuildContext context) async {
+    try {
+      final service = InwardPrintService();
+      final pdfBytes = await service.generatePdfBytes(inward);
+      final filename = 'Lot_Inward_${inward['lotNo'] ?? 'Details'}.pdf';
+      await Share.shareXFiles([XFile.fromData(pdfBytes, mimeType: 'application/pdf', name: filename)], text: 'Inward Details - Lot ${inward['lotNo'] ?? ''}', subject: 'Lot Inward PDF');
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error preparing sharing details: $e")));
+    }
   }
 
   Future<void> _printReport(BuildContext context) async {
@@ -624,65 +929,40 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
       final service = InwardPrintService();
       await service.printInwardReport(inward);
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error generating report: $e')));
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating report: $e')));
     }
   }
 
   void _editInward(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LotInwardScreen(editInward: inward),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (context) => LotInwardScreen(editInward: inward)));
   }
 
   Future<void> _deleteInward(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Inward'),
-        content: const Text('Are you sure you want to delete this inward?'),
+        title: Text('DELETE RECORD', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16)),
+        content: Text('ARE YOU SURE YOU WANT TO PERMANENTLY REMOVE THIS INWARD LOG?', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('CANCEL', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: ColorPalette.border))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), style: TextButton.styleFrom(foregroundColor: ColorPalette.error), child: Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w800))),
         ],
       ),
     );
-
     if (confirm == true) {
       try {
         final api = MobileApiService();
         final success = await api.deleteInward(inward['_id']);
         if (context.mounted) {
           if (success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Inward deleted successfully')),
-            );
-            Navigator.pop(context, true); // Return true to indicate deletion
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inward deleted successfully')));
+            Navigator.pop(context, true);
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to delete inward')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete inward')));
           }
         }
       } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error deleting inward: $e')));
-        }
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting inward: $e')));
       }
     }
   }
@@ -690,12 +970,10 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   List<Map<String, dynamic>> _extractStickers() {
     final storageDetails = inward['storageDetails'] as List<dynamic>? ?? [];
     final List<Map<String, dynamic>> stickers = [];
-
     for (var s in storageDetails) {
       if (s == null) continue;
       final dia = (s['dia'] ?? '').toString();
       final rows = s['rows'] as List<dynamic>? ?? [];
-
       for (var r in rows) {
         if (r == null) continue;
         final colour = (r['colour'] ?? '').toString();
@@ -704,459 +982,14 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
           final setLabels = r['setLabels'] as List<dynamic>? ?? [];
           for (int i = 0; i < setWeights.length; i++) {
             final weight = setWeights[i]?.toString() ?? '';
-            if (weight.trim().isNotEmpty) {
-              final setNo =
-                  i < setLabels.length &&
-                      (setLabels[i]?.toString().trim().isNotEmpty ?? false)
-                  ? setLabels[i].toString().trim()
-                  : (i + 1).toString();
-              stickers.add({
-                'lotNo': inward['lotNo']?.toString() ?? '',
-                'lotName': inward['lotName']?.toString() ?? '',
-                'dia': dia,
-                'colour': colour,
-                'weight': weight,
-                'date': () {
-                  try {
-                    return DateFormat('dd-MM-yyyy').format(
-                      DateTime.parse(
-                        inward['inwardDate'] ?? DateTime.now().toString(),
-                      ),
-                    );
-                  } catch (e) {
-                    return inward['inwardDate'] ?? '';
-                  }
-                }(),
-                'setNo': setNo,
-              });
+            if (weight.trim().isNotEmpty && (double.tryParse(weight) ?? 0) > 0) {
+              final setNo = i < setLabels.length && (setLabels[i]?.toString().trim().isNotEmpty ?? false) ? setLabels[i].toString().trim() : (i + 1).toString();
+              stickers.add({'lotNo': inward['lotNo']?.toString() ?? '', 'lotName': inward['lotName']?.toString() ?? '', 'dia': dia, 'colour': colour, 'weight': weight, 'date': _formatDate(inward['inwardDate']), 'setNo': setNo});
             }
           }
         }
       }
     }
     return stickers;
-  }
-
-  Widget _buildStickerHeader(
-    BuildContext context,
-    List<Map<String, dynamic>> stickers,
-  ) {
-    if (stickers.isEmpty) return const SizedBox.shrink();
-
-    if (!_showStickers) {
-      return Card(
-        child: InkWell(
-          onTap: () => setState(() => _showStickers = true),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Sticker Previews',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '${stickers.length} stickers available',
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-                const Icon(Icons.arrow_forward_ios, size: 16),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Sticker Previews',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                TextButton.icon(
-                  icon: const Icon(Icons.visibility_off, size: 16),
-                  label: const Text('Hide'),
-                  onPressed: () => setState(() => _showStickers = false),
-                ),
-              ],
-            ),
-            const Divider(),
-            Row(
-              children: [
-                Expanded(
-                  child: SwitchListTile(
-                    title: const Text(
-                      'Show QR Codes',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    subtitle: const Text(
-                      'Turn on to see scannable tags',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    value: _showAllQRs,
-                    dense: true,
-                    onChanged: (val) => setState(() => _showAllQRs = val),
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.print, color: Colors.blue),
-                      tooltip: 'Print All Stickers',
-                      onPressed: () => _printStickersAsPdf(context, stickers),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.share, color: Colors.blue),
-                      tooltip: 'Share All Stickers',
-                      onPressed: () => _shareStickersAsPdf(context, stickers),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStickerItem(BuildContext context, Map<String, dynamic> item) {
-    final rawWt = item['weight']?.toString() ?? '0';
-    final weightDouble = double.tryParse(rawWt) ?? 0.0;
-    final displayWeight = weightDouble.toStringAsFixed(2);
-
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black, width: 2),
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildStickerRow('LOT NO', item['lotNo']),
-              _buildStickerRow('Lot Name', item['lotName']),
-              _buildStickerRow('Dia', item['dia']),
-              _buildStickerRow('Colour', item['colour']),
-              _buildStickerRow('Set No', item['setNo'].toString()),
-              _buildStickerRow('Roll Wt', '$displayWeight kg'),
-              _buildStickerRow('Date', item['date']),
-              const SizedBox(height: 12),
-              if (_showAllQRs)
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.black),
-                        ),
-                        child: QrImageView(
-                          data:
-                              'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${displayWeight}kg\nDT: ${item['date']}',
-                          version: QrVersions.auto,
-                          size: 100.0,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'SCAN FOR AUTH',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.qr_code, color: Colors.grey, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'QR Code Hidden',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.print, color: Colors.blue),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Print Sticker',
-                  onPressed: () {
-                    _printStickersAsPdf(context, [item]);
-                  },
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.share, color: Colors.blue),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Share Sticker PDF',
-                  onPressed: () {
-                    _shareStickersAsPdf(context, [item]);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStickerRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 100, // Increased width for bold label
-            child: Text(
-              '$label :',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ), // Increased from 14
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ), // Made bold and increased from 14
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildPdfRow(
-    String label,
-    String value, {
-    double fontSize = 9,
-  }) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 0.1),
-      child: pw.Row(
-        children: [
-          pw.SizedBox(
-            width: 45, // Increased width for bold label
-            child: pw.Text(
-              '$label:',
-              style: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: fontSize,
-              ),
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              value,
-              style: pw.TextStyle(
-                fontSize: fontSize,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildSingleSticker(Map<String, dynamic> item) {
-    final rawWt = item['weight']?.toString() ?? '0';
-    final weightDouble = double.tryParse(rawWt) ?? 0.0;
-    final displayWeight = weightDouble.toStringAsFixed(2);
-
-    final qrData =
-        'LOT: ${item['lotNo']}\nNAME: ${item['lotName']}\nDIA: ${item['dia']}\nCOL: ${item['colour']}\nSET: ${item['setNo']}\nWT: ${displayWeight}kg\nDT: ${item['date']}';
-
-    return pw.Container(
-      width: double.infinity,
-      height: double.infinity,
-      padding: const pw.EdgeInsets.all(1),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(width: 0.5),
-        color: PdfColors.white,
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          // Text fields at top with smaller font size 9
-          _buildPdfRow('LOT', item['lotNo']?.toString() ?? '', fontSize: 9),
-          _buildPdfRow('Name', item['lotName']?.toString() ?? '', fontSize: 9),
-          _buildPdfRow('Dia', item['dia']?.toString() ?? '', fontSize: 9),
-          _buildPdfRow('Col', item['colour']?.toString() ?? '', fontSize: 9),
-          _buildPdfRow('Set', item['setNo']?.toString() ?? '', fontSize: 9),
-          _buildPdfRow('Wt', '$displayWeight kg', fontSize: 9),
-          _buildPdfRow('Dt', item['date']?.toString() ?? '', fontSize: 9),
-
-          pw.SizedBox(height: 2),
-
-          // QR code at bottom centre
-          pw.Center(
-            child: pw.Column(
-              mainAxisSize: pw.MainAxisSize.min,
-              children: [
-                pw.Container(
-                  width: 32,
-                  height: 32,
-                  child: pw.BarcodeWidget(
-                    barcode: pw.Barcode.qrCode(),
-                    data: qrData,
-                  ),
-                ),
-                pw.SizedBox(height: 0.5),
-                pw.Text(
-                  'SCAN FOR AUTH',
-                  style: pw.TextStyle(
-                    fontSize: 7,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Document _generateStickersPdf(List<Map<String, dynamic>> stickerList) {
-    final pdf = pw.Document();
-
-    for (int i = 0; i < stickerList.length; i += 2) {
-      final item1 = stickerList[i];
-      final item2 = (i + 1 < stickerList.length) ? stickerList[i + 1] : null;
-
-      final isSingle = item2 == null;
-      final pageFormat = isSingle
-          ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
-          : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
-
-      pdf.addPage(
-        pw.Page(
-          pageFormat: pageFormat,
-          margin: const pw.EdgeInsets.all(2),
-          build: (pw.Context context) {
-            if (isSingle) {
-              return _buildSingleSticker(item1);
-            } else {
-              return pw.Row(
-                children: [
-                  pw.Expanded(child: _buildSingleSticker(item1)),
-                  pw.SizedBox(width: 2),
-                  pw.Expanded(child: _buildSingleSticker(item2)),
-                ],
-              );
-            }
-          },
-        ),
-      );
-    }
-    return pdf;
-  }
-
-  Future<void> _shareStickersAsPdf(
-    BuildContext context,
-    List<Map<String, dynamic>> stickerList,
-  ) async {
-    try {
-      final pdf = _generateStickersPdf(stickerList);
-
-      final pdfBytes = await pdf.save();
-
-      final filename = 'Stickers_${inward['lotNo'] ?? 'Details'}.pdf';
-
-      await Share.shareXFiles(
-        [XFile.fromData(pdfBytes, mimeType: 'application/pdf', name: filename)],
-        text: 'Stickers - Lot ${inward['lotNo'] ?? ''}',
-        subject: 'Sticker Labels PDF',
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error preparing sticker PDF: $e")),
-        );
-      }
-    }
-  }
-
-  Future<void> _printStickersAsPdf(
-    BuildContext context,
-    List<Map<String, dynamic>> stickerList,
-  ) async {
-    try {
-      final pdf = _generateStickersPdf(stickerList);
-
-      final pageFormat = stickerList.length == 1
-          ? PdfPageFormat(50 * PdfPageFormat.mm, 50 * PdfPageFormat.mm)
-          : PdfPageFormat(100 * PdfPageFormat.mm, 50 * PdfPageFormat.mm);
-
-      await Printing.layoutPdf(
-        format: pageFormat,
-        onLayout: (PdfPageFormat defaultFormat) async => pdf.save(),
-        name: 'Stickers_${inward['lotNo'] ?? 'Details'}',
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error printing stickers: $e")));
-      }
-    }
   }
 }

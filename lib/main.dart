@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:garments/screens/dashboard/dashboard_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
@@ -19,14 +20,24 @@ class TextileLotManagementApp extends ConsumerWidget {
     final primaryColor = ref.watch(themeProvider);
 
     return MaterialApp(
-      title: 'Om Vinayaka',
+      title: 'Om Vinayaka Garments - Web Dashboard',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme(primaryColor),
-      initialRoute: '/',
+      initialRoute: kIsWeb ? '/login' : '/',
       routes: {
         '/': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),
+      },
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        final data = MediaQuery.maybeOf(context);
+        return MediaQuery(
+          data: (data ?? const MediaQueryData()).copyWith(
+            textScaleFactor: 1.0,
+          ),
+          child: child,
+        );
       },
     );
   }

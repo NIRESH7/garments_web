@@ -9,6 +9,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../services/mobile_api_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/constants/layout_constants.dart';
+import '../../core/layout/web_layout_wrapper.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/scale_service.dart';
 import '../../core/theme/color_palette.dart';
@@ -17,6 +19,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_dropdown_field.dart';
 import 'package:garments/dialogs/signature_pad_dialog.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:garments/widgets/responsive_wrapper.dart';
 
 import 'package:garments/widgets/app_drawer.dart';
 import '../../core/storage/storage_service.dart';
@@ -647,10 +652,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
   }
 
-  void _showError(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+        backgroundColor: ColorPalette.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   void _onPartyChanged(String? val) async {
@@ -2027,162 +2038,238 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         }
       },
       child: Scaffold(
+        backgroundColor: ColorPalette.background,
         drawer: _currentPage == 0 ? const AppDrawer() : null,
-        appBar: AppBar(
-          leading: _currentPage == 0
-              ? null // Use default hamburger
-              : IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () {
-                    if (_currentPage != 0) {
-                      setState(() => _currentPage = 0);
-                    } else {
-                      Navigator.of(context).pop();
-                    }
-                  },
-                ),
-          title: Text(
-            _currentPage == 0
-                ? (widget.editInward != null
-                      ? 'Edit Lot Inward'
-                      : 'Lot Inward Entry')
-                : 'Sticker & Storage Details',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.tune),
-              tooltip: 'Input Controls',
-              onPressed: _openInputControlSheet,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: ColorPalette.border)),
             ),
-            // Tare Button
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: ActionChip(
-                avatar: Icon(
-                  Icons.scale_outlined,
-                  size: 16,
-                  color: _tareOffset > 0 ? Colors.green : Colors.grey,
-                ),
-                label: Text(
-                  _tareOffset > 0
-                      ? "TARE: ${_tareOffset.toStringAsFixed(2)}"
-                      : "TARE",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: _tareOffset > 0
-                        ? Colors.green.shade900
-                        : Colors.grey.shade700,
-                  ),
-                ),
-                backgroundColor:
-                    _tareOffset > 0 ? Colors.green.shade50 : Colors.grey.shade50,
-                onPressed: _enableWeightInput ? _setCurrentAsTare : null,
-              ),
-            ),
-            // Language Toggle for Voice Input
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: ActionChip(
-                avatar: Icon(
-                  Icons.language,
-                  size: 16,
-                  color: _selectedVoiceLocale == 'ta_IN'
-                      ? Colors.orange
-                      : Colors.blue,
-                ),
-                label: Text(
-                  _selectedVoiceLocale == 'ta_IN' ? "தமிழ் (TA)" : "English (EN)",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: _selectedVoiceLocale == 'ta_IN'
-                        ? Colors.orange.shade900
-                        : Colors.blue.shade900,
-                  ),
-                ),
-                backgroundColor: _selectedVoiceLocale == 'ta_IN'
-                    ? Colors.orange.shade50
-                    : Colors.blue.shade50,
-                onPressed: () {
-                  setState(() {
-                    _selectedVoiceLocale =
-                        (_selectedVoiceLocale == 'en_US') ? 'ta_IN' : 'en_US';
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "Voice Language: ${_selectedVoiceLocale == 'ta_IN' ? 'Tamil' : 'English'}",
-                      ),
-                      duration: const Duration(seconds: 1),
+            child: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              leading: _currentPage == 0
+                  ? null // Use default hamburger
+                  : IconButton(
+                      icon: const Icon(LucideIcons.arrowLeft, size: 18, color: ColorPalette.textPrimary),
+                      onPressed: () {
+                        if (_currentPage != 0) {
+                          setState(() => _currentPage = 0);
+                        } else {
+                          Navigator.of(context).pop();
+                        }
+                      },
                     ),
-                  );
-                },
+              title: Text(
+                _currentPage == 0
+                    ? (widget.editInward != null ? 'EDIT LOT INWARD' : 'LOT INWARD ENTRY')
+                    : 'STICKER & STORAGE DETAILS',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: ColorPalette.textPrimary,
+                  letterSpacing: 1.0,
+                ),
               ),
+              actions: [
+                _buildModernActionIcon(LucideIcons.sliders, _openInputControlSheet, 'CONTROLS'),
+                const SizedBox(width: 8),
+                _buildModernTareButton(),
+                const SizedBox(width: 8),
+                _buildModernLanguageToggle(),
+                const SizedBox(width: 16),
+              ],
             ),
-          ],
+          ),
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Form(
-                key: _formKey,
-                child: _currentPage == 0
-                    ? SingleChildScrollView(
-                        padding: const EdgeInsets.all(12),
-                        child: _buildMainPage(),
-                      )
-                    : _buildStickerPage(),
-              ),
-        bottomNavigationBar: _isLoading
-            ? const LinearProgressIndicator()
-            : null,
+        body: ResponsiveWrapper(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Form(
+                  key: _formKey,
+                  child: _currentPage == 0 ? _buildMainPage() : _buildStickerPage(),
+                ),
+        ),
+        bottomNavigationBar: _isLoading ? const LinearProgressIndicator() : null,
       ),
     );
   }
 
+  Widget _buildModernActionIcon(IconData icon, VoidCallback onTap, String tooltip) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: ColorPalette.textPrimary),
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _buildModernTareButton() {
+     return ActionChip(
+      avatar: Icon(
+        LucideIcons.scale,
+        size: 14,
+        color: _tareOffset > 0 ? ColorPalette.success : ColorPalette.textMuted,
+      ),
+      label: Text(
+        _tareOffset > 0 ? "TARE: ${_tareOffset.toStringAsFixed(2)}" : "TARE",
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: _tareOffset > 0 ? ColorPalette.success : ColorPalette.textSecondary,
+        ),
+      ),
+      backgroundColor: Colors.white,
+      side: BorderSide(color: _tareOffset > 0 ? ColorPalette.success : ColorPalette.border),
+      onPressed: _enableWeightInput ? _setCurrentAsTare : null,
+    );
+  }
+
+  Widget _buildModernLanguageToggle() {
+    return ActionChip(
+      avatar: Icon(
+        LucideIcons.languages,
+        size: 14,
+        color: ColorPalette.primary,
+      ),
+      label: Text(
+        _selectedVoiceLocale == 'ta_IN' ? "தமிழ்" : "ENGLISH",
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: ColorPalette.primary,
+        ),
+      ),
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: ColorPalette.border),
+      onPressed: () {
+        setState(() {
+          _selectedVoiceLocale = (_selectedVoiceLocale == 'en_US') ? 'ta_IN' : 'en_US';
+        });
+      },
+    );
+  }
+
   Widget _buildMainPage() {
-    return Column(
-      children: [
-        _buildHeader(),
-        const SizedBox(height: 16),
-        // _buildImageSection("Balance/Challan Image", _balanceImage, (f) => _balanceImage = f),
-        // const SizedBox(height: 16),
-        _buildQualitySection(),
-        const SizedBox(height: 16),
-        _buildCheckSection(
-          title: "GSM Check",
-          status: _gsmStatus,
-          image: _gsmImage,
-          onStatusChanged: (v) => setState(() => _gsmStatus = v),
-          onImagePicked: (f) => _gsmImage = f,
-        ),
-        const SizedBox(height: 16),
-        _buildCheckSection(
-          title: "Shade Matching",
-          status: _shadeStatus,
-          image: _shadeImage,
-          onStatusChanged: (v) => setState(() => _shadeStatus = v),
-          onImagePicked: (f) => _shadeImage = f,
-        ),
-        const SizedBox(height: 16),
-        _buildCheckSection(
-          title: "Washing Check",
-          status: _washingStatus,
-          image: _washingImage,
-          onStatusChanged: (v) => setState(() => _washingStatus = v),
-          onImagePicked: (f) => _washingImage = f,
-        ),
-        const SizedBox(height: 16),
-        _buildComplaintSection(),
-        const SizedBox(height: 16),
-        _buildGridHeader(),
-        _buildDataTable(),
-        const SizedBox(height: 24),
-        _buildSignatureSection(),
-        const SizedBox(height: 24),
-        _buildNavigationButtons(),
-      ],
+    final isWeb = LayoutConstants.isWeb(context);
+    
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.symmetric(
+        horizontal: isWeb ? 40 : 16,
+        vertical: 24,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('CORE SPECIFICATIONS', LucideIcons.box),
+          _buildHeader(),
+          const SizedBox(height: 24),
+          
+          _buildSectionHeader('QUALITY VERIFICATION', LucideIcons.shieldCheck),
+          _buildQualitySection(),
+          const SizedBox(height: 16),
+          
+          if (isWeb)
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCheckSection(
+                    title: "GSM Check",
+                    status: _gsmStatus,
+                    image: _gsmImage,
+                    onStatusChanged: (v) => setState(() => _gsmStatus = v),
+                    onImagePicked: (f) => _gsmImage = f,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildCheckSection(
+                    title: "Shade Matching",
+                    status: _shadeStatus,
+                    image: _shadeImage,
+                    onStatusChanged: (v) => setState(() => _shadeStatus = v),
+                    onImagePicked: (f) => _shadeImage = f,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildCheckSection(
+                    title: "Washing Check",
+                    status: _washingStatus,
+                    image: _washingImage,
+                    onStatusChanged: (v) => setState(() => _washingStatus = v),
+                    onImagePicked: (f) => _washingImage = f,
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            _buildCheckSection(
+              title: "GSM Check",
+              status: _gsmStatus,
+              image: _gsmImage,
+              onStatusChanged: (v) => setState(() => _gsmStatus = v),
+              onImagePicked: (f) => _gsmImage = f,
+            ),
+            const SizedBox(height: 16),
+            _buildCheckSection(
+              title: "Shade Matching",
+              status: _shadeStatus,
+              image: _shadeImage,
+              onStatusChanged: (v) => setState(() => _shadeStatus = v),
+              onImagePicked: (f) => _shadeImage = f,
+            ),
+            const SizedBox(height: 16),
+            _buildCheckSection(
+              title: "Washing Check",
+              status: _washingStatus,
+              image: _washingImage,
+              onStatusChanged: (v) => setState(() => _washingStatus = v),
+              onImagePicked: (f) => _washingImage = f,
+            ),
+          ],
+          
+          const SizedBox(height: 24),
+          _buildSectionHeader('COMPLAINTS & REMARKS', LucideIcons.alertCircle),
+          _buildComplaintSection(),
+          
+          const SizedBox(height: 24),
+          _buildSectionHeader('DIA ENTRIES', LucideIcons.layers),
+          _buildDataTable(),
+          
+          const SizedBox(height: 32),
+          _buildSectionHeader('AUTHORIZATIONS', LucideIcons.penTool),
+          _buildSignatureSection(),
+          
+          const SizedBox(height: 48),
+          _buildNavigationButtons(),
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: ColorPalette.primary.withOpacity(0.7)),
+          const SizedBox(width: 8),
+          Text(
+            title.toUpperCase(),
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: ColorPalette.textMuted,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2334,180 +2421,202 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildHeader() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _inwardNoController,
-                    decoration: const InputDecoration(
-                      labelText: "Inward No",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.all(8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _selectDate(context),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: "Inward Date",
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.all(8),
-                        suffixIcon: Icon(Icons.calendar_today, size: 20),
-                      ),
-                      child: Text(
-                        DateFormat('dd-MM-yyyy').format(_inwardDate),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildReadOnly("In Time", _inTime)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildReadOnly("Out Time", _outTime ?? "--:--"),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDropdown(
-                    "Lot Name",
-                    _selectedLotName,
-                    _lotNames,
-                    _onLotNameChanged,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _lotNumberController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: "Lot No",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.all(8),
-                    ),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Required' : null,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: CustomDropdownField(
-                    label: "From Party",
-                    value: _parties.contains(_selectedParty)
-                        ? _selectedParty
-                        : null,
-                    items: _parties,
-                    onChanged: _onPartyChanged,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Required' : null,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildReadOnly("Process", _process)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _gsmController,
-                    decoration: const InputDecoration(
-                      labelText: "GSM",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.all(8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _rateController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: "Rate",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.all(8),
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (v) {
-                      final r = double.tryParse(v) ?? 0;
-                      setState(() {
-                        for (var row in _rows) {
-                          row.rate = r;
-                        }
-                      });
-                    },
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Required' : null,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTextField("Vehicle No", _vehicleController),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: _buildTextField("Party DC No", _dcController)),
-              ],
-            ),
-          ],
-        ),
+    final isWeb = LayoutConstants.isWeb(context);
+    return _buildModernCard(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          _buildExecutiveGrid([
+            _buildExecutiveField("Inward No", _inwardNoController, icon: LucideIcons.hash),
+            _buildExecutiveDatePicker("Inward Date", _inwardDate, () => _selectDate(context)),
+          ], isWeb),
+          const SizedBox(height: 16),
+          _buildExecutiveGrid([
+             _buildModernReadOnly("In Time", _inTime, icon: LucideIcons.clock),
+             _buildModernReadOnly("Out Time", _outTime ?? "--:--", icon: LucideIcons.logOut),
+          ], isWeb),
+          const SizedBox(height: 16),
+          _buildExecutiveGrid([
+            _buildModernDropdown("Lot Name", _selectedLotName, _lotNames, _onLotNameChanged, icon: LucideIcons.package),
+             _buildExecutiveField("Lot No", _lotNumberController, icon: LucideIcons.hash, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+          ], isWeb),
+          const SizedBox(height: 16),
+          _buildExecutiveGrid([
+            _buildModernCustomDropdown("From Party", _selectedParty, _parties, _onPartyChanged, icon: LucideIcons.user),
+            _buildModernReadOnly("Process", _process, icon: LucideIcons.settings),
+          ], isWeb),
+          const SizedBox(height: 16),
+          _buildExecutiveGrid([
+            _buildExecutiveField("GSM", _gsmController, icon: LucideIcons.layers),
+            _buildExecutiveField("Rate", _rateController, icon: LucideIcons.dollarSign, isNumeric: true, onChanged: (v) {
+                final r = double.tryParse(v) ?? 0;
+                setState(() {
+                  for (var row in _rows) {
+                    row.rate = r;
+                  }
+                });
+              }, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+          ], isWeb),
+          const SizedBox(height: 16),
+          _buildExecutiveGrid([
+            _buildExecutiveField("Vehicle No", _vehicleController, icon: LucideIcons.truck),
+            _buildExecutiveField("Party DC No", _dcController, icon: LucideIcons.fileText),
+          ], isWeb),
+        ],
       ),
     );
   }
 
-  Widget _buildDataTable() {
+  Widget _buildExecutiveGrid(List<Widget> children, bool isWeb) {
+    if (!isWeb) return Column(children: children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 12), child: c)).toList());
+    return Row(
+      children: children.expand((c) => [Expanded(child: c), const SizedBox(width: 16)]).toList()..removeLast(),
+    );
+  }
+
+  Widget _buildExecutiveField(String label, TextEditingController controller, {IconData? icon, bool isNumeric = false, Function(String)? onChanged, String? Function(String?)? validator}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          onChanged: onChanged,
+          validator: validator,
+          keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
+          decoration: InputDecoration(
+            isDense: true,
+            prefixIcon: icon != null ? Icon(icon, size: 14, color: ColorPalette.textMuted) : null,
+            filled: true,
+            fillColor: ColorPalette.background.withOpacity(0.5),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: ColorPalette.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: ColorPalette.border)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: ColorPalette.primary, width: 1.5)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExecutiveDatePicker(String label, DateTime value, VoidCallback onTap) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: ColorPalette.background.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: ColorPalette.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.calendar, size: 14, color: ColorPalette.textMuted),
+                const SizedBox(width: 8),
+                Text(DateFormat('dd-MM-yyyy').format(value), style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModernReadOnly(String label, String value, {IconData? icon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: ColorPalette.background.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: ColorPalette.border),
+          ),
+          child: Row(
+            children: [
+              if (icon != null) ...[Icon(icon, size: 14, color: ColorPalette.textMuted), const SizedBox(width: 8)],
+              Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModernDropdown(String label, String? value, List<String> items, Function(String?) onChanged, {IconData? icon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 6),
+        _buildDropdown(label, value, items, onChanged, customStyle: true, icon: icon),
+      ],
+    );
+  }
+
+  Widget _buildModernCustomDropdown(String label, String? value, List<String> items, Function(String?) onChanged, {IconData? icon}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 6),
+        CustomDropdownField(
+          label: label,
+          value: items.contains(value) ? value : null,
+          items: items,
+          onChanged: onChanged,
+          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+          prefixIcon: icon,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModernCard({required Widget child, EdgeInsets? padding}) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300, width: 1),
+        border: Border.all(color: ColorPalette.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.01),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      padding: padding,
+      child: child,
+    );
+  }
+
+  Widget _buildDataTable() {
+    return _buildModernCard(
+      padding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Table Header
               _buildTableHeader(),
-              // Table Rows
               ..._rows.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final row = entry.value;
-                return _buildDataRow(idx, row);
+                return _buildDataRow(entry.key, entry.value);
               }),
+              _buildTableFooter(),
             ],
           ),
         ),
@@ -2517,25 +2626,23 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
 
   Widget _buildTableHeader() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade300, width: 1),
-        ),
+      decoration: const BoxDecoration(
+        color: ColorPalette.background,
+        border: Border(bottom: BorderSide(color: ColorPalette.border)),
       ),
       child: Row(
         children: [
           _buildColumnHeader('#', 40),
-          _buildColumnHeader('DIA', 100),
+          _buildColumnHeader('DIA', 120),
           _buildColumnHeader('ROLL', 80),
           if (_useSetBasedEntry) _buildColumnHeader('SETS', 80),
           _buildColumnHeader('DELIV. WT', 100),
           _buildColumnHeader('REC. ROLL', 100),
           _buildColumnHeader('REC. WT', 100),
-          _buildColumnHeader('RATE', 80),
+          _buildColumnHeader('RATE', 90),
           _buildColumnHeader('DIFF', 80),
           _buildColumnHeader('LOSS %', 80),
-          _buildColumnHeader('VALUE', 100),
+          _buildColumnHeader('VALUE', 110),
           _buildColumnHeader('ACTION', 60, isLast: true),
         ],
       ),
@@ -2545,78 +2652,52 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   Widget _buildColumnHeader(String label, double width, {bool isLast = false}) {
     return Container(
       width: width,
-      height: 40,
+      height: 44,
       decoration: BoxDecoration(
-        border: Border(
-          right: isLast
-              ? BorderSide.none
-              : BorderSide(color: Colors.grey.shade300, width: 1),
-        ),
+        border: Border(right: isLast ? BorderSide.none : const BorderSide(color: ColorPalette.border)),
       ),
       alignment: Alignment.center,
       child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: Colors.grey.shade800,
-          letterSpacing: 0.5,
+        label.toUpperCase(),
+        style: GoogleFonts.inter(
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          color: ColorPalette.textSecondary,
+          letterSpacing: 0.8,
         ),
       ),
     );
   }
 
+  Widget _buildTableFooter() {
+     // Optional: Add a summary row if needed
+     return const SizedBox.shrink();
+  }
+
   Widget _buildDataRow(int idx, InwardRow row) {
     final bool isLastRow = idx == _rows.length - 1;
-    final Color rowBgColor = idx % 2 != 0
-        ? Colors.blue.shade50.withOpacity(0.2)
-        : Colors.white;
-
     return Container(
       decoration: BoxDecoration(
-        color: rowBgColor,
-        border: Border(
-          bottom: BorderSide(
-            color: isLastRow ? Colors.transparent : Colors.grey.shade200,
-            width: 1,
-          ),
-        ),
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: isLastRow ? Colors.transparent : ColorPalette.border)),
       ),
       child: Row(
         children: [
-          // #
           _buildTableCell(
             width: 40,
-            child: Text(
-              '${idx + 1}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade500,
-              ),
-            ),
+            child: Text('${idx + 1}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: ColorPalette.textMuted)),
           ),
-          // DIA
           _buildTableCell(
-            width: 100,
-            child: _buildSmallDropdown(
-              row.dia,
-              _dias,
-              (v) => setState(() => row.dia = v),
-              hint: "-",
-            ),
+            width: 120,
+            child: _buildSmallDropdown(row.dia, _dias, (v) => setState(() => row.dia = v), hint: "SELECT DIA"),
           ),
-          // ROLL
           _buildTableCell(
             width: 80,
             child: _buildTableInput(row.rollsController, (v) {
               row.rolls = int.tryParse(v) ?? 0;
               if (_useSetBasedEntry) {
-                // Auto-Calculate Sets: rolls / 11, rounded
                 row.sets = (row.rolls / 11).round();
-                row.setsController.text = row.sets == 0
-                    ? ''
-                    : row.sets.toString();
+                row.setsController.text = row.sets == 0 ? '' : row.sets.toString();
               } else {
                 row.sets = 0;
                 row.setsController.text = '';
@@ -2625,7 +2706,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
               _updateRowMath(row);
             }, key: ValueKey('rolls_${row.id}')),
           ),
-          // SETS
           if (_useSetBasedEntry)
             _buildTableCell(
               width: 80,
@@ -2634,7 +2714,6 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 _updateRowMath(row);
               }, key: ValueKey('sets_${row.id}')),
             ),
-          // DELIV. WT
           _buildTableCell(
             width: 100,
             child: _buildTableInput(row.delivWtController, (v) {
@@ -2825,13 +2904,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }) {
     return Container(
       width: width,
-      height: 60,
+      height: 56,
       decoration: BoxDecoration(
-        border: Border(
-          right: isLast
-              ? BorderSide.none
-              : BorderSide(color: Colors.grey.shade300, width: 1),
-        ),
+        border: Border(right: isLast ? BorderSide.none : const BorderSide(color: ColorPalette.border)),
       ),
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2847,37 +2922,32 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }) {
     return Container(
       key: key,
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.01),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        color: onTap != null ? ColorPalette.primary.withOpacity(0.02) : Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ColorPalette.border),
       ),
       child: TextFormField(
         controller: ctrl,
         onTap: onTap,
+        readOnly: onTap != null, // Typically weight tap means read only for manual typing
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
         ],
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF334155),
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: ColorPalette.textPrimary,
         ),
         textAlign: TextAlign.center,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: '0',
+          hintStyle: GoogleFonts.inter(color: ColorPalette.textMuted, fontSize: 12),
           border: InputBorder.none,
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
         ),
         onChanged: chg,
       ),
@@ -2934,25 +3004,24 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     final rows = diaData.rows;
     final setHeaders = _resolveDiaSetLabels(diaData, sets);
 
-    // Responsive Widths
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
     // Fixed parts (Left columns: Drag, Colour)
-    final dWidth = isMobile ? 30.0 : 40.0;
-    final cWidth = isMobile ? 95.0 : 120.0;
+    final dWidth = isMobile ? 32.0 : 44.0;
+    final cWidth = isMobile ? 100.0 : 140.0;
     final fixedPartWidth = dWidth + cWidth;
 
     // Scrollable identifiers (Moveable columns: S.NO, GSM)
-    final sWidth = isMobile ? 35.0 : 50.0;
-    final gWidth = isMobile ? 55.0 : 80.0;
+    final sWidth = isMobile ? 40.0 : 60.0;
+    final gWidth = isMobile ? 60.0 : 90.0;
 
     // Scrollable parts (Weights, Roll No, Total)
-    final cellWidth = isMobile ? 85.0 : 125.0;
-    final rollWidth = isMobile ? 65.0 : 100.0;
-    final totWidth = isMobile ? 85.0 : 125.0;
+    final cellWidth = isMobile ? 90.0 : 130.0;
+    final rollWidth = isMobile ? 70.0 : 110.0;
+    final totWidth = isMobile ? 90.0 : 130.0;
 
-    final totalTableWidth = fixedPartWidth + sWidth + gWidth + (sets * cellWidth) + rollWidth + totWidth;
+    final totalTableWidth = fixedPartWidth + sWidth + gWidth + (sets * cellWidth) + rollWidth + totWidth + 20.0;
 
     // Ensure rack and pallet lists are sized correctly
     while (diaData.racks.length < sets) diaData.racks.add(null);
@@ -3014,9 +3083,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     children: rows.map((r) {
                       final idx = rows.indexOf(r);
                       r.gsmController ??= TextEditingController(text: r.gsm);
+                      final isEven = idx % 2 == 0;
                       return Container(
                         key: ObjectKey(r),
-                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade300))),
+                        decoration: BoxDecoration(
+                          color: isEven ? Colors.white : ColorPalette.background.withOpacity(0.3),
+                          border: const Border(bottom: BorderSide(color: ColorPalette.border, width: 0.5)),
+                        ),
                         child: Stack(
                           children: [
                             Padding(
@@ -3099,14 +3172,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                     ),
                                   ),
                                   _buildGridCell(
-                                    r.totalWeight.toStringAsFixed(3),
+                                    "",
                                     totWidth,
                                     alignment: Alignment.center,
                                     isMobile: isMobile,
                                     child: Text(
                                       r.totalWeight.toStringAsFixed(3),
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: isMobile ? 10 : 12, color: const Color(0xFF475569)),
+                                      style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: isMobile ? 10 : 12, color: ColorPalette.primary),
                                     ),
                                   ),
                                 ],
@@ -3116,12 +3189,18 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                               offset: Offset(_hScrollOffset, 0),
                               child: Container(
                                 width: fixedPartWidth,
-                                color: Colors.white,
+                                decoration: BoxDecoration(
+                                  color: isEven ? Colors.white : const Color(0xFFF9FAFB),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(2, 0)),
+                                  ],
+                                  border: Border(right: BorderSide(color: ColorPalette.border.withOpacity(0.5))),
+                                ),
                                 child: Row(
                                   children: [
                                     ReorderableDragStartListener(
                                       index: idx,
-                                      child: _buildGridCell("", dWidth, child: const Icon(Icons.drag_indicator, size: 20, color: Colors.grey)),
+                                      child: _buildGridCell("", dWidth, child: const Icon(LucideIcons.gripVertical, size: 16, color: ColorPalette.textMuted)),
                                     ),
                                     _buildGridCell(
                                       "",
@@ -3130,10 +3209,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                         r.colour,
                                         _colours,
                                         (v) => setState(() => r.colour = v),
-                                        hint: "Colour",
+                                        hint: "COLOUR",
                                         itemImages: _colourImages,
                                         onDoubleTap: r.colour != null ? () => _showColorPreview(r.colour!, _colourImages[r.colour!]) : null,
-                                        showName: true,
                                       ),
                                     ),
                                   ],
@@ -3162,18 +3240,35 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                       Transform.translate(
                         offset: Offset(_hScrollOffset, 0),
                         child: Container(
-                          height: 65,
+                          height: 60,
                           width: fixedPartWidth,
-                          decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: Colors.grey.shade300), right: BorderSide(color: Colors.grey.shade300))),
+                          decoration: BoxDecoration(
+                            color: ColorPalette.background,
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(2, 0)),
+                            ],
+                            border: const Border(
+                              top: BorderSide(color: ColorPalette.border),
+                              right: BorderSide(color: ColorPalette.border),
+                            ),
+                          ),
                           alignment: Alignment.center,
-                          child: Text("TOTAL", style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF1E293B), fontSize: isMobile ? 11 : 14)),
+                          child: Text(
+                            "TOTAL",
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w800,
+                              color: ColorPalette.textPrimary,
+                              fontSize: isMobile ? 10 : 12,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: TextButton.icon(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: OutlinedButton.icon(
                       onPressed: () {
                         setState(() {
                           final row = StickerRow();
@@ -3182,9 +3277,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                           diaData.rows.add(row);
                         });
                       },
-                      icon: const Icon(Icons.add_circle_outline, size: 20),
-                      label: const Text("Add New Set Entry"),
-                      style: TextButton.styleFrom(foregroundColor: Theme.of(context).primaryColor, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: Text("ADD WEIGHT ROW", style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ColorPalette.primary,
+                        side: BorderSide(color: ColorPalette.primary.withOpacity(0.5)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 300),
@@ -3205,16 +3305,29 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
         Expanded(
           child: (_selectedStickerDia != null)
               ? _buildDynamicSetTable(setsCount, key: ValueKey(_selectedStickerDia))
-              : const Center(child: Text("Please select a DIA to enter sticker details")),
+              : Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(LucideIcons.package, size: 48, color: ColorPalette.textMuted.withOpacity(0.3)),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Please select a DIA to enter sticker details",
+                        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
         ),
         if (_selectedStickerDia != null)
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
-                BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, -2))
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, -4)),
               ],
+              border: const Border(top: BorderSide(color: ColorPalette.border)),
             ),
             child: Row(
               children: [
@@ -3223,13 +3336,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     height: 50,
                     child: ElevatedButton.icon(
                       onPressed: () => _printStickers(null),
-                      icon: const Icon(Icons.visibility),
-                      label: const Text("Preview Stickers", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      icon: const Icon(LucideIcons.eye, size: 18),
+                      label: Text("PREVIEW STICKERS", style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
+                        backgroundColor: ColorPalette.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),
@@ -3240,13 +3353,13 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     height: 50,
                     child: ElevatedButton.icon(
                       onPressed: _saveStorageForCurrentDia,
-                      icon: const Icon(Icons.save),
-                      label: const Text("Save Entry", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      icon: const Icon(LucideIcons.checkCheck, size: 18),
+                      label: Text("SAVE & CONTINUE", style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF22C55E).withOpacity(0.8),
+                        backgroundColor: ColorPalette.success,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),
@@ -3277,21 +3390,22 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     return Container(
       width: width,
       height: 65,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0).withOpacity(0.3),
+      decoration: const BoxDecoration(
+        color: ColorPalette.background,
         border: Border(
-          bottom: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: ColorPalette.border),
+          right: BorderSide(color: ColorPalette.border),
         ),
       ),
       alignment: Alignment.centerLeft,
       padding: EdgeInsets.symmetric(horizontal: isMobile ? 6 : 12),
       child: Text(
-        label,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: isMobile ? 10 : 12,
-          color: const Color(0xFF475569),
+        label.toUpperCase(),
+        style: GoogleFonts.inter(
+          fontWeight: FontWeight.w800,
+          fontSize: isMobile ? 9 : 10,
+          color: ColorPalette.textSecondary,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -3307,19 +3421,19 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }) {
     return Container(
       width: width,
-      height: 65, // Increased from 50 to allow wrapping
+      height: 60,
       padding: EdgeInsets.symmetric(horizontal: padding ?? (isMobile ? 2 : 4)),
-      decoration: BoxDecoration(
-        border: Border(right: BorderSide(color: Colors.grey.shade300)),
+      decoration: const BoxDecoration(
+        border: Border(right: BorderSide(color: ColorPalette.border)),
       ),
       alignment: alignment,
       child: child ??
           Text(
             label,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
               fontSize: isMobile ? 10 : 12,
-              color: const Color(0xFF475569),
+              color: ColorPalette.textPrimary,
             ),
           ),
     );
@@ -3342,18 +3456,20 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
       ],
-      style: TextStyle(
-        fontSize: isMobile ? 10 : 12,
-        fontWeight: FontWeight.bold,
-      ), // Reduced from 13
+      style: GoogleFonts.inter(
+        fontSize: isMobile ? 11 : 13,
+        fontWeight: FontWeight.w700,
+        color: ColorPalette.textPrimary,
+      ),
       textAlign: TextAlign.center,
-      maxLines: isMobile ? 1 : 2, // Allow wrapping
+      maxLines: 1,
       minLines: 1,
       decoration: InputDecoration(
         hintText: '-',
+        hintStyle: GoogleFonts.inter(color: ColorPalette.textMuted, fontSize: 11),
         border: InputBorder.none,
         isDense: true,
-        contentPadding: EdgeInsets.zero, // Maximize space
+        contentPadding: const EdgeInsets.symmetric(vertical: 8),
         suffixIcon: (onMicTap != null || onWeightTap != null)
             ? Row(
                 mainAxisSize: MainAxisSize.min,
@@ -3361,9 +3477,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                   if (onMicTap != null)
                     IconButton(
                       icon: Icon(
-                        Icons.mic,
-                        size: 16,
-                        color: isListening ? Colors.red : Colors.blue,
+                        LucideIcons.mic,
+                        size: 14,
+                        color: isListening ? ColorPalette.error : ColorPalette.primary,
                       ),
                       onPressed: onMicTap,
                       padding: EdgeInsets.zero,
@@ -3372,10 +3488,10 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     ),
                   if (onWeightTap != null && !_enableWeightInput)
                     IconButton(
-                      icon: Icon(
-                        Icons.monitor_weight_outlined,
-                        size: 16,
-                        color: Colors.green.shade700,
+                      icon: const Icon(
+                        LucideIcons.gauge,
+                        size: 14,
+                        color: ColorPalette.success,
                       ),
                       onPressed: onWeightTap,
                       padding: EdgeInsets.zero,
@@ -3391,338 +3507,169 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildSignatureSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Signatures (E-Signature)",
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF475569),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildSigBox(
-              "Lot Incharge",
-              _lotInchargeSignature,
-              (f) => setState(() => _lotInchargeSignature = f),
-              allowedRoles: ['lot_inward', 'admin'],
-            ),
-            _buildSigBox(
-              "Authorized",
-              _authorizedSignature,
-              (f) => setState(() => _authorizedSignature = f),
-              allowedRoles: ['authorized', 'admin'],
-            ),
-            _buildSigBox(
-              "MD",
-              _mdSignature,
-              (f) => setState(() => _mdSignature = f),
-              allowedRoles: ['md', 'admin'],
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<void> _openSignaturePad(Function(XFile?) onPick) async {
-    final XFile? result = await showDialog(
-      context: context,
-      builder: (context) => const SignaturePadDialog(),
-    );
-    if (result != null) {
-      onPick(result);
-    }
-  }
-
-  Widget _buildModalFilter(
-    String label,
-    String? val,
-    List<String> items,
-    Function(String?) chg,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: val,
-              isExpanded: true,
-              hint: Text(
-                "All",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+    return _buildModernCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.penTool, size: 14, color: ColorPalette.primary.withOpacity(0.7)),
+              const SizedBox(width: 8),
+              Text(
+                "AUTHORIZATION & SIGNATURES",
+                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textSecondary, letterSpacing: 0.5),
               ),
-              items: items
-                  .map(
-                    (e) => DropdownMenuItem(
-                      value: e,
-                      child: Text(e, style: const TextStyle(fontSize: 12)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: chg,
-            ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildSigBox("LOT INCHARGE", _lotInchargeSignature, (f) => setState(() => _lotInchargeSignature = f), allowedRoles: ['lot_inward', 'admin']),
+              const SizedBox(width: 12),
+              _buildSigBox("AUTHORIZED", _authorizedSignature, (f) => setState(() => _authorizedSignature = f), allowedRoles: ['authorized', 'admin']),
+              const SizedBox(width: 12),
+              _buildSigBox("MD", _mdSignature, (f) => setState(() => _mdSignature = f), allowedRoles: ['md', 'admin']),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildSigBox(
-    String label,
-    XFile? file,
-    Function(XFile?) onPick, {
-    List<String> allowedRoles = const [],
-  }) {
-    final bool canSign = _userRole != null && allowedRoles.contains(_userRole);
-
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: () {
-            if (canSign) {
-              _openSignaturePad(onPick);
-            } else {
-              _showError('Only ${allowedRoles.join(' or ')} can sign here.');
-            }
-          },
-          child: Container(
-            width: 90,
-            height: 50,
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-              color: canSign ? null : Colors.grey.shade100,
-            ),
-            child: file != null
-                ? (kIsWeb
-                      ? Image.network(file.path, fit: BoxFit.contain)
-                      : Image.file(File(file.path), fit: BoxFit.contain))
-                : const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.edit, color: Colors.grey, size: 20),
-                      Text(
-                        "Sign",
-                        style: TextStyle(fontSize: 10, color: Colors.grey),
+  Widget _buildSigBox(String label, XFile? file, Function(XFile?) onPick, {List<String> allowedRoles = const []}) {
+    final bool canSign = _userRole != null && (allowedRoles.contains(_userRole) || _userRole == 'admin');
+    return Expanded(
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => canSign ? _openSignaturePad(onPick) : _showError('ACCESS DENIED'),
+            child: Container(
+              height: 80,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: ColorPalette.background.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: canSign ? ColorPalette.primary.withOpacity(0.2) : ColorPalette.border),
+              ),
+              child: Stack(
+                children: [
+                  if (file != null)
+                    Center(child: Padding(padding: const EdgeInsets.all(8), child: kIsWeb ? Image.network(file.path, fit: BoxFit.contain) : Image.file(File(file.path), fit: BoxFit.contain)))
+                  else
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.pencil, size: 16, color: canSign ? ColorPalette.primary.withOpacity(0.3) : ColorPalette.textMuted),
+                          const SizedBox(height: 4),
+                          Text(canSign ? "TAP TO SIGN" : "LOCKED", style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted)),
+                        ],
                       ),
-                    ],
-                  ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF64748B),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReadOnly(String label, String val) => InputDecorator(
-    decoration: InputDecoration(
-      labelText: label,
-      border: const OutlineInputBorder(),
-      contentPadding: const EdgeInsets.all(8),
-    ),
-    child: Text(
-      val,
-      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-    ),
-  );
-  Widget _buildTextField(String label, TextEditingController c) =>
-      TextFormField(
-        controller: c,
-        textInputAction: TextInputAction.next,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.all(8),
-        ),
-      );
-  Widget _buildDropdown(
-    String label,
-    String? val,
-    List<String> items,
-    Function(String?) chg,
-  ) => CustomDropdownField(
-    label: label,
-    value: val,
-    items: items,
-    onChanged: chg,
-    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-  );
-
-  Widget _buildSmallDropdown(
-    String? val,
-    List<String> items,
-    Function(String?) chg, {
-    String hint = "-",
-    Map<String, String>? itemImages,
-    VoidCallback? onDoubleTap,
-    bool showName = false,
-  }) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CustomDropdownField(
-          label: "", 
-          value: val,
-          items: items,
-          onChanged: chg,
-          hint: hint,
-          itemImages: itemImages,
-          onDoubleTap: onDoubleTap,
-          resolveColor: _resolveColor,
-        ),
-        if (showName && val != null && val.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              val,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
+                  if (!canSign && file == null)
+                    const Align(alignment: Alignment.topRight, child: Padding(padding: EdgeInsets.all(4), child: Icon(LucideIcons.lock, size: 10, color: ColorPalette.textMuted))),
+                ],
+              ),
             ),
           ),
-      ],
+          const SizedBox(height: 6),
+          Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.textMuted)),
+        ],
+      ),
     );
   }
-  Widget _buildGridHeader() => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      const Text(
-        "DIA-wise Entry",
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF475569),
-        ),
+
+  Widget _buildGridHeader() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildSectionHeader('DIA-WISE ENTRY', LucideIcons.layers),
+          TextButton.icon(
+            onPressed: () async {
+              double defaultRate = 0;
+              if (_selectedParty != null) {
+                final details = await _api.getPartyDetails(_selectedParty!);
+                if (details != null) {
+                  defaultRate = (details['rate'] is num) ? (details['rate'] as num).toDouble() : 0.0;
+                }
+              }
+              final newRow = InwardRow()..rate = defaultRate;
+              newRow.syncControllersFromValues();
+              setState(() => _rows.add(newRow));
+            },
+            icon: const Icon(LucideIcons.plus, size: 14),
+            label: Text("ADD ROW", style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800)),
+            style: TextButton.styleFrom(
+              foregroundColor: ColorPalette.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+          ),
+        ],
       ),
-      TextButton.icon(
-        onPressed: () async {
-          double defaultRate = 0;
-          if (_selectedParty != null) {
-            final details = await _api.getPartyDetails(_selectedParty!);
-            if (details != null) {
-              defaultRate = (details['rate'] is num)
-                  ? (details['rate'] as num).toDouble()
-                  : 0.0;
-            }
-          }
-          final newRow = InwardRow()..rate = defaultRate;
-          newRow.syncControllersFromValues();
-          setState(() => _rows.add(newRow));
-        },
-        icon: const Icon(Icons.add, size: 20),
-        label: const Text(
-          "Add Row",
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        style: TextButton.styleFrom(
-          foregroundColor: Theme.of(context).primaryColor,
-        ),
-      ),
-    ],
-  );
+    );
+  }
+
   Widget _buildNavigationButtons() {
     final diasWithRolls = _getDiasWithRolls();
-    final pending = diasWithRolls
-        .where((d) => !_completedStickerDias.contains(d))
-        .toList();
+    final pending = diasWithRolls.where((d) => !_completedStickerDias.contains(d)).toList();
     final allDone = diasWithRolls.isNotEmpty && pending.isEmpty;
 
     return Column(
       children: [
         SizedBox(
           width: double.infinity,
-          height: 60,
-          child: ElevatedButton(
+          height: 50,
+          child: ElevatedButton.icon(
             onPressed: _navigateToStickerPage,
+            icon: const Icon(LucideIcons.arrowRight, size: 18),
+            label: Text("PROCEED TO STORAGE DETAILS", style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
+              backgroundColor: ColorPalette.primary,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            child: const Text(
-              "Next Page (Storage Details)",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ),
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
-          height: 60,
+          height: 50,
           child: ElevatedButton.icon(
             onPressed: (allDone && !_isSaving) ? _save : null,
             icon: _isSaving
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.save, size: 24),
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(LucideIcons.save, size: 18),
             label: Text(
-              _isSaving
-                  ? "Saving..."
-                  : (widget.editInward != null ? "Update Entry" : "Save Entry"),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              _isSaving ? "SAVING..." : (widget.editInward != null ? "UPDATE INWARD ENTRY" : "FINALIZE & SAVE ENTRY"),
+              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.0),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: allDone
-                  ? const Color(0xFF22C55E)
-                  : Colors.grey.shade300,
-              foregroundColor: allDone ? Colors.white : Colors.grey,
+              backgroundColor: ColorPalette.success,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: ColorPalette.border,
+              disabledForegroundColor: ColorPalette.textMuted,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ),
         if (!allDone && diasWithRolls.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              "Missing storage for: ${pending.join(', ')}",
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
+            padding: const EdgeInsets.only(top: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(color: ColorPalette.error.withOpacity(0.05), borderRadius: BorderRadius.circular(6), border: Border.all(color: ColorPalette.error.withOpacity(0.2))),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.alertTriangle, size: 12, color: ColorPalette.error),
+                  const SizedBox(width: 8),
+                  Text("MISSING STORAGE DATA: ${pending.join(', ')}", style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.error)),
+                ],
               ),
             ),
           ),
@@ -3819,53 +3766,70 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildImageSection(String label, XFile? file, Function(XFile?) onSet) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ColorPalette.background.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ColorPalette.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _pickImage(onSet),
-                  icon: const Icon(Icons.camera_alt, size: 18),
-                  label: Text(file == null ? "Add Image" : "Change"),
-                ),
-              ],
-            ),
-            if (file != null)
-              GestureDetector(
-                onTap: () => _showLargeImage(file),
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  height: 120,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    image: DecorationImage(
-                      image: FileImage(File(file.path)),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.zoom_in, color: Colors.white70, size: 30),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: ColorPalette.textMuted,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
-          ],
-        ),
+              TextButton.icon(
+                onPressed: () => _pickImage(onSet),
+                icon: const Icon(LucideIcons.camera, size: 14),
+                label: Text(
+                  file == null ? "ADD IMAGE" : "CHANGE",
+                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          if (file != null)
+            GestureDetector(
+              onTap: () => _showLargeImage(file),
+              child: Container(
+                margin: const EdgeInsets.only(top: 8),
+                height: 120,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: ColorPalette.border),
+                  image: DecorationImage(
+                    image: FileImage(File(file.path)),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.black.withOpacity(0.2),
+                  ),
+                  child: const Center(
+                    child: Icon(LucideIcons.maximize2, color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -3877,39 +3841,78 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     required Function(String) onStatusChanged,
     required Function(XFile?) onImagePicked,
   }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Row(
-              children: [
-                Expanded(
-                  child: RadioListTile(
-                    title: const Text("OK", style: TextStyle(fontSize: 12)),
-                    value: "OK",
-                    groupValue: status,
-                    onChanged: (v) => onStatusChanged(v.toString()),
-                  ),
+    return _buildModernCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.checkCircle, size: 14, color: ColorPalette.primary.withOpacity(0.7)),
+              const SizedBox(width: 8),
+              Text(
+                title.toUpperCase(),
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: ColorPalette.textSecondary,
+                  letterSpacing: 0.5,
                 ),
-                Expanded(
-                  child: RadioListTile(
-                    title: const Text("Not OK", style: TextStyle(fontSize: 12)),
-                    value: "Not OK",
-                    groupValue: status,
-                    onChanged: (v) => onStatusChanged(v.toString()),
-                  ),
-                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildModernToggle('OK', status == 'OK', () => onStatusChanged('OK'), ColorPalette.success),
+              const SizedBox(width: 12),
+              _buildModernToggle('NOT OK', status == 'Not OK', () => onStatusChanged('Not OK'), ColorPalette.error),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildImageSection(
+            "${title.split(' ')[0]} Image",
+            image,
+            onImagePicked,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernToggle(String label, bool isSelected, VoidCallback onTap, Color activeColor) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor.withOpacity(0.05) : Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isSelected ? activeColor : ColorPalette.border,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isSelected) ...[
+                Icon(LucideIcons.check, size: 12, color: activeColor),
+                const SizedBox(width: 6),
               ],
-            ),
-            _buildImageSection(
-              "${title.split(' ')[0]} Image",
-              image,
-              onImagePicked,
-            ),
-          ],
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? activeColor : ColorPalette.textMuted,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -3926,33 +3929,49 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
   Widget _buildComplaintSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Complaint (if any)",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _complaintController,
-              decoration: const InputDecoration(
-                labelText: "Complaint Remarks",
-                border: OutlineInputBorder(),
+    return _buildModernCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.alertCircle, size: 14, color: ColorPalette.error),
+              const SizedBox(width: 8),
+              Text(
+                "COMPLAINT REMARKS",
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: ColorPalette.textSecondary,
+                  letterSpacing: 0.5,
+                ),
               ),
-              maxLines: 2,
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _complaintController,
+            style: GoogleFonts.inter(fontSize: 13, color: ColorPalette.textPrimary),
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: "Enter any issues or complaints observed...",
+              hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted),
+              filled: true,
+              fillColor: ColorPalette.background.withOpacity(0.5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: ColorPalette.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: ColorPalette.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: ColorPalette.primary, width: 1.5)),
+              contentPadding: const EdgeInsets.all(16),
             ),
-            const SizedBox(height: 8),
-            _buildImageSection(
-              "Complaint Image",
-              _complaintImage,
-              (f) => _complaintImage = f,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          _buildImageSection(
+            "Complaint Image",
+            _complaintImage,
+            (f) => _complaintImage = f,
+          ),
+        ],
       ),
     );
   }
@@ -4115,6 +4134,57 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }
 
 
+  Widget _buildSmallDropdown(String? val, List<String> items, Function(String?) chg, {String? hint, Map<String, String>? itemImages, VoidCallback? onDoubleTap}) {
+    return CustomDropdownField(
+      label: "",
+      value: val,
+      items: items,
+      onChanged: chg,
+      hint: hint ?? '',
+      itemImages: itemImages,
+      onDoubleTap: onDoubleTap,
+    );
+  }
+
+  Widget _buildDropdown(String label, String? val, List<String> items, Function(String?) chg, {bool customStyle = false, IconData? icon, Map<String, String>? itemImages, VoidCallback? onDoubleTap}) {
+    return CustomDropdownField(
+      label: label,
+      value: val,
+      items: items,
+      onChanged: chg,
+      prefixIcon: icon,
+      itemImages: itemImages,
+      onDoubleTap: onDoubleTap,
+    );
+  }
+
+  Widget _buildModalFilter(String label, String? val, List<String> items, Function(String?) chg) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        CustomDropdownField(
+          label: "",
+          value: val,
+          items: items,
+          onChanged: chg,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openSignaturePad(Function(XFile?) onPick) async {
+    final XFile? result = await showDialog(
+      context: context,
+      builder: (context) => const SignaturePadDialog(),
+    );
+    if (result != null) {
+      onPick(result);
+    }
+  }
+
+
   Widget _buildStickerTopInfoSection() {
     final enteredDias = _getDiasWithRolls().toList();
     final diaData = _selectedStickerDia != null ? _stickerData[_selectedStickerDia!] : null;
@@ -4129,80 +4199,123 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Select DIA for Stickers",
-            style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 4),
-          _buildSmallDropdown(
-            _selectedStickerDia,
-            enteredDias,
-            (v) => setState(() {
-              _selectedStickerDia = v;
-              if (v != null) _initializeStickerRows(v);
-            }),
-          ),
-          if (_selectedStickerDia != null) ...[
-            const SizedBox(height: 12),
-            if (diaData != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Cuttable Dia",
-                    style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 4),
-                  TextFormField(
-                    controller: diaData.cuttingDiaController,
-                    decoration: InputDecoration(
-                      hintText: (diaData.cuttingDia == null || diaData.cuttingDia!.isEmpty)
-                          ? "you not add details in this dia no cuttable dia added"
-                          : "Enter Cuttable Dia",
-                      hintStyle: (diaData.cuttingDia == null || diaData.cuttingDia!.isEmpty)
-                          ? const TextStyle(color: Colors.red, fontSize: 13)
-                          : null,
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          _buildModernCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(LucideIcons.package, size: 14, color: ColorPalette.primary.withOpacity(0.7)),
+                    const SizedBox(width: 8),
+                    Text(
+                      "DIA SELECTION & STORAGE DATA",
+                      style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textSecondary, letterSpacing: 0.5),
                     ),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    onChanged: (v) => setState(() => diaData.cuttingDia = v),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: _buildModernDropdown(
+                        "Selected DIA",
+                        _selectedStickerDia,
+                        enteredDias,
+                        (v) => setState(() {
+                          _selectedStickerDia = v;
+                          if (v != null) _initializeStickerRows(v);
+                        }),
+                        icon: LucideIcons.layers,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    if (_selectedStickerDia != null && diaData != null)
+                      Expanded(
+                        flex: 3,
+                        child: _buildExecutiveField(
+                          "Cuttable Dia",
+                          diaData.cuttingDiaController!,
+                          icon: LucideIcons.scissors,
+                          onChanged: (v) => setState(() => diaData.cuttingDia = v),
+                        ),
+                      ),
+                  ],
+                ),
+                if (selectedRow != null) ...[
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ColorPalette.primary.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: ColorPalette.primary.withOpacity(0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        _buildInfoItem("DELIVERY ROLLS", "${selectedRow.rolls}", LucideIcons.scrollText),
+                        const SizedBox(width: 24),
+                        _buildInfoItem("DELIVERY WEIGHT", "${FormatUtils.formatWeight(selectedRow.deliveredWeight)} KG", LucideIcons.scale),
+                        const Spacer(),
+                        _buildSetManagement(diaData!),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-            const SizedBox(height: 16),
-            if (selectedRow != null && diaData != null)
-              Row(
-                children: [
-                  Text(
-                    'Delivery Roll: ${selectedRow.rolls}   '
-                    'Delivery Wt: ${FormatUtils.formatWeight(selectedRow.deliveredWeight)} kg',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => _removeSet(diaData),
-                    icon: const Icon(Icons.remove_circle, color: Colors.red, size: 24),
-                    tooltip: 'Remove Set',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    onPressed: () => _addSet(diaData),
-                    icon: const Icon(Icons.add_circle, color: Colors.blue, size: 24),
-                    tooltip: 'Add Set',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-          ],
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(String label, String value, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 10, color: ColorPalette.textMuted),
+            const SizedBox(width: 4),
+            Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w800, color: ColorPalette.primary)),
+      ],
+    );
+  }
+
+  Widget _buildSetManagement(StickerDiaData diaData) {
+    return Row(
+      children: [
+        Text("MANAGE SETS", style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+        const SizedBox(width: 12),
+        _buildCircularAction(LucideIcons.minusCircle, ColorPalette.error, () => _removeSet(diaData)),
+        const SizedBox(width: 8),
+        _buildCircularAction(LucideIcons.plusCircle, ColorPalette.primary, () => _addSet(diaData)),
+      ],
+    );
+  }
+
+  Widget _buildCircularAction(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 20, color: color),
       ),
     );
   }
@@ -4241,7 +4354,13 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          if (shrinkOffset > 0)
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+      ),
       child: Stack(
         children: [
           Padding(
@@ -4250,34 +4369,34 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
               children: [
                 _buildHeaderRow(
                   children: [
-                    _buildCell("", sWidth),
-                    _buildCell("", gWidth),
-                    ...List.generate(sets, (i) => _buildCell("", cellWidth, child: _buildDrop(diaData.racks[i], rackNames, (v) { diaData.racks[i] = v; onStateChange(); }, "Rack"))),
-                    _buildCell("", rollWidth),
-                    _buildCell("", totWidth),
+                    _buildCell("", sWidth, isHeader: true),
+                    _buildCell("", gWidth, isHeader: true),
+                    ...List.generate(sets, (i) => _buildCell("", cellWidth, isHeader: true, child: _buildDrop(i < diaData.racks.length ? diaData.racks[i] : null, rackNames, (v) { diaData.racks[i] = v; onStateChange(); }, "RACK"))),
+                    _buildCell("", rollWidth, isHeader: true),
+                    _buildCell("", totWidth, isHeader: true),
                   ],
                 ),
                 _buildHeaderRow(
                   children: [
-                    _buildCell("", sWidth),
-                    _buildCell("", gWidth),
-                    ...List.generate(sets, (i) => _buildCell("", cellWidth, child: _buildDrop(diaData.pallets[i], palletNos, (v) { diaData.pallets[i] = v; onStateChange(); }, "Pallet"))),
-                    _buildCell("", rollWidth),
-                    _buildCell("", totWidth),
+                    _buildCell("", sWidth, isHeader: true),
+                    _buildCell("", gWidth, isHeader: true),
+                    ...List.generate(sets, (i) => _buildCell("", cellWidth, isHeader: true, child: _buildDrop(i < diaData.pallets.length ? diaData.pallets[i] : null, palletNos, (v) { diaData.pallets[i] = v; onStateChange(); }, "PALLET"))),
+                    _buildCell("", rollWidth, isHeader: true),
+                    _buildCell("", totWidth, isHeader: true),
                   ],
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0).withOpacity(0.5),
-                    border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                    color: ColorPalette.background,
+                    border: const Border(bottom: BorderSide(color: ColorPalette.border)),
                   ),
                   child: Row(
                     children: [
-                      _buildCell("S.NO", sWidth),
-                      _buildCell("GSM", gWidth),
-                      ...List.generate(sets, (i) => _buildCell(setHeaders[i], cellWidth)),
-                      _buildCell("Roll No", rollWidth),
-                      _buildCell("TOTAL", totWidth),
+                      _buildCell("S.NO", sWidth, isHeader: true),
+                      _buildCell("GSM", gWidth, isHeader: true),
+                      ...List.generate(sets, (i) => _buildCell(setHeaders[i], cellWidth, isHeader: true)),
+                      _buildCell("ROLL NO", rollWidth, isHeader: true),
+                      _buildCell("TOTAL", totWidth, isHeader: true),
                     ],
                   ),
                 ),
@@ -4288,24 +4407,29 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
             offset: Offset(hScrollOffset, 0),
             child: Container(
               width: fixedPartWidth,
-              color: Colors.white,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(2, 0)),
+                ],
+              ),
               child: Column(
                 children: [
                   _buildFixedHeaderCell(fixedPartWidth),
                   _buildFixedHeaderCell(fixedPartWidth),
                   Container(
-                    height: 65,
+                    height: 60,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0).withOpacity(0.5),
-                      border: Border(
-                        bottom: BorderSide(color: Colors.grey.shade300),
-                        right: BorderSide(color: Colors.grey.shade300),
+                      color: ColorPalette.background,
+                      border: const Border(
+                        bottom: BorderSide(color: ColorPalette.border),
+                        right: BorderSide(color: ColorPalette.border),
                       ),
                     ),
                     child: Row(
                       children: [
-                        _buildCell("", dWidth),
-                        _buildCell("Colour", cWidth),
+                        _buildCell("", dWidth, isHeader: true),
+                        _buildCell("COLOUR", cWidth, isHeader: true),
                       ],
                     ),
                   ),
@@ -4320,9 +4444,9 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   Widget _buildHeaderRow({required List<Widget> children}) {
     return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0).withOpacity(0.3),
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: ColorPalette.border)),
       ),
       child: Row(children: children),
     );
@@ -4331,24 +4455,34 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
   Widget _buildFixedHeaderCell(double width) {
     return Container(
       width: width,
-      height: 65,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0).withOpacity(0.3),
+      height: 60,
+      decoration: const BoxDecoration(
+        color: Colors.white,
         border: Border(
-          bottom: BorderSide(color: Colors.grey.shade300),
-          right: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: ColorPalette.border),
+          right: BorderSide(color: ColorPalette.border),
         ),
       ),
     );
   }
 
-  Widget _buildCell(String text, double width, {Widget? child}) {
+  Widget _buildCell(String text, double width, {Widget? child, bool isHeader = false}) {
     return Container(
       width: width,
-      height: 65,
-      decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey.shade300))),
+      height: 60,
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: ColorPalette.border.withOpacity(0.5))),
+      ),
       alignment: Alignment.center,
-      child: child ?? Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: isMobile ? 10 : 12, color: const Color(0xFF475569))),
+      child: child ?? Text(
+        text, 
+        style: GoogleFonts.inter(
+          fontWeight: isHeader ? FontWeight.w800 : FontWeight.w600, 
+          fontSize: isMobile ? (isHeader ? 8 : 9) : (isHeader ? 9 : 11), 
+          color: isHeader ? ColorPalette.textSecondary : ColorPalette.textPrimary,
+          letterSpacing: isHeader ? 0.8 : 0,
+        )
+      ),
     );
   }
 
@@ -4367,9 +4501,9 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  double get maxExtent => 65.0 * 3;
+  double get maxExtent => 60.0 * 3 + 15.0;
   @override
-  double get minExtent => 65.0 * 3;
+  double get minExtent => 60.0 * 3 + 15.0;
   @override
   bool shouldRebuild(covariant _StickerHeaderDelegate oldDelegate) => true;
 }

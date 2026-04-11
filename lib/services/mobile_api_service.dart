@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:flutter/foundation.dart';
 import '../core/network/dio_client.dart';
 import '../core/constants/api_constants.dart';
 import '../core/storage/storage_service.dart';
@@ -106,8 +106,8 @@ class MobileApiService {
       XFile xFile;
       if (file is XFile) {
         xFile = file;
-      } else if (file is File) {
-        xFile = XFile(file.path);
+      } else if (file is String) {
+        xFile = XFile(file);
       } else {
         return null;
       }
@@ -130,11 +130,11 @@ class MobileApiService {
   }
 
   Future<String?> uploadFile(String path) async {
-    return uploadImage(File(path));
+    return uploadImage(path);
   }
 
   Future<String?> uploadAudio(String path) async {
-    return uploadImage(File(path));
+    return uploadImage(path);
   }
 
   Future<bool> saveInward(Map<String, dynamic> data) async {
@@ -1027,7 +1027,7 @@ class MobileApiService {
   Future<bool> saveStockLimit(Map<String, dynamic> data) async {
     try {
       final response = await _client.post(ApiConstants.stockLimits, data: data);
-      return response.statusCode == 201;
+      return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
       return false;
     }
@@ -1938,6 +1938,16 @@ class MobileApiService {
       return response.data ?? [];
     } catch (e) {
       return [];
+    }
+  }
+
+  // --- Stock Limits ---
+  Future<bool> deleteStockLimit(String id) async {
+    try {
+      final response = await _client.delete('${ApiConstants.stockLimits}/$id');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
     }
   }
 }

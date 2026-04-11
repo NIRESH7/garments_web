@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../core/theme/color_palette.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../core/constants/layout_constants.dart';
 
-class CustomDropdownField extends StatelessWidget {
+class CustomDropdownField extends StatefulWidget {
   final String label;
   final String? value;
   final List<String> items;
@@ -30,387 +32,212 @@ class CustomDropdownField extends StatelessWidget {
   });
 
   @override
+  State<CustomDropdownField> createState() => _CustomDropdownFieldState();
+}
+
+class _CustomDropdownFieldState extends State<CustomDropdownField> {
+  final MenuController _menuController = MenuController();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _filteredItems {
+    if (_searchQuery.isEmpty) return widget.items;
+    return widget.items
+        .where((item) => item.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (label.isNotEmpty) ...[
+        if (widget.label.isNotEmpty) ...[
           Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+            widget.label,
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
               color: ColorPalette.textSecondary,
+              letterSpacing: 0.2,
             ),
           ),
-          const SizedBox(height: 6),
+          Gaps.h8,
         ],
-        GestureDetector(
-          onTap: () => _showSelectionDialog(context),
-          onDoubleTap: onDoubleTap,
-          child: FormField<String>(
-            key: ValueKey(value),
-            validator: validator,
-            initialValue: value,
-            builder: (state) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: state.hasError
-                            ? ColorPalette.error
-                            : const Color(0xFFE2E8F0),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0F172A).withOpacity(0.04),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        if (prefixIcon != null) ...[
-                          Icon(
-                            prefixIcon,
-                            size: 18,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                          const SizedBox(width: 10),
-                        ],
-                        if (value != null) ...[
-                          (() {
-                            final rColor = resolveColor?.call(value!);
-                            final imgPath = itemImages?[value!];
-
-                            if (imgPath != null && imgPath.isNotEmpty) {
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildImagePreview(imgPath),
-                                  const SizedBox(width: 10),
-                                ],
-                              );
-                            } else if (rColor != null) {
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildColorCircle(rColor),
-                                  const SizedBox(width: 10),
-                                ],
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          })(),
-                        ],
-                        Expanded(
-                          child: Text(
-                            (value != null && value!.contains(' (#'))
-                                ? value!.split(' (#')[0]
-                                : value ?? hint,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: value == null
-                                  ? Colors.grey.shade400
-                                  : ColorPalette.textPrimary,
-                              fontWeight: value == null
-                                  ? FontWeight.normal
-                                  : FontWeight.w500,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const Icon(
-                          LucideIcons.chevronDown,
-                          size: 20,
-                          color: Color(0xFF64748B),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (state.hasError)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6, left: 4),
-                      child: Text(
-                        state.errorText!,
-                        style: const TextStyle(
-                          color: ColorPalette.error,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showSelectionDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => _SearchableListDialog(
-        title: 'Select $label',
-        items: items,
-        initialValue: value,
-        itemImages: itemImages,
-        resolveColor: resolveColor,
-        onSelected: (val) {
-          onChanged(val);
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
-
-  Widget _buildColorCircle(Color color) {
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.grey.shade300, width: 1),
-      ),
-    );
-  }
-
-  Widget _buildImagePreview(String path) {
-    bool isNetwork = path.startsWith('http');
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade300),
-        image: DecorationImage(
-          image: isNetwork
-              ? NetworkImage(path) as ImageProvider
-              : FileImage(File(path)), // Correcting io.File usage
-          fit: BoxFit.cover,
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchableListDialog extends StatefulWidget {
-  final String title;
-  final List<String> items;
-  final String? initialValue;
-  final Map<String, String>? itemImages;
-  final Color? Function(String)? resolveColor;
-  final Function(String) onSelected;
-
-  const _SearchableListDialog({
-    required this.title,
-    required this.items,
-    this.initialValue,
-    this.itemImages,
-    this.resolveColor,
-    required this.onSelected,
-  });
-
-  @override
-  State<_SearchableListDialog> createState() => _SearchableListDialogState();
-}
-
-class _SearchableListDialogState extends State<_SearchableListDialog> {
-  late List<String> _filteredItems;
-  final _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredItems = widget.items;
-  }
-
-  void _filterItems(String query) {
-    setState(() {
-      _filteredItems = widget.items
-          .where((item) => item.toLowerCase().contains(query.toLowerCase()))
-          .toList();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-          maxWidth: 400,
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: ColorPalette.textPrimary,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _searchController,
-              onChanged: _filterItems,
-              decoration: InputDecoration(
-                hintText: 'Search...',
-                prefixIcon: const Icon(LucideIcons.search, size: 18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Theme.of(context).primaryColor),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                filled: true,
-                fillColor: Colors.grey.shade50,
+        MenuAnchor(
+          controller: _menuController,
+          alignmentOffset: const Offset(0, 4),
+          style: MenuStyle(
+            backgroundColor: WidgetStateProperty.all(Colors.white),
+            surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+            elevation: WidgetStateProperty.all(8),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: const BorderSide(color: ColorPalette.border),
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _filteredItems.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            LucideIcons.searchX,
-                            size: 40,
-                            color: Colors.grey.shade300,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No items found',
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+            padding: WidgetStateProperty.all(EdgeInsets.zero),
+          ),
+          menuChildren: [
+            Container(
+              width: 350,
+              height: 400,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+              ),
+              child: Column(
+                children: [
+                  // Search Bar at Top
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      style: GoogleFonts.inter(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search...',
+                        hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted),
+                        prefixIcon: const Icon(LucideIcons.search, size: 14, color: ColorPalette.textMuted),
+                        filled: true,
+                        fillColor: ColorPalette.background,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _filteredItems.length,
-                      separatorBuilder: (context, index) =>
-                          Divider(height: 1, color: Colors.grey.shade100),
-                      itemBuilder: (context, index) {
-                        final item = _filteredItems[index];
-                        final isSelected = item == widget.initialValue;
-                        final imagePath = widget.itemImages?[item];
-
-                        return ListTile(
-                          onTap: () => widget.onSelected(item),
-                          leading: (() {
-                            final rColor = widget.resolveColor?.call(item);
-                            final imagePath = widget.itemImages?[item];
-
-                            if (imagePath != null && imagePath.isNotEmpty) {
-                              return Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  image: DecorationImage(
-                                    image: imagePath.startsWith('http')
-                                        ? NetworkImage(imagePath)
-                                              as ImageProvider
-                                        : FileImage(File(imagePath)),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              );
-                            } else if (rColor != null) {
-                              return Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: rColor,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                    width: 1,
-                                  ),
-                                ),
-                              );
-                            }
-                            return null;
-                          })(),
-                          title: Text(
-                            item.contains(' (#') ? item.split(' (#')[0] : item,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected
-                                  ? Theme.of(context).primaryColor
-                                  : ColorPalette.textPrimary,
-                            ),
-                          ),
-                          trailing: isSelected
-                              ? Icon(
-                                  LucideIcons.check,
-                                  color: Theme.of(context).primaryColor,
-                                  size: 18,
-                                )
-                              : null,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        );
-                      },
                     ),
+                  ),
+                  const Divider(height: 1, color: ColorPalette.border),
+                  // List Items
+                  Expanded(
+                    child: _filteredItems.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                'No items found',
+                                style: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted),
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: _filteredItems.length,
+                            itemBuilder: (context, index) {
+                              final item = _filteredItems[index];
+                              final isSelected = item == widget.value;
+
+                              return InkWell(
+                                onTap: () {
+                                  widget.onChanged(item);
+                                  _menuController.close();
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  color: isSelected ? ColorPalette.primary.withOpacity(0.05) : null,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.contains(' (#') ? item.split(' (#')[0] : item,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                            color: isSelected ? ColorPalette.primary : ColorPalette.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(LucideIcons.check, size: 14, color: ColorPalette.primary),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ],
+          builder: (context, controller, child) {
+            return GestureDetector(
+              onTap: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              child: FormField<String>(
+                key: ValueKey(widget.value),
+                validator: widget.validator,
+                initialValue: widget.value,
+                builder: (state) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: state.hasError ? ColorPalette.error : ColorPalette.border,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            if (widget.prefixIcon != null) ...[
+                              Icon(widget.prefixIcon, size: 16, color: ColorPalette.textMuted),
+                              const SizedBox(width: 10),
+                            ],
+                            Expanded(
+                              child: Text(
+                                (widget.value != null && widget.value!.contains(' (#'))
+                                    ? widget.value!.split(' (#')[0]
+                                    : widget.value ?? widget.hint,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: widget.value == null
+                                      ? ColorPalette.textMuted.withOpacity(0.6)
+                                      : ColorPalette.textPrimary,
+                                  fontWeight: widget.value == null ? FontWeight.normal : FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const Icon(LucideIcons.chevronDown, size: 16, color: ColorPalette.textMuted),
+                          ],
+                        ),
+                      ),
+                      if (state.hasError)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            state.errorText!,
+                            style: GoogleFonts.inter(color: ColorPalette.error, fontSize: 10),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
         ),
-      ),
+      ],
     );
   }
 }
