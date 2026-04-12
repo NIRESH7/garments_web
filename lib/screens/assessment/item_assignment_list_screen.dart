@@ -57,37 +57,37 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> wit
 
   @override
   Widget build(BuildContext context) {
+    bool isWeb = MediaQuery.of(context).size.width > 900;
+    
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        toolbarHeight: 0,
-        leading: null,
-        title: null,
-        automaticallyImplyLeading: false,
-        centerTitle: false,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: ColorPalette.primary,
-          unselectedLabelColor: ColorPalette.textMuted,
-          indicatorColor: ColorPalette.primary,
-          indicatorWeight: 2,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5),
-          tabs: const [
-            Tab(text: 'CUTTING MASTER'),
-            Tab(text: 'ACCESSORIES MASTER'),
-          ],
-        ),
-      ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : TabBarView(
-            controller: _tabController,
-            children: [
-              _buildListView(_cuttingMasters, true),
-              _buildListView(_accessoriesMasters, false),
-            ],
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Column(
+        children: [
+          // Header removed as requested
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: isWeb ? 40 : 16, vertical: 24),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 1400),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTabSwitcher(),
+                      const SizedBox(height: 24),
+                      _isLoading 
+                        ? const Center(child: Padding(padding: EdgeInsets.all(100), child: CircularProgressIndicator(strokeWidth: 2)))
+                        : _tabController.index == 0 
+                          ? _buildListView(_cuttingMasters, true)
+                          : _buildListView(_accessoriesMasters, false),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           Widget screen = _tabController.index == 0 
@@ -96,11 +96,50 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> wit
           final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
           if (result == true) _loadData();
         },
-        backgroundColor: ColorPalette.primary,
-        icon: const Icon(LucideIcons.plus, size: 20, color: Colors.white),
+        backgroundColor: const Color(0xFF475569), // Lightened slate grey
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        icon: const Icon(LucideIcons.plus, size: 18, color: Colors.white),
         label: Text(
-          'NEW RECORD', 
-          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5, color: Colors.white),
+          'CREATE NEW ASSIGNMENT', 
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabSwitcher() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _tabToggle('CUTTING MASTER', 0),
+          _tabToggle('ACCESSORIES MASTER', 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabToggle(String label, int index) {
+    bool active = _tabController.index == index;
+    return InkWell(
+      onTap: () => setState(() => _tabController.index = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: active ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))] : null,
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 12, 
+            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+            color: active ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+          ),
         ),
       ),
     );

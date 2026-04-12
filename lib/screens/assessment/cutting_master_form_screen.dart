@@ -240,12 +240,12 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         backgroundColor: const Color(0xFFF9FAFB),
         appBar: AppBar(
           backgroundColor: Colors.white,
-          elevation: 1,
+          elevation: 0,
           leading: IconButton(
-            icon: const Icon(LucideIcons.arrowLeft, color: Color(0xFF0F172A), size: 20),
+            icon: const Icon(LucideIcons.chevronLeft, color: Color(0xFF0F172A), size: 20),
             onPressed: () => Navigator.pop(context),
           ),
-          title: null,
+          title: Text('NEW CUTTING MASTER', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
           centerTitle: false,
           actions: [
             Container(
@@ -254,12 +254,12 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                 child: TextButton.icon(
                   onPressed: _isSaving ? null : _save,
                   icon: _isSaving 
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: ColorPalette.primary))
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(LucideIcons.check, size: 14, color: Colors.white),
-                  label: Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: Colors.white)),
+                  label: Text('SAVE RECORD', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1, color: Colors.white)),
                   style: TextButton.styleFrom(
-                    backgroundColor: ColorPalette.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    backgroundColor: const Color(0xFF475569),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                   ),
                 ),
@@ -267,12 +267,12 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
             ),
           ],
           bottom: TabBar(
-            labelColor: ColorPalette.primary,
-            unselectedLabelColor: ColorPalette.textMuted,
-            indicatorColor: ColorPalette.primary,
+            labelColor: const Color(0xFF0F172A),
+            unselectedLabelColor: const Color(0xFF64748B),
+            indicatorColor: const Color(0xFF0F172A),
             indicatorSize: TabBarIndicatorSize.label,
-            indicatorWeight: 2,
-            labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5),
+            indicatorWeight: 3,
+            labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5),
             tabs: const [
               Tab(text: 'IDENTITY'),
               Tab(text: 'PRODUCTION'),

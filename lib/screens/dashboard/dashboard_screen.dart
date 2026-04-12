@@ -62,6 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 5: return 'Lot Requirement Allocation';
       case 6: return 'Cutting Planning';
       case 7: return 'Reports Dashboard';
+      case 8: return 'Item Assignments';
       default: return 'Executive Dashboard';
     }
   }
@@ -122,7 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: IndexedStack(
-          index: _pageIndex >= 9 ? 0 : _pageIndex, // Keep on home if navigating away
+          index: _pageIndex >= 11 ? 0 : _pageIndex, // Keep on home if navigating away
           children: [
             const _DynamicDataHomeTab(),              // 0
             const MastersDashboard(),                 // 1
@@ -132,7 +133,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const LotRequirementAllocationScreen(),   // 5
             const CuttingOrderPlanningScreen(),       // 6
             const ReportsDashboard(),                 // 7
-            const _HistoryPlaceholder(),              // 8
+            const ItemAssignmentListScreen(),         // 8
+            const _HistoryPlaceholder(),              // 9
           ],
         ),
         bottomNavigationBar: LayoutConstants.isMobile(context) 

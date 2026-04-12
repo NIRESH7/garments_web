@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/color_palette.dart';
@@ -51,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final isWeb = LayoutConstants.isWeb(context);
     
     return Scaffold(
-      backgroundColor: isWeb ? ColorPalette.background : Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       body: isWeb ? _buildWebLayout() : _buildMobileLayout(),
     );
   }
@@ -59,161 +58,170 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildWebLayout() {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1100),
-        child: Row(
-          children: [
-            // Left side - Branding
-            Expanded(
-              flex: 3,
-              child: Container(
-                padding: const EdgeInsets.all(48),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: ColorPalette.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
+        constraints: const BoxConstraints(maxWidth: 1200),
+        child: Container(
+          margin: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              )
+            ],
+          ),
+          child: Row(
+            children: [
+              // Left side - Branding
+              Expanded(
+                flex: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(64),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.only(topLeft: Radius.circular(4), bottomLeft: Radius.circular(4)),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          height: 70,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => const Icon(LucideIcons.image, color: Color(0xFF475569), size: 40),
+                        ),
                       ),
-                      child: const Icon(
-                        LucideIcons.factory,
-                        color: ColorPalette.primary,
-                        size: 40,
+                      const SizedBox(height: 48),
+                      Text(
+                        'OM VINAYAGA\nGARMENTS',
+                        style: GoogleFonts.outfit(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0F172A),
+                          height: 1.1,
+                          letterSpacing: -1,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    Text(
-                      'Om Vinayaga\nGarments',
-                      style: GoogleFonts.inter(
-                        fontSize: 48,
-                        fontWeight: FontWeight.w800,
-                        color: ColorPalette.textPrimary,
-                        height: 1.1,
+                      const SizedBox(height: 24),
+                      Text(
+                        'PRECISION LOGISTICS & PRODUCTION ERP',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 2,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Professional textile lot management system with comprehensive inventory tracking, quality control, and production workflow automation.',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: ColorPalette.textSecondary,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    _buildFeatureList(),
-                  ],
+                      const SizedBox(height: 48),
+                      _buildFeatureItem('INVENTORY INTELLIGENCE'),
+                      _buildFeatureItem('PRODUCTION PROTOCOLS'),
+                      _buildFeatureItem('DISTRIBUTION REGISTRY'),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            // Right side - Login Form
-            Expanded(
-              flex: 2,
-              child: Container(
-                height: double.infinity,
-                color: Colors.white,
-                padding: const EdgeInsets.all(48),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      child: _buildLoginForm(),
-                    ),
-                  ],
+              // Right side - Login Form
+              Expanded(
+                flex: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(80),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AUTHENTICATION',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Login',
+                        style: GoogleFonts.outfit(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 48),
+                      _buildLoginForm(),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        children: [
+          Container(width: 4, height: 4, decoration: const BoxDecoration(color: Color(0xFF475569), shape: BoxShape.circle)),
+          const SizedBox(width: 16),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF475569),
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildMobileLayout() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: ColorPalette.primary.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ColorPalette.primary.withOpacity(0.1)),
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Image.asset(
+                'assets/images/logo.png',
+                height: 50,
+                errorBuilder: (context, error, stackTrace) => const Icon(LucideIcons.image, color: Color(0xFF475569), size: 40),
               ),
-              child: const Icon(LucideIcons.factory, color: ColorPalette.primary, size: 28),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Om Vinayaga Garments',
-              style: GoogleFonts.inter(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: ColorPalette.textPrimary,
-                letterSpacing: -0.5,
+              const SizedBox(height: 32),
+              Text(
+                'OM VINAYAGA',
+                style: GoogleFonts.outfit(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Corporate Management Dashboard',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: ColorPalette.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 48),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: _buildLoginForm(),
-            ),
-          ],
+              const SizedBox(height: 48),
+              _buildLoginForm(),
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildFeatureList() {
-    final features = [
-      'Real-time inventory tracking',
-      'Quality control management',
-      'Production workflow automation',
-      'Comprehensive reporting system',
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: features.map((feature) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: ColorPalette.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              feature,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: ColorPalette.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      )).toList(),
     );
   }
 
@@ -221,67 +229,33 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Welcome Back',
-          style: GoogleFonts.inter(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: ColorPalette.textPrimary,
-          ),
-        ),
+        _buildFieldLabel('OFFICIAL EMAIL'),
         const SizedBox(height: 8),
-        Text(
-          'Sign in to access your dashboard',
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            color: ColorPalette.textSecondary,
-          ),
+        _buildIndustrialInput(
+          controller: _emailController,
+          hint: 'admin@garments.erp',
+          icon: LucideIcons.mail,
         ),
-        const SizedBox(height: 32),
-        _buildFormFields(),
-        const SizedBox(height: 12),
-        _buildForgotPassword(),
+        const SizedBox(height: 24),
+        _buildFieldLabel('SECURITY PASSWORD'),
+        const SizedBox(height: 8),
+        _buildIndustrialInput(
+          controller: _passwordController,
+          hint: '••••••••',
+          icon: LucideIcons.lock,
+          isPassword: true,
+        ),
         const SizedBox(height: 32),
         _buildSignInButton(),
-        const SizedBox(height: 32),
-        _buildContactAdmin(),
-      ],
-    );
-  }
-
-  Widget _buildFormFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildFieldLabel('Email Address'),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 50,
-          child: TextField(
-            controller: _emailController,
-            decoration: const InputDecoration(
-              hintText: 'admin@garments.erp',
-              prefixIcon: Icon(LucideIcons.mail, size: 18),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        _buildFieldLabel('Security Password'),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 50,
-          child: TextField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              hintText: '••••••••',
-              prefixIcon: const Icon(LucideIcons.lock, size: 18),
-              suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye, size: 18),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        const SizedBox(height: 48),
+        Center(
+          child: Text(
+            'FOR ASSISTANCE CONTACT SYSTEM ADMIN',
+            style: GoogleFonts.inter(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF94A3B8),
+              letterSpacing: 1,
             ),
           ),
         ),
@@ -291,30 +265,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildFieldLabel(String label) {
     return Text(
-      label.toUpperCase(),
+      label,
       style: GoogleFonts.inter(
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        color: ColorPalette.textSecondary,
-        letterSpacing: 0.5,
+        fontSize: 9,
+        fontWeight: FontWeight.w900,
+        color: const Color(0xFF64748B),
+        letterSpacing: 1,
       ),
     );
   }
 
-  Widget _buildForgotPassword() {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: TextButton(
-        onPressed: () {},
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: Text(
-          'Recover Password',
-          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.primary),
-        ),
+  Widget _buildIndustrialInput({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: isPassword && _obscurePassword,
+      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(color: const Color(0xFFCBD5E1)),
+        prefixIcon: Icon(icon, size: 16, color: const Color(0xFF64748B)),
+        suffixIcon: isPassword 
+          ? IconButton(
+              icon: Icon(_obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye, size: 16),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            )
+          : null,
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF475569), width: 1.5)),
       ),
     );
   }
@@ -322,32 +308,22 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildSignInButton() {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 56,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _login,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF475569),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        ),
         child: _isLoading
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : const Text('Access Dashboard'),
+            : Text(
+                'LOGIN',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5),
+              ),
       ),
-    );
-  }
-
-  Widget _buildContactAdmin() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Support required?',
-          style: GoogleFonts.inter(fontSize: 13, color: ColorPalette.textMuted),
-        ),
-        TextButton(
-          onPressed: () {},
-          child: Text(
-            'Contact Administrator',
-            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -148,219 +148,233 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    if (_isLoading) return const Center(child: Padding(padding: EdgeInsets.all(100), child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF475569))));
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'PRODUCTION TASK ASSIGNMENT',
-              style: GoogleFonts.outfit(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                color: ColorPalette.textPrimary,
-                letterSpacing: -1,
-              ),
+        padding: const EdgeInsets.all(40),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeaderSection(),
+                const SizedBox(height: 48),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth > 1000) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 4, child: _buildTaskFormUI()),
+                          const SizedBox(width: 48),
+                          Expanded(flex: 6, child: _buildTasksListUI()),
+                        ],
+                      );
+                    } else {
+                      return Column(
+                        children: [
+                          _buildTaskFormUI(),
+                          const SizedBox(height: 64),
+                          _buildTasksListUI(),
+                        ],
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Create and monitor operational workflows for floor teams.',
-              style: GoogleFonts.inter(fontSize: 13, color: ColorPalette.textMuted),
-            ),
-            const SizedBox(height: 48),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth > 900) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 2, child: _buildTaskFormUI()),
-                      const SizedBox(width: 48),
-                      Expanded(flex: 3, child: _buildTasksListUI()),
-                    ],
-                  );
-                } else {
-                  return Column(
-                    children: [
-                      _buildTaskFormUI(),
-                      const SizedBox(height: 64),
-                      _buildTasksListUI(),
-                    ],
-                  );
-                }
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTaskFormUI() {
+  Widget _buildHeaderSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('NEW ASSIGNMENT'),
+        Text(
+          'MISSION CONTROL',
+          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 2),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Operational Workflows',
+          style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A), letterSpacing: -0.5),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskFormUI() {
+    return _formContainer(
+      title: 'NEW WORK ASSIGNMENT',
+      children: [
+        _buildIndustrialInput('TASK IDENTIFIER / TITLE', _titleController, LucideIcons.type),
+        const SizedBox(height: 24),
+        _buildIndustrialInput('DESCRIPTION & TECHNICAL SPECS', _descController, LucideIcons.alignLeft, maxLines: 4),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: _buildIndustrialDropdown('PRIORITY', ['Low', 'Medium', 'High'], _priority, (v) => setState(() => _priority = v!)),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: _buildIndustrialDropdown('ASSIGNMENT GROUP', _assignOptions, _assignedTo, (v) => setState(() => _assignedTo = v!)),
+            ),
+          ],
+        ),
         const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: ColorPalette.border.withOpacity(0.3)),
-          ),
-          child: Column(
-            children: [
-              _buildFieldLabel('TASK TITLE'),
-              _buildTextInput('Enter task name...', controller: _titleController),
-              const SizedBox(height: 24),
-              _buildFieldLabel('DESCRIPTION & INSTRUCTIONS'),
-              _buildTextInput('Describe the work details...', controller: _descController, maxLines: 4),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildFieldLabel('PRIORITY'),
-                        _buildDropdown(['Low', 'Medium', 'High'], _priority, (v) => setState(() => _priority = v!)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildFieldLabel('ASSIGN TO'),
-                        _buildDropdown(_assignOptions, _assignedTo, (v) => setState(() => _assignedTo = v!)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              if (_recordedPath != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 24),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: ColorPalette.success.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: ColorPalette.success.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(LucideIcons.mic, size: 16, color: ColorPalette.success),
-                      const SizedBox(width: 12),
-                      Text('VOICE INSTRUCTION ATTACHED', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.success)),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x, size: 14),
-                        onPressed: () => setState(() => _recordedPath = null),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                ),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _toggleRecording,
-                      icon: Icon(_isRecording ? LucideIcons.stopCircle : LucideIcons.mic, size: 16),
-                      label: Text(_isRecording ? 'STOP' : 'RECORD VOICE', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800)),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        foregroundColor: _isRecording ? ColorPalette.error : ColorPalette.primary,
-                        side: BorderSide(color: _isRecording ? ColorPalette.error : ColorPalette.primary.withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: _showManageAssignmentsDialog,
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Icon(LucideIcons.users, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _createTask,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ColorPalette.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text('CREATE & DISPATCH TASK', style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        if (_recordedPath != null)
+          _voiceAttachmentIndicator(),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _toggleRecording,
+                icon: Icon(_isRecording ? LucideIcons.stopCircle : LucideIcons.mic, size: 16),
+                label: Text(_isRecording ? 'STOP RECORDING' : 'ATTACH VOICE PROTOCOL', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  foregroundColor: _isRecording ? const Color(0xFFEF4444) : const Color(0xFF475569),
+                  side: BorderSide(color: _isRecording ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                 ),
               ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 60,
+              height: 60,
+              child: OutlinedButton(
+                onPressed: _showManageAssignmentsDialog,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                child: const Icon(LucideIcons.settings, size: 18, color: Color(0xFF64748B)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: _isSaving ? null : _createTask,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF475569),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            ),
+            child: _isSaving
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text('DISPATCH WORKFLOW', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.2)),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildFieldLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 1.2)),
-    );
-  }
-
-  Widget _buildTextInput(String hint, {required TextEditingController controller, int maxLines = 1}) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(color: ColorPalette.border, fontSize: 13),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-      ),
-    );
-  }
-
-  Widget _buildDropdown(List<String> items, String value, Function(String?) onChanged) {
+  Widget _formContainer({required String title, required List<Widget> children}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: items.contains(value) ? value : items.first,
-          items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)))).toList(),
-          onChanged: onChanged,
-          isExpanded: true,
-          icon: const Icon(LucideIcons.chevronDown, size: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 3, height: 12, color: const Color(0xFF475569)),
+              const SizedBox(width: 8),
+              Text(title, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 1.2)),
+            ],
+          ),
+          const SizedBox(height: 32),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIndustrialInput(String label, TextEditingController ctrl, IconData icon, {int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: ctrl,
+          maxLines: maxLines,
+          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 14, color: const Color(0xFF475569)),
+            filled: true,
+            fillColor: const Color(0xFFF9FAFB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildIndustrialDropdown(String label, List<String> items, String value, Function(String?) onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : items.first,
+              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)))).toList(),
+              onChanged: onChanged,
+              isExpanded: true,
+              icon: const Icon(LucideIcons.chevronDown, size: 16),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _voiceAttachmentIndicator() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFD1FAE5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.mic, size: 14, color: Color(0xFF059669)),
+          const SizedBox(width: 12),
+          Text('VOICE INSTRUCTION ATTACHED', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF059669), letterSpacing: 0.5)),
+          const Spacer(),
+          InkWell(onTap: () => setState(() => _recordedPath = null), child: const Icon(LucideIcons.x, size: 14, color: Color(0xFF059669))),
+        ],
       ),
     );
   }
@@ -369,88 +383,95 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('ACTIVE FLOWS'),
-        const SizedBox(height: 32),
-        if (_tasks.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(64),
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: ColorPalette.border.withOpacity(0.2)),
-            ),
-            child: Column(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(LucideIcons.clipboardList, size: 48, color: ColorPalette.border.withOpacity(0.5)),
-                const SizedBox(height: 16),
-                Text('NO ACTIVE TASKS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 1)),
+                Text('ACTIVE FLOWS', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 1.5)),
+                const SizedBox(height: 4),
+                Container(height: 2, width: 24, color: const Color(0xFF475569)),
               ],
             ),
-          )
+            IconButton(onPressed: _loadTasks, icon: const Icon(LucideIcons.refreshCw, size: 16, color: Color(0xFF64748B))),
+          ],
+        ),
+        const SizedBox(height: 32),
+        if (_tasks.isEmpty)
+          _buildEmptyState()
         else
-          ..._tasks.map((task) => _buildTaskCard(task)),
+          ..._tasks.map((task) => _buildTaskRegistryCard(task)),
       ],
     );
   }
 
-  Widget _buildTaskCard(dynamic task) {
-    final priority = (task['priority'] ?? 'Low').toString().toUpperCase();
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(64),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          Icon(LucideIcons.layers, size: 32, color: const Color(0xFF94A3B8).withOpacity(0.5)),
+          const SizedBox(height: 16),
+          Text('NO ACTIVE REGISTRIES', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskRegistryCard(dynamic task) {
     final status = (task['status'] ?? 'Pending').toString().toUpperCase();
     final bool isCompleted = status == 'COMPLETED';
 
-    Color pColor = priority == 'HIGH' ? ColorPalette.error : (priority == 'MEDIUM' ? Colors.orange : ColorPalette.success);
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ColorPalette.border.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => TaskDetailScreen(task: task))).then((_) => _loadTasks()),
-        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              Container(width: 4, height: 48, decoration: BoxDecoration(color: pColor, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       (task['title'] ?? 'UNTITLED').toString().toUpperCase(),
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: isCompleted ? ColorPalette.textMuted : ColorPalette.textPrimary,
+                        color: isCompleted ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
                         decoration: isCompleted ? TextDecoration.lineThrough : null,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'ASSIGNEE: ${task['assignedTo']?.toString().toUpperCase() ?? 'NONE'}',
-                      style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text('ASSIGNED:', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: const Color(0xFF64748B))),
+                        const SizedBox(width: 4),
+                        Text(task['assignedTo']?.toString().toUpperCase() ?? 'N/A', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                      ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 24),
-              _buildStatusIndicator(status),
-              const SizedBox(width: 24),
+              _buildStatusBadge(status),
+              const SizedBox(width: 16),
               if (task['voiceDescriptionUrl'] != null)
-                IconButton(
-                  icon: const Icon(LucideIcons.volume2, size: 18, color: ColorPalette.primary),
-                  onPressed: () => _playRemoteAudio(task['voiceDescriptionUrl']),
-                ),
-              IconButton(
-                icon: const Icon(LucideIcons.trash2, size: 18, color: ColorPalette.textMuted),
-                onPressed: () => _confirmDelete(task),
-              ),
-              const Icon(LucideIcons.chevronRight, size: 16, color: ColorPalette.border),
+                IconButton(icon: const Icon(LucideIcons.volume2, size: 16, color: Color(0xFF475569)), onPressed: () => _playRemoteAudio(task['voiceDescriptionUrl'])),
+              IconButton(icon: const Icon(LucideIcons.trash2, size: 16, color: Color(0xFFCBD5E1)), onPressed: () => _confirmDelete(task)),
             ],
           ),
         ),
@@ -458,23 +479,16 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     );
   }
 
-  Widget _buildStatusIndicator(String status) {
-    Color c = status == 'COMPLETED' ? ColorPalette.success : (status == 'PENDING' ? ColorPalette.textMuted : ColorPalette.primary);
+  Widget _buildStatusBadge(String status) {
+    bool isDone = status == 'COMPLETED';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(4), border: Border.all(color: c.withOpacity(0.2))),
-      child: Text(status, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: c, letterSpacing: 0.5)),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary, letterSpacing: 1.5)),
-        const SizedBox(height: 8),
-        Container(height: 2, width: 24, color: ColorPalette.primary),
-      ],
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDone ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+        border: Border.all(color: isDone ? const Color(0xFFD1FAE5) : const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Text(status, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: isDone ? const Color(0xFF059669) : const Color(0xFF64748B))),
     );
   }
 
@@ -555,5 +569,20 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
         }, child: const Text('DELETE', style: TextStyle(color: ColorPalette.error))),
       ],
     ));
+  }
+
+  Widget _buildTextInput(String hint, {required TextEditingController controller}) {
+    return TextFormField(
+      controller: controller,
+      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+    );
   }
 }

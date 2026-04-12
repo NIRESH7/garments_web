@@ -70,7 +70,7 @@ class _ModernDataTableState extends State<ModernDataTable> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       clipBehavior: Clip.antiAlias,
@@ -81,7 +81,7 @@ class _ModernDataTableState extends State<ModernDataTable> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20),
             decoration: const BoxDecoration(
-              color: Color(0xFF0F172A), // Premium Black Header as requested
+              color: Color(0xFF475569), // Lightened slate grey for better contrast
             ),
             child: Row(
               children: [
@@ -262,8 +262,8 @@ class _ModernDataTableState extends State<ModernDataTable> {
       padding: const EdgeInsets.all(64.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         children: [

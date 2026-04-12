@@ -40,6 +40,7 @@ class WebSidebar extends StatelessWidget {
                 _buildNavItem(3, LucideIcons.arrowUpCircle, 'Outward Stock'),
                 _buildNavItem(4, LucideIcons.clipboardList, 'Production Tasks'),
                 _buildNavItem(5, LucideIcons.layoutGrid, 'Lot Assignment'),
+                _buildNavItem(8, LucideIcons.layers, 'Item Assignment'),
                 _buildNavItem(6, LucideIcons.calendar, 'Cutting Planning'),
                 
                 const SizedBox(height: 24),
