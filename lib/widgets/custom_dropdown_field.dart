@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../core/theme/color_palette.dart';
@@ -16,6 +15,7 @@ class CustomDropdownField extends StatefulWidget {
   final Map<String, String>? itemImages;
   final VoidCallback? onDoubleTap;
   final Color? Function(String)? resolveColor;
+  final bool isDense;
 
   const CustomDropdownField({
     super.key,
@@ -29,6 +29,7 @@ class CustomDropdownField extends StatefulWidget {
     this.itemImages,
     this.onDoubleTap,
     this.resolveColor,
+    this.isDense = false,
   });
 
   @override
@@ -188,7 +189,9 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        padding: widget.isDense 
+                            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+                            : const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(4),

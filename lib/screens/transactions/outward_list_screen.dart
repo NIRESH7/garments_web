@@ -15,10 +15,10 @@ class OutwardListScreen extends StatefulWidget {
   const OutwardListScreen({super.key});
 
   @override
-  State<OutwardListScreen> createState() => _OutwardListScreenState();
+  State<OutwardListScreen> createState() => OutwardListScreenState();
 }
 
-class _OutwardListScreenState extends State<OutwardListScreen> {
+class OutwardListScreenState extends State<OutwardListScreen> {
   final _api = MobileApiService();
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _outwards = [];
@@ -28,7 +28,7 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchOutwards();
+    fetchOutwards();
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
@@ -40,7 +40,7 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchOutwards() async {
+  Future<void> fetchOutwards() async {
     setState(() => _isLoading = true);
     try {
       final res = await _api.getOutwards();
@@ -71,53 +71,6 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
 
     return Scaffold(
       backgroundColor: ColorPalette.background,
-      appBar: AppBar(
-        toolbarHeight: 64,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'DISPATCH LOGISTICS',
-              style: GoogleFonts.outfit(
-                fontWeight: FontWeight.w800,
-                color: ColorPalette.textPrimary,
-                fontSize: 16,
-                letterSpacing: 0.5,
-              ),
-            ),
-            Text(
-              'OUTWARD SHIPMENT REGISTRY',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
-                color: ColorPalette.textMuted,
-                fontSize: 9,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        iconTheme: const IconThemeData(color: ColorPalette.textPrimary, size: 20),
-        actions: [
-          _buildSearchOverlay(isMobile),
-          IconButton(
-            onPressed: _fetchOutwards,
-            icon: const Icon(LucideIcons.refreshCw, size: 16, color: ColorPalette.textMuted),
-          ),
-          Gaps.w16,
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const LotOutwardScreen()),
-        ).then((_) => _fetchOutwards()),
-        backgroundColor: ColorPalette.textPrimary,
-        child: const Icon(LucideIcons.plus, color: Colors.white),
-      ),
       body: ResponsiveWrapper(
         maxWidth: 1400,
         child: SingleChildScrollView(
@@ -160,7 +113,7 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
                         onEdit: (item) => Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => LotOutwardScreen(editOutward: item)),
-                        ).then((_) => _fetchOutwards()),
+                        ).then((_) => fetchOutwards()),
                         onDelete: _showDeleteDialog,
                         emptyMessage: _searchQuery.isEmpty
                             ? 'No dispatch records identified'
@@ -169,6 +122,41 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
                     ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddNewButton() {
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LotOutwardScreen()),
+      ).then((_) => fetchOutwards()),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: ColorPalette.primary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: ColorPalette.primary.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(LucideIcons.plus, size: 12, color: ColorPalette.primary),
+            const SizedBox(width: 4),
+            Text(
+              'ADD NEW',
+              style: GoogleFonts.inter(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: ColorPalette.primary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -191,6 +179,8 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
           '(${_filteredOutwards.length} ENTRIES)',
           style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted),
         ),
+        const Spacer(),
+        _buildAddNewButton(),
       ],
     );
   }
@@ -233,7 +223,7 @@ class _OutwardListScreenState extends State<OutwardListScreen> {
               Navigator.pop(context);
               final success = await _api.deleteOutward(item['_id']);
               if (success) {
-                _fetchOutwards();
+                fetchOutwards();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Dispatch record neutralized'), backgroundColor: ColorPalette.error),

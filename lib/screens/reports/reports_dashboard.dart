@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../core/theme/color_palette.dart';
 import '../../core/constants/layout_constants.dart';
 import '../../core/layout/web_layout_wrapper.dart';
 import 'monthly_summary_report.dart';
@@ -26,58 +25,58 @@ class ReportsDashboard extends StatelessWidget {
     final List<Map<String, dynamic>> activeReports = [
       {
         'title': 'Departmental Tasks',
-        'subtitle': 'Cutting/Packing/Tailoring status',
+        'subtitle': 'Live status monitoring',
         'icon': LucideIcons.listChecks,
-        'color': Colors.purple,
+        'color': const Color(0xFF6366F1),
         'screen': const TaskProgressReportScreen(),
       },
       {
         'title': 'Cut Order Planning',
-        'subtitle': 'Planned vs Issued (Pending Dozen)',
+        'subtitle': 'Yield vs Variance',
         'icon': LucideIcons.scissors,
-        'color': Colors.orange.shade800,
+        'color': const Color(0xFFF59E0B),
         'screen': const CutOrderPlanReportScreen(),
       },
       {
         'title': 'Rack & Pallet Assets',
-        'subtitle': 'Inventory grouping by storage zone',
+        'subtitle': 'Inventory distribution',
         'icon': LucideIcons.box,
-        'color': Colors.brown,
+        'color': const Color(0xFF8B5CF6),
         'screen': const RackPalletReportScreen(),
       },
       {
         'title': 'Shade Card Analytics',
-        'subtitle': 'Lot & Item grouped color mapping',
+        'subtitle': 'Color group mapping',
         'icon': LucideIcons.palette,
-        'color': Colors.indigo,
+        'color': const Color(0xFF10B981),
         'screen': const ShadeCardReportScreen(),
       },
       {
         'title': 'Quality & Complaints',
-        'subtitle': 'Signatures and pictorial audits',
+        'subtitle': 'Performance audits',
         'icon': LucideIcons.checkCircle2,
-        'color': Colors.red.shade700,
+        'color': const Color(0xFFEF4444),
         'screen': const QualityAuditReportScreen(),
       },
       {
         'title': 'Stock Alert (Min/Max)',
-        'subtitle': 'Godown replenishment forecasting',
+        'subtitle': 'Replenishment forecast',
         'icon': LucideIcons.alertTriangle,
-        'color': Colors.redAccent,
+        'color': const Color(0xFFF43F5E),
         'screen': const GodownStockReportScreen(),
       },
       {
         'title': 'Monthly Summary',
-        'subtitle': 'Opening/Closing inventory flows',
+        'subtitle': 'Inventory flow audit',
         'icon': LucideIcons.layers,
-        'color': ColorPalette.success,
+        'color': const Color(0xFF2563EB),
         'screen': const MonthlySummaryReportScreen(),
       },
       {
         'title': 'Standard Spreadsheet',
-        'subtitle': 'Professional Excel data exporting',
+        'subtitle': 'Excel record exports',
         'icon': LucideIcons.fileSpreadsheet,
-        'color': Colors.teal,
+        'color': const Color(0xFF0D9488),
         'screen': const FormatReportsScreen(),
       },
     ];
@@ -88,14 +87,15 @@ class ReportsDashboard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeaderSection(),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             Expanded(
               child: GridView.builder(
+                padding: EdgeInsets.zero,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: isMobile ? 1 : 2,
-                  crossAxisSpacing: 24,
-                  mainAxisSpacing: 24,
-                  mainAxisExtent: 120,
+                  crossAxisCount: isMobile ? 1 : 4,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  mainAxisExtent: 140,
                 ),
                 itemCount: activeReports.length,
                 itemBuilder: (context, index) {
@@ -109,7 +109,7 @@ class ReportsDashboard extends StatelessWidget {
                       context,
                       MaterialPageRoute(builder: (context) => report['screen']),
                     ),
-                  ).animate().fadeIn(delay: (index * 50).ms).slideY(begin: 0.1);
+                  ).animate().fadeIn(delay: (index * 40).ms).scale(begin: const Offset(0.98, 0.98));
                 },
               ),
             ),
@@ -119,16 +119,12 @@ class ReportsDashboard extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: ColorPalette.background,
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: Text('ANALYTICS ENGINE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1)),
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.helpCircle, size: 18),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 16),
-        ],
+        toolbarHeight: 0,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -136,15 +132,14 @@ class ReportsDashboard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeaderSection(),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 1,
-                crossAxisSpacing: 20,
-                mainAxisSpacing: 20,
-                mainAxisExtent: 100,
+                mainAxisSpacing: 12,
+                mainAxisExtent: 80,
               ),
               itemCount: activeReports.length,
               itemBuilder: (context, index) {
@@ -158,7 +153,7 @@ class ReportsDashboard extends StatelessWidget {
                     context,
                     MaterialPageRoute(builder: (context) => report['screen']),
                   ),
-                ).animate().fadeIn(delay: (index * 50).ms).slideY(begin: 0.1);
+                ).animate().fadeIn(delay: (index * 40).ms);
               },
             ),
           ],
@@ -172,20 +167,29 @@ class ReportsDashboard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Intelligence Reports',
-          style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          'INTELLIGENCE ENGINE',
+          style: GoogleFonts.inter(
+            fontSize: 14, 
+            fontWeight: FontWeight.w900, 
+            color: const Color(0xFF1E293B),
+            letterSpacing: 0.5,
+          ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Synthesized data and operational insights for production scaling.',
-          style: GoogleFonts.inter(fontSize: 14, color: ColorPalette.textSecondary),
+        const SizedBox(height: 4),
+        Container(
+          width: 40,
+          height: 2,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2563EB),
+            borderRadius: BorderRadius.circular(1),
+          ),
         ),
       ],
     );
   }
 }
 
-class _ReportCard extends StatelessWidget {
+class _ReportCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final IconData icon;
@@ -201,78 +205,132 @@ class _ReportCard extends StatelessWidget {
   });
 
   @override
+  State<_ReportCard> createState() => _ReportCardState();
+}
+
+class _ReportCardState extends State<_ReportCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final isWeb = LayoutConstants.isWeb(context);
     
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(isWeb ? 16 : 24),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: isWeb ? [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: _isHovered ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+            width: _isHovered ? 1.5 : 1,
           ),
-        ] : ColorPalette.softShadow,
+          boxShadow: _isHovered ? [
+            BoxShadow(
+              color: const Color(0xFF2563EB).withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ] : [],
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: isWeb ? _buildWebCard() : _buildMobileCard(),
+          ),
+        ),
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(isWeb ? 16 : 24),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: isWeb ? 24 : 20,
-            vertical: isWeb ? 20 : 16,
+    );
+  }
+
+  Widget _buildWebCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: widget.color.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Icon(widget.icon, color: widget.color, size: 18),
+            ),
+            const Icon(LucideIcons.arrowUpRight, size: 16, color: Color(0xFF94A3B8)),
+          ],
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title.toUpperCase(),
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: const Color(0xFF1E293B),
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.subtitle,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileCard() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(4),
           ),
-          child: Row(
+          child: Icon(widget.icon, color: widget.color, size: 18),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: EdgeInsets.all(isWeb ? 14 : 12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: color.withOpacity(0.1)),
-                ),
-                child: Icon(icon, color: color, size: isWeb ? 24 : 22),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800,
-                        fontSize: isWeb ? 14 : 13,
-                        color: ColorPalette.textPrimary,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: isWeb ? 12 : 11,
-                        color: ColorPalette.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+              Text(
+                widget.title.toUpperCase(),
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: const Color(0xFF1E293B),
                 ),
               ),
-              Icon(
-                LucideIcons.arrowRight,
-                color: ColorPalette.textMuted,
-                size: isWeb ? 18 : 16,
+              const SizedBox(height: 2),
+              Text(
+                widget.subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: const Color(0xFF64748B),
+                ),
               ),
             ],
           ),
         ),
-      ),
+        const Icon(LucideIcons.chevronRight, size: 16, color: Color(0xFFCBD5E1)),
+      ],
     );
   }
 }

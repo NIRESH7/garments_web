@@ -120,61 +120,6 @@ class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
     return 0.0;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ColorPalette.background,
-      appBar: AppBar(
-        title: Text('OUTWARD ANALYSIS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1)),
-        backgroundColor: Colors.white,
-        foregroundColor: ColorPalette.textPrimary,
-        actions: [
-          if (_isRecovering)
-            Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                   width: 16,
-                   height: 16,
-                   child: CircularProgressIndicator(
-                     color: ColorPalette.primary,
-                     strokeWidth: 2,
-                   ),
-                ),
-              ),
-            ),
-          IconButton(
-            onPressed: () => OutwardPrintService().printOutwardReport(_outward),
-            icon: Icon(LucideIcons.printer, size: 18),
-          ),
-          IconButton(
-            onPressed: () => _shareDetails(context),
-            icon: Icon(LucideIcons.share2, size: 18),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: ResponsiveWrapper(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeaderCard(),
-              const SizedBox(height: 16),
-              _buildPartyCard(),
-              const SizedBox(height: 16),
-              _buildItemsCard(),
-              const SizedBox(height: 16),
-              _buildSignaturesCard(),
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _shareDetails(BuildContext context) async {
     try {
       final sb = StringBuffer();
@@ -185,18 +130,14 @@ class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
       String formattedDate = 'N/A';
       if (_outward['dateTime'] != null) {
         try {
-          formattedDate = DateFormat(
-            'dd-MM-yyyy',
-          ).format(DateTime.parse(_outward['dateTime']));
+          formattedDate = DateFormat('dd-MM-yyyy').format(DateTime.parse(_outward['dateTime']));
         } catch (e) {
           formattedDate = _outward['dateTime'].toString();
         }
       }
       sb.writeln("Date: $formattedDate");
       sb.writeln("Party: ${_outward['partyName'] ?? 'N/A'}");
-      sb.writeln(
-        "Lot: ${_outward['lotName'] ?? 'N/A'} / ${_outward['lotNo'] ?? 'N/A'}",
-      );
+      sb.writeln("Lot: ${_outward['lotName'] ?? 'N/A'} / ${_outward['lotNo'] ?? 'N/A'}");
       sb.writeln("DIA: ${_outward['dia'] ?? 'N/A'}");
       sb.writeln("");
 
@@ -235,198 +176,196 @@ class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
       sb.writeln("-----------------------");
       sb.writeln("TOTAL SUMMARY");
       sb.writeln("Total Rolls: $grandTotalRolls");
-      sb.writeln(
-        "Total Weight: ${FormatUtils.formatWeight(grandTotalWeight)} Kg",
-      );
+      sb.writeln("Total Weight: ${FormatUtils.formatWeight(grandTotalWeight)} Kg");
       sb.writeln("-----------------------");
       sb.writeln("");
 
       sb.writeln("Signatures:");
-      sb.writeln(
-        "Lot Incharge: ${_outward['lotInchargeSignature'] != null ? 'OK' : 'Missing'}",
-      );
-      sb.writeln(
-        "Authorized: ${_outward['authorizedSignature'] != null ? 'OK' : 'Missing'}",
-      );
+      sb.writeln("Lot Incharge: ${_outward['lotInchargeSignature'] != null ? 'OK' : 'Missing'}");
+      sb.writeln("Authorized: ${_outward['authorizedSignature'] != null ? 'OK' : 'Missing'}");
 
-      final whatsappUrl =
-          "whatsapp://send?text=${Uri.encodeComponent(sb.toString())}";
+      final whatsappUrl = "whatsapp://send?text=${Uri.encodeComponent(sb.toString())}";
       final url = Uri.parse(whatsappUrl);
 
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
-        final webUrl = Uri.parse(
-          "https://wa.me/?text=${Uri.encodeComponent(sb.toString())}",
-        );
+        final webUrl = Uri.parse("https://wa.me/?text=${Uri.encodeComponent(sb.toString())}");
         if (await canLaunchUrl(webUrl)) {
           await launchUrl(webUrl, mode: LaunchMode.externalApplication);
         } else {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Could not launch WhatsApp.")),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not launch WhatsApp.")));
           }
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error sharing: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error sharing: $e")));
       }
     }
   }
 
-  Future<void> _printReport(BuildContext context) async {
-    try {
-      final service = OutwardPrintService();
-      await service.printOutwardReport(_outward);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error printing: $e')));
-      }
-    }
-  }
-
-  Widget _buildSignaturesCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Signatures (E-Signature)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildSignatureItem(
-                  'Lot Incharge',
-                  _outward['lotInchargeSignature'],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text('OUTWARD ANALYSIS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 1, color: ColorPalette.textPrimary)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        iconTheme: const IconThemeData(color: ColorPalette.textPrimary, size: 20),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: ColorPalette.border.withOpacity(0.5), height: 1),
+        ),
+        actions: [
+          if (_isRecovering)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                   width: 14,
+                   height: 14,
+                   child: CircularProgressIndicator(
+                     color: ColorPalette.primary,
+                     strokeWidth: 1.5,
+                   ),
                 ),
-                _buildSignatureItem(
-                  'Authorized',
-                  _outward['authorizedSignature'],
-                ),
-              ],
+              ),
             ),
-          ],
+          IconButton(
+            onPressed: () => OutwardPrintService().printOutwardReport(_outward),
+            icon: const Icon(LucideIcons.printer, size: 16, color: ColorPalette.textMuted),
+          ),
+          IconButton(
+            onPressed: () => _shareDetails(context),
+            icon: const Icon(LucideIcons.share2, size: 16, color: ColorPalette.textMuted),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: ResponsiveWrapper(
+        maxWidth: 1200,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader('DISPATCH INFORMATION'),
+              const SizedBox(height: 16),
+              _buildFlatInfoGrid([
+                {'label': 'DC NO', 'value': _outward['dcNo'] ?? 'N/A'},
+                {'label': 'LOT NAME', 'value': _outward['lotName'] ?? 'N/A'},
+                {'label': 'LOT NO', 'value': _outward['lotNo'] ?? 'N/A'},
+                {'label': 'DIA', 'value': _outward['dia']?.toString() ?? 'N/A'},
+                if (_outward['dateTime'] != null)
+                  {'label': 'DATE', 'value': DateFormat('dd-MM-yyyy').format(DateTime.parse(_outward['dateTime']))},
+                {'label': 'IN TIME', 'value': _outward['inTime'] ?? 'N/A'},
+                {'label': 'OUT TIME', 'value': _outward['outTime'] ?? 'N/A'},
+                {'label': 'VEHICLE', 'value': _outward['vehicleNo'] ?? 'N/A'},
+              ]),
+              const SizedBox(height: 32),
+              _buildSectionHeader('PARTY DETAILS'),
+              const SizedBox(height: 16),
+              _buildFlatInfoGrid([
+                {'label': 'PARTY NAME', 'value': _outward['partyName'] ?? 'N/A'},
+                {'label': 'PROCESS', 'value': _outward['process'] ?? 'N/A'},
+                {'label': 'ADDRESS', 'value': _outward['address'] ?? 'N/A'},
+              ]),
+              const SizedBox(height: 32),
+              _buildSectionHeader('DISPATCHED ITEMS'),
+              const SizedBox(height: 16),
+              _buildItemsTable(),
+              const SizedBox(height: 48),
+              _buildSectionHeader('VALIDATION SIGNATURES'),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  _buildFlatSignatureItem('LOT INCHARGE', _outward['lotInchargeSignature']),
+                  const SizedBox(width: 48),
+                  _buildFlatSignatureItem('AUTHORIZED SIGNATORY', _outward['authorizedSignature']),
+                ],
+              ),
+              const SizedBox(height: 64),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSignatureItem(String label, String? imagePath) {
-    final bool hasImage = imagePath != null && imagePath.toString().isNotEmpty;
+  Widget _buildSectionHeader(String title) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          height: 60,
-          width: 90,
-          decoration: BoxDecoration(
-            color: hasImage ? Colors.transparent : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: hasImage ? Colors.grey.shade200 : Colors.grey.shade100,
-            ),
-          ),
-          child: hasImage
-              ? Image.network(
-                  ApiConstants.getImageUrl(imagePath),
-                  fit: BoxFit.contain,
-                  errorBuilder: (ctx, err, stack) => const Icon(
-                    Icons.broken_image,
-                    size: 20,
-                    color: Colors.grey,
-                  ),
-                )
-              : const Center(
-                  child: Text(
-                    "Missing",
-                    style: TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
-                ),
-        ),
-        const SizedBox(height: 4),
         Text(
-          label,
-          style: const TextStyle(
+          title,
+          style: GoogleFonts.inter(
             fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w900,
+            color: ColorPalette.textPrimary,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 2,
+          width: 32,
+          decoration: BoxDecoration(
+            color: ColorPalette.primary,
+            borderRadius: BorderRadius.circular(1),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildHeaderCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Dispatch Information',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            _buildInfoRow('DC No', _outward['dcNo'] ?? 'N/A'),
-            _buildInfoRow('Lot Name', _outward['lotName'] ?? 'N/A'),
-            _buildInfoRow('Lot No', _outward['lotNo'] ?? 'N/A'),
-            _buildInfoRow('DIA', _outward['dia'] ?? 'N/A'),
-            if (_outward['dateTime'] != null)
-              _buildInfoRow(
-                'Date',
-                DateFormat(
-                  'dd-MM-yyyy',
-                ).format(DateTime.parse(_outward['dateTime'])),
+  Widget _buildFlatInfoGrid(List<Map<String, String>> items) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ColorPalette.border.withOpacity(0.5)),
+      ),
+      child: Wrap(
+        spacing: 48,
+        runSpacing: 24,
+        children: items.map((item) => SizedBox(
+          width: 200,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item['label']!.toUpperCase(),
+                style: GoogleFonts.inter(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: ColorPalette.textMuted,
+                  letterSpacing: 0.8,
+                ),
               ),
-            _buildInfoRow('In Time', _outward['inTime'] ?? 'N/A'),
-            _buildInfoRow('Out Time', _outward['outTime'] ?? 'N/A'),
-            _buildInfoRow('Vehicle No', _outward['vehicleNo'] ?? 'N/A'),
-          ],
-        ),
+              const SizedBox(height: 4),
+              Text(
+                item['value']!,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: ColorPalette.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        )).toList(),
       ),
     );
   }
 
-  Widget _buildPartyCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Party Details',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Divider(),
-            _buildInfoRow('Party Name', _outward['partyName'] ?? 'N/A'),
-            _buildInfoRow('Process', _outward['process'] ?? 'N/A'),
-            _buildInfoRow('Address', _outward['address'] ?? 'N/A'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemsCard() {
+  Widget _buildItemsTable() {
     final items = _outward['items'] as List<dynamic>? ?? [];
-
     double totalWeight = 0;
     int grandTotalRolls = 0;
     for (var item in items) {
@@ -438,194 +377,153 @@ class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
       }
     }
 
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ColorPalette.border.withOpacity(0.5)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            color: const Color(0xFFF8FAFC),
+            child: Row(
               children: [
-                const Text(
-                  'Dispatched Items',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                _buildTableHeader('SET NO', flex: 1),
+                _buildTableHeader('RACK / PALLET', flex: 2),
+                _buildTableHeader('COLOURS & DETAILS', flex: 5),
+                _buildTableHeader('WEIGHT (KG)', flex: 2, align: TextAlign.right),
+                _buildTableHeader('ROLLS', flex: 1, align: TextAlign.right),
+              ],
+            ),
+          ),
+          ...items.map((item) => _buildItemRow(item)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              border: Border(top: BorderSide(color: ColorPalette.border.withOpacity(0.5))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 8,
                   child: Text(
-                    'Total: ${FormatUtils.formatWeight(totalWeight)} Kg | $grandTotalRolls Rolls',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
-                    ),
+                    'GRAND TOTAL DISPATCHED',
+                    style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary, letterSpacing: 1),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    FormatUtils.formatWeight(totalWeight),
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w900, color: ColorPalette.primary),
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Text(
+                    grandTotalRolls.toString(),
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w900, color: ColorPalette.primary),
                   ),
                 ),
               ],
             ),
-            const Divider(),
-            if (items.isEmpty)
-              const Text('No items found')
-            else
-              ...items.map((item) => _buildItemRow(item)),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeader(String label, {int flex = 1, TextAlign align = TextAlign.left}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label,
+        textAlign: align,
+        style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
       ),
     );
   }
 
   Widget _buildItemRow(Map<String, dynamic> item) {
+    final colours = item['colours'] as List<dynamic>? ?? [];
     int itemTotalRolls = 0;
-    if (item['colours'] != null) {
-      for (var col in item['colours']) {
-        itemTotalRolls += (col['no_of_rolls'] as num?)?.toInt() ?? 0;
-      }
+    for (var col in colours) {
+      itemTotalRolls += (col['no_of_rolls'] as num?)?.toInt() ?? 0;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border(top: BorderSide(color: ColorPalette.border.withOpacity(0.3))),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Set No: ${item['set_no'] ?? 'N/A'}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              Text(
-                '${FormatUtils.formatWeight(item['total_weight'])} Kg | $itemTotalRolls Rolls',
-                style: const TextStyle(
-                  color: Colors.orange,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
+          Expanded(
+            flex: 1,
+            child: Text(
+              item['set_no']?.toString() ?? 'N/A',
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
+            ),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                'RACK: ${item['rack_name'] ?? 'Not Assigned'}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'PALLET: ${item['pallet_number'] ?? 'Not Assigned'}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${item['rack_name'] ?? 'N/A'} / ${item['pallet_number'] ?? 'N/A'}',
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: ColorPalette.textMuted),
+            ),
           ),
-          const SizedBox(height: 8),
-          if (item['colours'] != null && (item['colours'] as List).isNotEmpty)
-            Column(
-              children: (item['colours'] as List).map((col) {
+          Expanded(
+            flex: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: colours.map((col) {
+                final cWt = (col['weight'] as num?)?.toDouble() ?? 0.0;
+                final gsm = (col['gsm'] as num?)?.toDouble() ?? 0.0;
+                final dia = (col['cutting_dia'] as num?)?.toDouble() ?? (col['dia'] as num?)?.toDouble() ?? 0.0;
+                final meters = _calculateMeters(cWt, gsm, dia);
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: _buildSmallInfo(
-                          'Colour',
-                          col['colour'] ?? 'N/A',
-                        ),
+                      Text(
+                        col['colour']?.toString() ?? 'N/A',
+                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
                       ),
-                      Expanded(
-                        child: _buildSmallInfo(
-                          'Weight',
-                          '${FormatUtils.formatWeight(col['weight'])} Kg',
+                      if (meters > 0) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '(${meters.toStringAsFixed(1)} M)',
+                          style: GoogleFonts.inter(fontSize: 11, color: ColorPalette.textMuted),
                         ),
-                      ),
-                      Expanded(
-                        child: _buildSmallInfo(
-                          'Rolls',
-                          '${col['no_of_rolls'] ?? 0}',
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildSmallInfo(
-                          'Meter',
-                          () {
-                            final gsm = (col['gsm'] as num?)?.toDouble() ?? 0.0;
-                            final dia = (col['cutting_dia'] as num?)?.toDouble() ?? 
-                                        (col['dia'] as num?)?.toDouble() ?? 0.0;
-                            final m = _calculateMeters((col['weight'] as num?)?.toDouble() ?? 0.0, gsm, dia);
-                            return m > 0 ? m.toStringAsFixed(1) : '-';
-                          }(),
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 );
               }).toList(),
-            )
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _buildSmallInfo('Colour', item['colour'] ?? 'N/A'),
-                ),
-                Expanded(
-                  child: _buildSmallInfo(
-                    'Balance',
-                    '${FormatUtils.formatWeight(item['balance_weight'])} Kg',
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
             ),
           ),
           Expanded(
+            flex: 2,
             child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              FormatUtils.formatWeight(item['total_weight']),
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              itemTotalRolls.toString(),
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
             ),
           ),
         ],
@@ -633,13 +531,38 @@ class _OutwardDetailScreenState extends State<OutwardDetailScreen> {
     );
   }
 
-  Widget _buildSmallInfo(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
-      ),
+  Widget _buildFlatSignatureItem(String label, String? imagePath) {
+    final bool hasImage = imagePath != null && imagePath.toString().isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.8),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          height: 80,
+          width: 160,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFDFDFD),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: ColorPalette.border.withOpacity(0.5)),
+          ),
+          child: hasImage
+              ? Image.network(
+                  ApiConstants.getImageUrl(imagePath),
+                  fit: BoxFit.contain,
+                  errorBuilder: (ctx, err, stack) => const Icon(LucideIcons.image, size: 20, color: ColorPalette.border),
+                )
+              : Center(
+                  child: Text(
+                    "PENDING",
+                    style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.border),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 

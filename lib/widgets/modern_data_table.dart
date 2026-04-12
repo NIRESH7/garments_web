@@ -10,9 +10,12 @@ class ModernDataTable extends StatefulWidget {
   final Function(Map<String, dynamic>)? onEdit;
   final Function(Map<String, dynamic>)? onDelete;
   final Function(Map<String, dynamic>)? onView;
+  final Function(Map<String, dynamic>)? onPrint;
+  final Function(Map<String, dynamic>)? onShare;
   final bool showActions;
   final String? emptyMessage;
   final Map<String, IconData>? columnIcons;
+  final Widget? headerTrailing;
 
   const ModernDataTable({
     super.key,
@@ -21,9 +24,12 @@ class ModernDataTable extends StatefulWidget {
     this.onEdit,
     this.onDelete,
     this.onView,
+    this.onPrint,
+    this.onShare,
     this.showActions = true,
     this.emptyMessage,
     this.columnIcons,
+    this.headerTrailing,
   });
 
   @override
@@ -96,8 +102,8 @@ class _ModernDataTableState extends State<ModernDataTable> {
                 )),
                 if (widget.showActions)
                   SizedBox(
-                    width: isMobile ? 80 : 120,
-                    child: Text(
+                    width: isMobile ? 120 : 180,
+                    child: widget.headerTrailing ?? Text(
                       'ACTIONS',
                       textAlign: TextAlign.right,
                       style: GoogleFonts.inter(
@@ -171,7 +177,7 @@ class _ModernDataTableState extends State<ModernDataTable> {
                       }),
                       if (widget.showActions)
                         SizedBox(
-                          width: isMobile ? 80 : 120,
+                          width: isMobile ? 120 : 180,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -181,6 +187,22 @@ class _ModernDataTableState extends State<ModernDataTable> {
                                   onTap: () => widget.onView!(row),
                                   color: ColorPalette.info,
                                   tooltip: 'View',
+                                  isMobile: isMobile,
+                                ),
+                              if (widget.onShare != null)
+                                _buildActionBtn(
+                                  icon: LucideIcons.share2,
+                                  onTap: () => widget.onShare!(row),
+                                  color: Colors.green,
+                                  tooltip: 'Share',
+                                  isMobile: isMobile,
+                                ),
+                              if (widget.onPrint != null)
+                                _buildActionBtn(
+                                  icon: LucideIcons.printer,
+                                  onTap: () => widget.onPrint!(row),
+                                  color: Colors.purple,
+                                  tooltip: 'Print',
                                   isMobile: isMobile,
                                 ),
                               if (widget.onEdit != null)

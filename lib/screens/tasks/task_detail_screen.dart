@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../services/mobile_api_service.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../../core/theme/color_palette.dart';
 import 'package:intl/intl.dart';
-import '../../services/task_print_service.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:record/record.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../services/mobile_api_service.dart';
+import '../../core/theme/color_palette.dart';
+import '../../services/task_print_service.dart';
 import '../../core/constants/api_constants.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class TaskDetailScreen extends StatefulWidget {
   final dynamic task;
@@ -23,678 +19,384 @@ class TaskDetailScreen extends StatefulWidget {
 
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final _api = MobileApiService();
-  final _stt = stt.SpeechToText();
-  final _recorder = AudioRecorder();
-  final _audioPlayer = AudioPlayer();
-  final _tts = FlutterTts();
+  final _printService = TaskPrintService();
 
-  bool _isListening = false;
-  bool _isRecording = false;
-  bool _isTranscribing = false;
   bool _isSaving = false;
-  String? _recordedPath;
-  String _voiceLocale = 'en_US'; // 'en_US' or 'ta_IN'
-  bool _speechReady = false;
-
   final _workerNameController = TextEditingController();
   final _replyController = TextEditingController();
-  String _status = 'In Progress';
-  final _printService = TaskPrintService();
+  late String _status;
 
   @override
   void initState() {
     super.initState();
-    _initVoice();
-    _status = widget.task['status'] ?? 'To Do';
+    _status = widget.task != null ? (widget.task['status'] ?? 'In Progress') : 'In Progress';
   }
 
   @override
   void dispose() {
-    _stt.stop();
-    _recorder.dispose();
-    _audioPlayer.dispose();
-    _tts.stop();
     _workerNameController.dispose();
     _replyController.dispose();
     super.dispose();
   }
 
-  Future<void> _initVoice() async {
-    _speechReady = await _stt.initialize();
-  }
-
   void _showMsg(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600)),
+        backgroundColor: error ? ColorPalette.error : ColorPalette.success,
+        behavior: SnackBarBehavior.floating,
+        width: 300,
+      ),
     );
   }
 
-  String _transcribeLang() => _voiceLocale.startsWith('ta') ? 'ta' : 'en';
-
-  Future<void> _transcribeAndFillReply(String audioPath) async {
-    setState(() => _isTranscribing = true);
-    try {
-      final transcribed = await _api.transcribeAudioFile(
-        audioPath,
-        language: _transcribeLang(),
-      );
-      if (transcribed != null && transcribed.trim().isNotEmpty) {
-        setState(() {
-          _replyController.text = transcribed.trim();
-          _replyController.selection = TextSelection.fromPosition(
-            TextPosition(offset: _replyController.text.length),
-          );
-        });
-      } else {
-        _showMsg(
-          'Voice to text failed on server. Check live OPENAI_API_KEY and /api/ai/transcribe.',
-          error: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isTranscribing = false);
-    }
-  }
-
-  Future<void> _startRecording() async {
-    try {
-      final hasPermission = await _recorder.hasPermission();
-      if (!hasPermission) {
-        _showMsg('Microphone permission is required', error: true);
-        return;
-      }
-
-      await _tts.stop();
-      // Do not speak prompt here; it can conflict with iOS listen session.
-
-      String path = '';
-      if (!kIsWeb) {
-        final dir = await getTemporaryDirectory();
-        path =
-            '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      }
-
-      await _recorder.start(const RecordConfig(), path: path);
-      setState(() {
-        _isRecording = true;
-        _recordedPath = null;
-      });
-
-      // Do not start live STT while recording; rely on server transcription for final text.
-    } catch (e) {
-      debugPrint('Error starting record: $e');
-      _showMsg('Failed to start voice recording', error: true);
-    }
-  }
-
-  Future<void> _stopRecording() async {
-    try {
-      String? path;
-      if (_isRecording) {
-        path = await _recorder.stop();
-      }
-      if (_isListening) {
-        await _listen(stopOnly: true);
-      }
-
-      setState(() {
-        _isRecording = false;
-        if (path != null && path.isNotEmpty) _recordedPath = path;
-      });
-
-      // Guaranteed fallback: transcribe recorded audio and auto-fill progress details.
-      if (path != null && path.isNotEmpty) {
-        await _transcribeAndFillReply(path);
-      }
-    } catch (e) {
-      debugPrint('Error stopping record: $e');
-      _showMsg('Failed to stop voice recording', error: true);
-    }
-  }
-
-  void _playLocalRecording() async {
-    if (_recordedPath != null) {
-      try {
-        await _transcribeAndFillReply(_recordedPath!);
-        await _audioPlayer.play(DeviceFileSource(_recordedPath!));
-      } catch (e) {
-        _showMsg('Unable to play local recording', error: true);
-      }
-    }
-  }
-
-  void _playRemoteAudio(String url) async {
-    try {
-      final fullUrl = ApiConstants.getImageUrl(url);
-      await _audioPlayer.play(UrlSource(fullUrl));
-    } catch (e) {
-      _showMsg('Unable to play voice audio', error: true);
-    }
-  }
-
-  Future<void> _listen({bool startOnly = false, bool stopOnly = false}) async {
-    try {
-      if (stopOnly) {
-        await _stt.stop();
-        if (mounted) setState(() => _isListening = false);
-        return;
-      }
-
-      if (!_speechReady) {
-        _speechReady = await _stt.initialize();
-      }
-      if (!_speechReady) return;
-
-      if (!_isListening) {
-        await _stt.stop();
-        setState(() => _isListening = true);
-        await _stt.listen(
-          localeId: _voiceLocale,
-          partialResults: true,
-          onResult: (val) {
-            final recognized = val.recognizedWords.trim();
-            if (recognized.isEmpty) return;
-            setState(() {
-              _replyController.text = recognized;
-              _replyController.selection = TextSelection.fromPosition(
-                TextPosition(offset: _replyController.text.length),
-              );
-            });
-          },
-        );
-        return;
-      }
-
-      if (!startOnly) {
-        await _stt.stop();
-        if (mounted) setState(() => _isListening = false);
-      }
-    } catch (e) {
-      debugPrint('Speech listen failed: $e');
-      if (mounted) setState(() => _isListening = false);
-    }
-  }
-
   Future<void> _submitReply() async {
-    if (_workerNameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Submission failed: Worker Name is mandatory!'),
-        ),
-      );
+    final worker = _workerNameController.text.trim();
+    if (worker.isEmpty) {
+      _showMsg('NAME REQUIRED', error: true);
       return;
     }
 
     setState(() => _isSaving = true);
     final data = {
-      'workerName': _workerNameController.text,
-      'replyText': _replyController.text,
+      'workerName': worker,
+      'replyText': _replyController.text.trim(),
       'status': _status,
     };
 
-    final result = await _api.addTaskReply(
-      widget.task['_id'],
-      data,
-      voicePath: _recordedPath,
-    );
-    if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Status & Reply Submitted Successfully')),
-      );
-      Navigator.pop(context);
-    }
-    setState(() => _isSaving = false);
-  }
-
-  Future<void> _shareTask(dynamic task) async {
-    final String title = task['title'] ?? 'No Title';
-    final String description =
-        task['description'] ?? 'No description provided.';
-    final String priority = task['priority'] ?? 'N/A';
-    final String status = task['status'] ?? 'N/A';
-    final String createdAt = task['createdAt'] != null
-        ? DateFormat(
-            'dd-MM-yyyy hh:mm a',
-          ).format(DateTime.parse(task['createdAt'].toString()))
-        : 'N/A';
-
-    final sb = StringBuffer();
-    sb.writeln("*TASK ASSIGNMENT*");
-    sb.writeln("");
-    sb.writeln("*Title:* $title");
-    sb.writeln("*Date:* $createdAt");
-    sb.writeln("*Priority:* $priority");
-    sb.writeln("*Status:* $status");
-    sb.writeln("");
-    sb.writeln("*Instruction:*");
-    sb.writeln(description);
-
-    if (task['replies'] != null && (task['replies'] as List).isNotEmpty) {
-      sb.writeln("");
-      sb.writeln("*Progress History:*");
-      for (var reply in task['replies']) {
-        sb.writeln(
-          "• ${reply['workerName']}: ${reply['replyText']} (${reply['status']})",
-        );
-      }
-    }
-
-    final message = sb.toString();
-    final whatsappUrl = "whatsapp://send?text=${Uri.encodeComponent(message)}";
-    final webUrl = "https://wa.me/?text=${Uri.encodeComponent(message)}";
-
     try {
-      if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
-        await launchUrl(
-          Uri.parse(whatsappUrl),
-          mode: LaunchMode.externalApplication,
-        );
-      } else {
-        // Fallback to web URL which opens Safari on simulator
-        await launchUrl(
-          Uri.parse(webUrl),
-          mode: LaunchMode.externalApplication,
-        );
+      final result = await _api.addTaskReply(widget.task['_id'], data);
+      if (result != null && mounted) {
+        _showMsg('SYNCED');
+        Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch WhatsApp or Safari.')),
-        );
-      }
+      _showMsg('FAILED', error: true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
-    final task = widget.task;
+    if (widget.task == null) {
+      return const Scaffold(body: Center(child: Text('NULL_TASK')));
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('TASK DETAILS'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: () => _printService.printTaskDetails(task),
-            tooltip: 'Print Task',
-          ),
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () => _shareTask(task),
-            tooltip: 'Share via WhatsApp',
+      backgroundColor: ColorPalette.background,
+      body: Column(
+        children: [
+          _buildProfessionalHeader(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildPulseRow(),
+                            const SizedBox(height: 24),
+                            _buildInstructionModule(),
+                            const SizedBox(height: 24),
+                            _buildWorkflowRegistry(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+                      SizedBox(
+                        width: 320,
+                        child: _buildControlRegistry(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoCard(task, primaryColor),
-            const SizedBox(height: 24),
-            const Text(
-              'SUBMIT PROGRESS',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(height: 12),
-            _buildReplyForm(primaryColor),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildInfoCard(dynamic task, Color primaryColor) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task['title'] ?? '',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text(
-                          'Instruction:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        if ((task['description'] != null &&
-                                task['description'].toString().isNotEmpty) ||
-                            (task['voiceDescriptionUrl'] != null &&
-                                task['voiceDescriptionUrl']
-                                    .toString()
-                                    .isNotEmpty))
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: InkWell(
-                              onTap: () {
-                                final voiceUrl = task['voiceDescriptionUrl'];
-                                if (voiceUrl != null &&
-                                    voiceUrl.toString().isNotEmpty) {
-                                  _playRemoteAudio(voiceUrl.toString());
-                                } else {
-                                  final desc =
-                                      task['description']?.toString() ?? '';
-                                  if (desc.isNotEmpty) _tts.speak(desc);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  LucideIcons.volume2,
-                                  color: Colors.blue,
-                                  size: 16,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      task['description'] ?? 'No instruction provided.',
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ],
-                ),
-                if ((task['description'] != null &&
-                        task['description'].toString().isNotEmpty) ||
-                    (task['voiceDescriptionUrl'] != null &&
-                        task['voiceDescriptionUrl'].toString().isNotEmpty))
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          LucideIcons.volume2,
-                          color: Colors.blue,
-                        ),
-                        tooltip: 'Listen to instruction',
-                        onPressed: () {
-                          final voiceUrl = task['voiceDescriptionUrl'];
-                          if (voiceUrl != null &&
-                              voiceUrl.toString().isNotEmpty) {
-                            _playRemoteAudio(voiceUrl.toString());
-                          } else {
-                            // Fallback: TTS reads the description aloud
-                            final desc = task['description']?.toString() ?? '';
-                            if (desc.isNotEmpty) _tts.speak(desc);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                _buildChip('Priority: ${task['priority']}', Colors.orange),
-                const SizedBox(width: 8),
-                _buildChip('Status: ${task['status']}', Colors.blue),
-              ],
-            ),
-            if (task['createdAt'] != null) ...[
-              const SizedBox(height: 12),
-              Row(
+  Widget _buildProfessionalHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: ColorPalette.border)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(LucideIcons.arrowLeft, size: 18)),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    LucideIcons.calendar,
-                    size: 14,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Created: ${DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.parse(task['createdAt'].toString()))}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Text('MONITORING PROTOCOL', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: ColorPalette.textMuted, letterSpacing: 1.2)),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(widget.task['title']?.toString().toUpperCase() ?? 'UNTITLED', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary)),
+                      const SizedBox(width: 12),
+                      _buildStatusToken(widget.task['status'] ?? 'PENDING'),
+                    ],
                   ),
                 ],
               ),
             ],
-            if (task['replies'] != null &&
-                (task['replies'] as List).isNotEmpty) ...[
-              const Divider(height: 40),
-              const Text(
-                'History:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...(task['replies'] as List).map((r) {
-                final String type = r['type'] ?? 'Progress';
-                final String label = type == 'Completion'
-                    ? '✅ COMPLETION'
-                    : (type == 'Client' ? '💬 CLIENT' : '⚙️ PROGRESS');
-                final String dateStr = r['submittedAt'] != null
-                    ? DateFormat(
-                        'dd-MM-yyyy hh:mm a',
-                      ).format(DateTime.parse(r['submittedAt'].toString()))
-                    : 'N/A';
-                final String? voiceUrl = r['voiceReplyUrl'];
-
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '• $label: ${r['workerName']} - ${r['replyText']} ($dateStr)',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      // Always show speaker for any reply that has text or voice
-                      IconButton(
-                        icon: const Icon(
-                          LucideIcons.volume2,
-                          size: 18,
-                          color: Colors.blue,
-                        ),
-                        onPressed: () {
-                          if (voiceUrl != null && voiceUrl.isNotEmpty) {
-                            _playRemoteAudio(voiceUrl);
-                          } else {
-                            // TTS fallback — read the reply text aloud
-                            final replyText = r['replyText']?.toString() ?? '';
-                            final workerName =
-                                r['workerName']?.toString() ?? '';
-                            if (replyText.isNotEmpty) {
-                              _tts.speak('$workerName said: $replyText');
-                            }
-                          }
-                        },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Listen to reply',
-                      ),
-                    ],
-                  ),
-                );
-              }),
+          ),
+          Row(
+            children: [
+              _headerButton(icon: LucideIcons.printer, label: 'EXPORT', onTap: () => _printService.printTaskDetails(widget.task)),
+              const SizedBox(width: 8),
+              _headerButton(icon: LucideIcons.share2, label: 'SHARE', isPrimary: true, onTap: () => _shareTask(widget.task)),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerButton({required IconData icon, required String label, bool isPrimary = false, VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isPrimary ? ColorPalette.primary : Colors.white,
+          border: Border.all(color: isPrimary ? ColorPalette.primary : ColorPalette.border),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 12, color: isPrimary ? Colors.white : ColorPalette.textPrimary),
+            const SizedBox(width: 8),
+            Text(label, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: isPrimary ? Colors.white : ColorPalette.textPrimary)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+  Widget _buildPulseRow() {
+    String date = 'N/A';
+    try {
+      if (widget.task['createdAt'] != null) {
+        date = DateFormat('MMM dd, yyyy').format(DateTime.parse(widget.task['createdAt'].toString()));
+      }
+    } catch (_) {}
+
+    return Row(
+      children: [
+        _buildMetricToken('ASSIGNMENT', widget.task['assignedTo']?.toString() ?? 'SYSTEM', LucideIcons.user),
+        const SizedBox(width: 12),
+        _buildMetricToken('DATE', date, LucideIcons.calendar),
+        const SizedBox(width: 12),
+        _buildMetricToken('PRIORITY', (widget.task['priority'] ?? 'MEDIUM').toString().toUpperCase(), LucideIcons.zap, isUrgent: widget.task['priority'] == 'High'),
+      ],
+    );
+  }
+
+  Widget _buildMetricToken(String label, String value, IconData icon, {bool isUrgent = false}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: ColorPalette.border), borderRadius: BorderRadius.circular(4)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 10, color: ColorPalette.textMuted),
+                const SizedBox(width: 6),
+                Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: ColorPalette.textMuted, letterSpacing: 0.5)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(value, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800, color: isUrgent ? ColorPalette.error : ColorPalette.textPrimary)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildReplyForm(Color primaryColor) {
+  Widget _buildInstructionModule() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DropdownButtonFormField<String>(
-          value: _status,
-          decoration: const InputDecoration(
-            labelText: 'Update Status',
-            border: OutlineInputBorder(),
+        _titleHeading('OPERATIONAL SPECIFICATIONS'),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: Colors.white, border: Border.all(color: ColorPalette.border), borderRadius: BorderRadius.circular(4)),
+          child: Text(
+            widget.task['description'] ?? 'NO WRITTEN LOG.',
+            style: GoogleFonts.inter(fontSize: 14, height: 1.6, color: ColorPalette.textPrimary),
           ),
-          items: [
-            'To Do',
-            'In Progress',
-            'Completed',
-          ].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-          onChanged: (val) => setState(() => _status = val!),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _workerNameController,
-          decoration: const InputDecoration(
-            labelText: 'Your Name (Mandatory)',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(LucideIcons.user),
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _replyController,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: 'Progress Details',
-            border: const OutlineInputBorder(),
-            suffixIcon: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _voiceLocale = _voiceLocale == 'en_US' ? 'ta_IN' : 'en_US';
-                  }),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 4, top: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _voiceLocale == 'ta_IN'
-                          ? Colors.orange.shade100
-                          : Colors.blue.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _voiceLocale == 'ta_IN' ? 'TA' : 'EN',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: _voiceLocale == 'ta_IN'
-                            ? Colors.orange.shade900
-                            : Colors.blue.shade900,
-                      ),
-                    ),
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_isTranscribing)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 4),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    if (_recordedPath != null)
-                      IconButton(
-                        icon: const Icon(
-                          LucideIcons.playCircle,
-                          color: Colors.green,
-                        ),
-                        onPressed: _playLocalRecording,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    IconButton(
-                      icon: Icon(
-                        _isRecording ? LucideIcons.stopCircle : LucideIcons.mic,
-                        color: _isRecording ? Colors.red : primaryColor,
-                      ),
-                      onPressed: _isRecording
-                          ? _stopRecording
-                          : _startRecording,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 24),
-        ElevatedButton(
-          onPressed: _isSaving ? null : _submitReply,
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 50),
-            backgroundColor: ColorPalette.success,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: _isSaving
-              ? const CircularProgressIndicator(color: Colors.white)
-              : const Text(
-                  'SUBMIT REPORT',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
         ),
       ],
     );
+  }
+
+  Widget _buildWorkflowRegistry() {
+    final List logs = List.from(widget.task['replies'] ?? []);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _titleHeading('STATE HISTORY'),
+        const SizedBox(height: 16),
+        if (logs.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            width: double.infinity,
+            decoration: BoxDecoration(border: Border.all(color: ColorPalette.border, style: BorderStyle.solid), borderRadius: BorderRadius.circular(4)),
+            child: Center(child: Text('LOG EMPTY', style: GoogleFonts.inter(fontSize: 10, color: ColorPalette.textMuted))),
+          )
+        else
+          ...logs.reversed.map((l) => _buildLogEntry(l)),
+      ],
+    );
+  }
+
+  Widget _buildLogEntry(dynamic l) {
+    String time = 'Pending';
+    try {
+      if (l['submittedAt'] != null) {
+        time = DateFormat('hh:mm a • MMM dd').format(DateTime.parse(l['submittedAt'].toString()));
+      }
+    } catch (_) {}
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: ColorPalette.border), borderRadius: BorderRadius.circular(4)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(l['workerName']?.toString().toUpperCase() ?? 'ADMIN', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w900)),
+              Text(time.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, color: ColorPalette.textMuted)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(children: [_buildStatusToken(l['status'] ?? 'UPDATE')]),
+          const SizedBox(height: 8),
+          Text(l['replyText'] ?? 'Status updated.', style: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlRegistry() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: ColorPalette.border), borderRadius: BorderRadius.circular(4)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('STATE SYNC', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: ColorPalette.textMuted, letterSpacing: 1)),
+          const SizedBox(height: 24),
+          _inputPanel('OPERATOR', 'ID...', _workerNameController, LucideIcons.user),
+          const SizedBox(height: 16),
+          _inputPanel('STATUS', 'Select...', null, LucideIcons.activity, isDropdown: true),
+          const SizedBox(height: 16),
+          _inputPanel('COMMENT', 'Add...', _replyController, LucideIcons.edit3, lines: 3),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _isSaving ? null : _submitReply,
+              style: ElevatedButton.styleFrom(backgroundColor: ColorPalette.primary, foregroundColor: Colors.white, elevation: 0),
+              child: _isSaving ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text('SYNC STATE', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inputPanel(String label, String hint, TextEditingController? ctrl, IconData icon, {int lines = 1, bool isDropdown = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: ColorPalette.textMuted)),
+        const SizedBox(height: 6),
+        if (isDropdown)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: ColorPalette.border), borderRadius: BorderRadius.circular(4)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: ['To Do', 'In Progress', 'Completed'].contains(_status) ? _status : 'To Do',
+                items: ['To Do', 'In Progress', 'Completed'].map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase(), style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800)))).toList(),
+                onChanged: (v) => setState(() => _status = v!),
+                isExpanded: true,
+                icon: const Icon(LucideIcons.chevronDown, size: 12),
+              ),
+            ),
+          )
+        else
+          TextFormField(
+            controller: ctrl,
+            maxLines: lines,
+            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.inter(fontSize: 10, color: ColorPalette.textMuted),
+              prefixIcon: Icon(icon, size: 12, color: ColorPalette.primary.withOpacity(0.5)),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: ColorPalette.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: ColorPalette.border)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStatusToken(String status) {
+    Color c = status.toUpperCase() == 'COMPLETED' ? ColorPalette.success : ColorPalette.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(2), border: Border.all(color: c.withOpacity(0.2))),
+      child: Text(status.toUpperCase(), style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: c)),
+    );
+  }
+
+  Widget _titleHeading(String text) {
+    return Row(
+      children: [
+        Container(width: 2, height: 10, color: ColorPalette.primary),
+        const SizedBox(width: 8),
+        Text(text, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary, letterSpacing: 1)),
+      ],
+    );
+  }
+
+  Future<void> _shareTask(dynamic task) async {
+    final sb = StringBuffer();
+    sb.writeln("*UPDATE: ${task['title']}*");
+    sb.writeln("Status: ${task['status']}");
+    final url = "https://wa.me/?text=${Uri.encodeComponent(sb.toString())}";
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 }

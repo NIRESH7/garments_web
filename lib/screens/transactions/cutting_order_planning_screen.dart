@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../services/mobile_api_service.dart';
-import '../../widgets/app_drawer.dart';
 import '../../services/lot_allocation_print_service.dart';
 import 'cutting_order_list_screen.dart';
+import '../../core/theme/color_palette.dart';
 
 class CuttingOrderPlanningScreen extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -173,7 +174,6 @@ class _CuttingOrderPlanningScreenState
       return;
     }
 
-    // For current planning sheet (unsaved), cutting quantities are 0
     final entries = _cuttingEntries.map((e) {
       final newE = Map<String, dynamic>.from(e);
       newE['cuttingQuantities'] = {for (var s in _sizes) s.toString(): 0};
@@ -191,7 +191,6 @@ class _CuttingOrderPlanningScreenState
     );
   }
 
-  // ── Edit a previous entry ─────────────────────────────────────────────────
   void _editEntry(Map<String, dynamic> entry) {
     setState(() {
       _editingId = entry['_id']?.toString();
@@ -220,14 +219,12 @@ class _CuttingOrderPlanningScreenState
       if (_cuttingEntries.isEmpty) _addInitialRow();
     });
 
-    // Scroll to top so user sees the form
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'Entry loaded for editing — tap UPDATE PLANNING SHEET to save'),
-            backgroundColor: Colors.blue,
+            content: Text('Entry loaded for editing — tap UPDATE to save'),
+            backgroundColor: Color(0xFF2563EB),
             duration: Duration(seconds: 3),
           ),
         );
@@ -235,106 +232,94 @@ class _CuttingOrderPlanningScreenState
     });
   }
 
-  // ── Preview a previous entry ──────────────────────────────────────────────
-
-  // ── Share a previous entry ────────────────────────────────────────────────
-
-  // ── Print a previous entry ────────────────────────────────────────────────
+  DateTime? _startDate;
+  DateTime? _endDate;
+  String _sizeType = 'Senior'; 
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
     return Scaffold(
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: const Text('CUTTING ORDER PLANNING'),
+        toolbarHeight: 0,
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.list, color: Colors.blue),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CuttingOrderListScreen()),
-              );
-            },
-            tooltip: 'View Plans',
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.printer),
-            onPressed: _printPlanningSheet,
-            tooltip: 'Print Planning Sheet',
-          ),
-        ],
+        automaticallyImplyLeading: false,
       ),
-      drawer: const AppDrawer(),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
           : Form(
               key: _formKey,
               child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _buildPlanParams(),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildEntryTable(),
-                          const SizedBox(height: 30),
-                        ],
-                      ),
-                    ),
-                  ),
+                  // Minimalist Header Actions
                   Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          offset: const Offset(0, -4),
-                          blurRadius: 10,
+                    color: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(LucideIcons.arrowLeft, size: 20, color: Color(0xFF1E293B)),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          _editingId == null ? 'NEW BLUEPRINT' : 'EDIT BLUEPRINT',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            color: const Color(0xFF1E293B),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: _printPlanningSheet,
+                          icon: const Icon(LucideIcons.printer, size: 14),
+                          label: Text('PRINT', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const CuttingOrderListScreen()),
+                            );
+                          },
+                          icon: const Icon(LucideIcons.list, size: 14),
+                          label: Text('RECORDS', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: _isSaving ? null : _savePlanningSheet,
+                          icon: _isSaving 
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(LucideIcons.check, size: 14, color: Colors.white),
+                          label: Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: Colors.white)),
+                          style: TextButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
                         ),
                       ],
                     ),
-                    child: Center(
-                      child: ElevatedButton(
-                        onPressed: _isSaving ? null : _savePlanningSheet,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 60,
-                            vertical: 15,
-                          ),
-                          backgroundColor: primaryColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                _editingId != null
-                                    ? 'UPDATE PLANNING SHEET'
-                                    : 'SAVE PLANNING SHEET',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildPlanParams(),
+                          const SizedBox(height: 24),
+                          _buildEntryTable(),
+                        ],
                       ),
                     ),
                   ),
@@ -344,308 +329,315 @@ class _CuttingOrderPlanningScreenState
     );
   }
 
-  DateTime? _startDate;
-  DateTime? _endDate;
-  String _sizeType = 'Senior'; // 'Junior' (50-75) or 'Senior' (75-110)
-
   Widget _buildPlanParams() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextFormField(
-              controller: _planNameCtrl,
-              decoration: InputDecoration(
-                labelText: 'PLAN NAME / REMARKS',
-                hintText: 'e.g. Summer Collection 2026',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.edit_note),
-                suffixIcon: null,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.fileEdit, size: 16, color: Color(0xFF64748B)),
+              const SizedBox(width: 8),
+              Text(
+                'PLAN DETAILS',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 0.5,
+                ),
               ),
-              onChanged: (val) {
-                // Debounce or simple timer? For now, simple check
-              },
+            ],
+          ),
+          const SizedBox(height: 20),
+          TextFormField(
+            controller: _planNameCtrl,
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+            decoration: InputDecoration(
+              hintText: 'PLAN NAME / REMARKS',
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _planType,
-                    decoration: const InputDecoration(
-                      labelText: 'PLAN TYPE',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['Monthly', 'Yearly']
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        _planType = val!;
-                        if (_planType == 'Monthly') {
-                          _planPeriod = DateFormat(
-                            'yyyy-MM',
-                          ).format(DateTime.now());
-                        } else {
-                          _planPeriod = DateFormat(
-                            'yyyy',
-                          ).format(DateTime.now());
-                        }
-                      });
-                    },
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildFieldLabelled('PLAN TYPE', DropdownButtonFormField<String>(
+                  value: _planType,
+                  isDense: true,
+                  style: GoogleFonts.inter(fontSize: 14, color: Colors.black, fontWeight: FontWeight.w500),
+                  decoration: _fieldDeco(),
+                  items: ['Monthly', 'Yearly']
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _planType = val!;
+                      _planPeriod = _planType == 'Monthly'
+                          ? DateFormat('yyyy-MM').format(DateTime.now())
+                          : DateFormat('yyyy').format(DateTime.now());
+                    });
+                  },
+                )),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildFieldLabelled('SIZE TYPE', DropdownButtonFormField<String>(
+                  value: _sizeType,
+                  isDense: true,
+                  style: GoogleFonts.inter(fontSize: 14, color: Colors.black, fontWeight: FontWeight.w500),
+                  decoration: _fieldDeco(),
+                  items: ['Senior', 'Junior']
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _sizeType = val!;
+                    });
+                  },
+                )),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildFieldLabelled('FROM DATE', TextFormField(
+                  readOnly: true,
+                  controller: TextEditingController(
+                    text: _startDate != null ? DateFormat('dd MMM yyyy').format(_startDate!) : '',
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _sizeType,
-                    decoration: const InputDecoration(
-                      labelText: 'SIZE TYPE',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['Senior', 'Junior']
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        _sizeType = val!;
-                      });
-                    },
+                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+                  decoration: _fieldDeco().copyWith(suffixIcon: const Icon(LucideIcons.calendar, size: 16)),
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _startDate ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (date != null) setState(() => _startDate = date);
+                  },
+                )),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildFieldLabelled('TO DATE', TextFormField(
+                  readOnly: true,
+                  controller: TextEditingController(
+                    text: _endDate != null ? DateFormat('dd MMM yyyy').format(_endDate!) : '',
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    readOnly: true,
-                    controller: TextEditingController(
-                      text: _startDate != null
-                          ? DateFormat('dd-MM-yyyy').format(_startDate!)
-                          : '',
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'FROM DATE',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
-                    ),
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: _startDate ?? DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (date != null) {
-                        setState(() => _startDate = date);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    readOnly: true,
-                    controller: TextEditingController(
-                      text: _endDate != null
-                          ? DateFormat('dd-MM-yyyy').format(_endDate!)
-                          : '',
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'TO DATE',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
-                    ),
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: _endDate ?? DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (date != null) {
-                        setState(() => _endDate = date);
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
+                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+                  decoration: _fieldDeco().copyWith(suffixIcon: const Icon(LucideIcons.calendar, size: 16)),
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _endDate ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (date != null) setState(() => _endDate = date);
+                  },
+                )),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFieldLabelled(String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+            color: const Color(0xFF94A3B8),
+            letterSpacing: 0.5,
+          ),
         ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+
+  InputDecoration _fieldDeco() {
+    return InputDecoration(
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(4),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(4),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
     );
   }
 
   Widget _buildEntryTable() {
-    final primaryColor = Theme.of(context).primaryColor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Text(
-              'PLANNING SHEET',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: primaryColor,
-              ),
-            ),
             TextButton.icon(
               onPressed: _addInitialRow,
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('ADD LINE'),
+              icon: const Icon(LucideIcons.plusCircle, size: 14),
+              label: Text('ADD LINE', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+              style: TextButton.styleFrom(foregroundColor: const Color(0xFF2563EB)),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 15,
-                horizontalMargin: 15,
-                headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                border: TableBorder.symmetric(
-                  inside: BorderSide(color: Colors.grey.shade300),
-                ),
-                columns: [
-                  const DataColumn(
-                    label: Text(
-                      'ITEM NAME',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+        const SizedBox(height: 12),
+        Center(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 0,
+                  horizontalMargin: 0,
+                  headingRowHeight: 40,
+                  dataRowMinHeight: 40,
+                  dataRowMaxHeight: 40,
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
+                  border: const TableBorder(
+                    verticalInside: BorderSide(color: Color(0xFFCBD5E1)),
+                    horizontalInside: BorderSide(color: Color(0xFFCBD5E1)),
+                    bottom: BorderSide(color: Color(0xFFCBD5E1)),
                   ),
-                  ..._sizes.map(
-                    (s) => DataColumn(
-                      label: Text(
-                        s.toString(),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                  const DataColumn(
-                    label: Text(
-                      'DOZENS',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const DataColumn(
-                    label: Text(
-                      'ACTION',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-                rows: List.generate(_cuttingEntries.length, (index) {
-                  final entry = _cuttingEntries[index];
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        SizedBox(
-                          width: 150,
-                          child: DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            value: entry['itemName'].isEmpty
-                                ? null
-                                : entry['itemName'],
-                            items: _itemNames
-                                .map(
-                                  (name) => DropdownMenuItem(
-                                    value: name,
-                                    child: Text(name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) {
-                              setState(() => entry['itemName'] = val ?? '');
-                            },
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'Select Item',
+                  columns: [
+                    DataColumn(label: _excelHeader('ITEM NAME', 200)),
+                    ..._sizes.map((s) => DataColumn(label: _excelHeader(s.toString(), 80))),
+                    DataColumn(label: _excelHeader('DOZENS', 100)),
+                    const DataColumn(label: SizedBox(width: 40)),
+                  ],
+                  rows: List.generate(_cuttingEntries.length, (index) {
+                    final entry = _cuttingEntries[index];
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Container(
+                            width: 200,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: entry['itemName'].isEmpty ? null : entry['itemName'],
+                              style: GoogleFonts.inter(fontSize: 13, color: Colors.black, fontWeight: FontWeight.w600),
+                              items: _itemNames.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                              onChanged: (v) => setState(() => entry['itemName'] = v ?? ''),
+                              decoration: const InputDecoration(border: InputBorder.none, isDense: true),
                             ),
                           ),
                         ),
-                      ),
-                      ..._sizes.map((s) {
-                        final sStr = s.toString();
-                        return DataCell(
-                          SizedBox(
-                            width: 100, // Widened to fit large values better
-                            child: TextFormField(
-                              initialValue:
-                                  entry['sizeQuantities'][sStr].toString() ==
-                                      '0'
-                                  ? ''
-                                  : entry['sizeQuantities'][sStr].toString(),
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              maxLines: null, // Allow wrapping to the next line
-                              onChanged: (val) {
-                                setState(() {
-                                  entry['sizeQuantities'][sStr] =
-                                      int.tryParse(val) ?? 0;
-                                  _calculateTotal(index);
-                                });
-                              },
-                              decoration: InputDecoration(
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                  horizontal: 4,
-                                ),
-                                border: InputBorder.none,
-                                hintText: '0',
-                                hintStyle: TextStyle(
-                                  color: Colors.grey.shade400,
+                        ..._sizes.map((s) {
+                          final sStr = s.toString();
+                          return DataCell(
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                initialValue: entry['sizeQuantities'][sStr] == 0 ? '' : entry['sizeQuantities'][sStr].toString(),
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
+                                onChanged: (v) {
+                                  setState(() {
+                                    entry['sizeQuantities'][sStr] = int.tryParse(v) ?? 0;
+                                    _calculateTotal(index);
+                                  });
+                                },
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  hintText: '-',
+                                  hintStyle: TextStyle(color: Color(0xFFCBD5E1)),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
-                      DataCell(
-                        Text(
-                          entry['totalDozens'].toString(),
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontWeight: FontWeight.bold,
+                          );
+                        }),
+                        DataCell(
+                          Container(
+                            width: 100,
+                            alignment: Alignment.center,
+                            child: Text(
+                              entry['totalDozens'].toString(),
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                color: const Color(0xFF2563EB),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      DataCell(
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete,
-                            color: Colors.red,
-                            size: 20,
+                        DataCell(
+                          SizedBox(
+                            width: 40,
+                            child: IconButton(
+                              icon: const Icon(LucideIcons.trash2, color: Color(0xFFEF4444), size: 16),
+                              onPressed: () => setState(() => _cuttingEntries.removeAt(index)),
+                            ),
                           ),
-                          onPressed: () {
-                            setState(() => _cuttingEntries.removeAt(index));
-                          },
                         ),
-                      ),
-                    ],
-                  );
-                }),
+                      ],
+                    );
+                  }),
+                ),
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _excelHeader(String label, double width) {
+    return Container(
+      width: width,
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontWeight: FontWeight.w900,
+          fontSize: 11,
+          color: const Color(0xFF475569),
+          letterSpacing: 1,
+        ),
+      ),
     );
   }
 }

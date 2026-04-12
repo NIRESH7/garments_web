@@ -23,6 +23,7 @@ import '../transactions/lot_complaint_solution_screen.dart';
 import '../transactions/cutting_order_planning_screen.dart';
 import '../transactions/lot_requirement_allocation_screen.dart';
 import '../tasks/worker_task_dashboard_screen.dart';
+import '../tasks/admin_task_management_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../reports/godown_stock_report_screen.dart';
 import '../reports/monthly_summary_report.dart';
@@ -49,6 +50,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _pageIndex = 0;
   final GlobalKey<InwardListScreenState> _inwardKey = GlobalKey<InwardListScreenState>();
+  final GlobalKey<OutwardListScreenState> _outwardKey = GlobalKey<OutwardListScreenState>();
 
   String _getShellTitle() {
     switch (_pageIndex) {
@@ -71,6 +73,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onPressed: () => _inwardKey.currentState?.fetchInwards(),
           icon: const Icon(LucideIcons.refreshCw, size: 16, color: ColorPalette.textMuted),
           tooltip: 'REFRESH INWARDS',
+        ),
+      ];
+    }
+    if (_pageIndex == 3) {
+      return [
+        IconButton(
+          onPressed: () => _outwardKey.currentState?.fetchOutwards(),
+          icon: const Icon(LucideIcons.refreshCw, size: 16, color: ColorPalette.textMuted),
+          tooltip: 'REFRESH OUTWARDS',
         ),
       ];
     }
@@ -116,8 +127,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const _DynamicDataHomeTab(),              // 0
             const MastersDashboard(),                 // 1
             InwardListScreen(key: _inwardKey),        // 2
-            const OutwardListScreen(),                // 3
-            const WorkerTaskDashboardScreen(),        // 4
+            OutwardListScreen(key: _outwardKey),       // 3
+            const AdminTaskManagementScreen(),        // 4
             const ItemAssignmentListScreen(),         // 5
             const CuttingOrderPlanningScreen(),       // 6
             const ReportsDashboard(),                 // 7

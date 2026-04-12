@@ -1,19 +1,15 @@
-import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:record/record.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path/path.dart' as p;
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:intl/intl.dart';
+
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 import '../../core/constants/api_constants.dart';
 import '../../widgets/custom_dropdown_field.dart';
-import '../../services/lot_allocation_print_service.dart';
 
 class CuttingMasterFormScreen extends StatefulWidget {
   final String? entryId;
@@ -26,50 +22,37 @@ class CuttingMasterFormScreen extends StatefulWidget {
 class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   final _api = MobileApiService();
   final _formKey = GlobalKey<FormState>();
-  late AudioRecorder _recorder;
-  late stt.SpeechToText _speechToText;
+
   bool _isLoading = false;
   bool _isSaving = false;
-  bool _isRecording = false;
-  String? _recordingPath;
 
-  // ─── Section 1: Item Details ───
+  // Tab 1: Identity
   String? _itemName;
   String? _size;
   XFile? _itemImageFile;
   String? _itemImageUrl;
+  
+  // Tab 2: Production Data
   final _dozenWeightController = TextEditingController();
   final _wastePctController = TextEditingController(); 
   final _layPcsController = TextEditingController();
   final _timeToCompleteController = TextEditingController();
   final _meterPerDozenController = TextEditingController();
-
-  // ─── Section 2: Lot Details ───
-  String? _lotName;
-  String? _knittingDia;
-  String? _knittingDiaSpecific;
-  String? _selectedDiaName; // Separated from _itemName
-  String? _cuttingDia; // auto-filled
   final _efficiencyController = TextEditingController();
   final _foldingController = TextEditingController();
   final _layLengthController = TextEditingController();
 
-  // ─── Section 3: Pattern Details ───
-  List<PatternRowData> _patterns = [];
+  // Lot Details (In Identity or Production depending on density)
+  String? _lotName;
+  String? _selectedDiaName;
+  String? _knittingDiaSpecific;
+  String? _cuttingDia;
 
-  // ─── Section 4: CAD File ───
+  // Tab 3: Patterns & Instructions
+  List<PatternRowData> _patterns = [];
+  final _instructionTextController = TextEditingController();
   PlatformFile? _cadFile;
   String? _cadFileUrl;
-
-  // ─── Section 5: Instructions ───
-  XFile? _instructionAudioFile;
-  String? _instructionAudioUrl;
-  final _instructionTextController = TextEditingController();
-  PlatformFile? _instructionDocFile;
-  String? _instructionDocUrl;
-  bool _isListening = false;
-  bool _isSpeechInitialized = false;
-
 
   // Dropdown lists
   List<String> _itemList = [];
@@ -77,78 +60,31 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   List<String> _lotList = [];
   List<Map<String, dynamic>> _diaObjects = []; 
   List<String> _diaNames = [];
-  List<String> _partyList = [];
   List<String> _partNameList = [];
-
-  final _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
     super.initState();
-    _recorder = AudioRecorder();
-    _speechToText = stt.SpeechToText();
     _loadDropdowns();
     if (widget.entryId != null) {
       _loadEntryDetails();
     } else {
       _addPatternRow();
     }
-
-    _efficiencyController.addListener(_updateWasteFromEfficiency);
-    _wastePctController.addListener(_updateEfficiencyFromWaste);
   }
 
   @override
   void dispose() {
-    _recorder.dispose();
     _dozenWeightController.dispose();
-    _wastePctController.removeListener(_updateEfficiencyFromWaste);
     _wastePctController.dispose();
     _layPcsController.dispose();
     _timeToCompleteController.dispose();
     _meterPerDozenController.dispose();
-    _efficiencyController.removeListener(_updateWasteFromEfficiency);
     _efficiencyController.dispose();
     _foldingController.dispose();
     _layLengthController.dispose();
     _instructionTextController.dispose();
-    _audioPlayer.dispose();
-    for (var p in _patterns) {
-      p.patternMeasurementController.dispose();
-      p.finishingController.dispose();
-      p.punchesController.dispose();
-    }
     super.dispose();
-  }
-
-  bool _isCalculating = false;
-
-  void _updateWasteFromEfficiency() {
-    if (_isCalculating) return;
-    _isCalculating = true;
-    try {
-      final eff = double.tryParse(_efficiencyController.text) ?? 0;
-      final wasteVal = (100 - eff).toStringAsFixed(2);
-      if (_wastePctController.text != wasteVal) {
-        _wastePctController.text = wasteVal;
-      }
-    } finally {
-      _isCalculating = false;
-    }
-  }
-
-  void _updateEfficiencyFromWaste() {
-    if (_isCalculating) return;
-    _isCalculating = true;
-    try {
-      final waste = double.tryParse(_wastePctController.text) ?? 0;
-      final effVal = (100 - waste).toStringAsFixed(2);
-      if (_efficiencyController.text != effVal) {
-        _efficiencyController.text = effVal;
-      }
-    } finally {
-      _isCalculating = false;
-    }
   }
 
   Future<void> _loadDropdowns() async {
@@ -156,62 +92,62 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
     try {
       final categories = await _api.getCategories();
       final lots = await _api.getLots();
-      final parties = await _api.getParties();
+      debugPrint('LOAD_DROPDOWNS: Categories count: ${categories.length}');
+      debugPrint('LOAD_DROPDOWNS: Lots count: ${lots.length}');
+      if (lots.isNotEmpty) debugPrint('LOAD_DROPDOWNS: First lot sample: ${lots.first}');
+
+      if (!mounted) return;
 
       for (var cat in categories) {
         final name = (cat['name'] ?? '').toString().toLowerCase().trim();
         final rawVals = cat['values'] as List? ?? [];
         final vals = rawVals.map((v) => v is Map ? v : {'name': v.toString()}).toList();
 
-        if (name == 'item name' || name == 'item') {
+        if (name == 'item name' || name == 'item' || name == 'item_name') {
           _itemList = vals.map((v) => v['name'].toString()).toList();
         } else if (name == 'size') {
           _sizeList = vals.map((v) => v['name'].toString()).toList();
         } else if (name == 'dia') {
           _diaObjects = vals.cast<Map<String, dynamic>>();
           _diaNames = _diaObjects.map((v) => v['name'].toString()).toList();
-        } else if (name == 'party name') {
-          final catParties = vals.map((v) => v['name'].toString()).toList();
-          _partyList.addAll(catParties);
-        } else if (name == 'part name') {
+        } else if (name == 'part name' || name == 'party name') {
           _partNameList = vals.map((v) => v['name'].toString()).toList();
         } else if (name == 'lot name' || name == 'lot') {
-          final catLots = vals.map((v) => v['name'].toString()).toList();
-          _lotList.addAll(catLots);
+          final registryLots = vals.map((v) => v['name'].toString()).toList();
+          _lotList.addAll(registryLots);
         }
       }
+      
+      final masterLots = lots.map((l) => l['lotNumber'].toString()).toList();
+      _lotList.addAll(masterLots);
+      _lotList = _lotList.toSet().toList(); // Deduplicate
 
-      _lotList.addAll(lots.map((l) => l['lotNumber'].toString()).toList());
-      _lotList = _lotList.toSet().toList(); // unique
-      _partyList.addAll(parties.map((p) => p['name'].toString()).toList());
-      _partyList = _partyList.toSet().toList(); // unique
-
+      debugPrint('LOAD_DROPDOWNS: Final Item List: ${_itemList.length}');
+      debugPrint('LOAD_DROPDOWNS: Final Lot List: ${_lotList.length}');
+      
       setState(() => _isLoading = false);
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _loadEntryDetails() async {
     final data = await _api.getCuttingMasterById(widget.entryId!);
-    if (data != null) {
+    if (data != null && mounted) {
       setState(() {
         _itemName = data['itemName'];
         _size = data['size'];
         _itemImageUrl = data['itemImage'];
-        _dozenWeightController.text = (data['dozenWeight'] ?? 0).toString();
-        _wastePctController.text = (100 - (data['efficiencyPct'] ?? 100)).toString();
-        _layPcsController.text = (data['layPcs'] ?? 0).toString();
-
+        _dozenWeightController.text = (data['dozenWeight'] ?? '').toString();
+        _layPcsController.text = (data['layPcs'] ?? '').toString();
         _lotName = data['lotName'];
         _selectedDiaName = data['diaName']; 
-        _knittingDiaSpecific = data['knittingDia'];
-        _knittingDia = data['knittingDia']; 
-        _cuttingDia = data['cuttingDia'];
-        _efficiencyController.text = (data['efficiency'] ?? 0).toString();
-        _wastePctController.text = (data['wastePercentage'] ?? 0).toString();
-        _foldingController.text = (data['folding'] ?? 0).toString();
-        _layLengthController.text = (data['layLengthMeter'] ?? 0).toString();
+        _knittingDiaSpecific = data['knittingDia']?.toString();
+        _cuttingDia = data['cuttingDia']?.toString();
+        _efficiencyController.text = (data['efficiency'] ?? '').toString();
+        _wastePctController.text = (data['wastePercentage'] ?? '').toString();
+        _foldingController.text = (data['folding'] ?? '').toString();
+        _layLengthController.text = (data['layLengthMeter'] ?? '').toString();
         _timeToCompleteController.text = data['timeToComplete'] ?? '';
         _meterPerDozenController.text = (data['meterPerDozen'] ?? '').toString();
 
@@ -219,27 +155,18 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         _patterns = pats.map((p) => PatternRowData(
           partName: p['partyName'],
           imageUrl: p['patternImage'],
-          patternMeasurementController: TextEditingController(text: (p['patternMeasurement'] ?? '').toString()),
-          finishingController: TextEditingController(text: (p['finishingMeasurement'] ?? '').toString()),
-          punchesController: TextEditingController(text: (p['noOfPunches'] ?? '').toString()),
+          ctrlMeasurement: TextEditingController(text: (p['patternMeasurement'] ?? '').toString()),
         )).toList();
 
-        _cadFileUrl = data['cadFile'];
-        _instructionAudioUrl = data['instructionAudio'];
         _instructionTextController.text = data['instructionText'] ?? '';
-        _instructionDocUrl = data['instructionDoc'];
+        _cadFileUrl = data['cadFile'];
       });
     }
   }
 
   void _addPatternRow() {
     setState(() {
-      _patterns.add(PatternRowData(
-        partName: null,
-        patternMeasurementController: TextEditingController(),
-        finishingController: TextEditingController(),
-        punchesController: TextEditingController(),
-      ));
+      _patterns.add(PatternRowData(ctrlMeasurement: TextEditingController()));
     });
   }
 
@@ -248,40 +175,15 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
     final img = await picker.pickImage(source: ImageSource.gallery);
     if (img != null) {
       setState(() {
-        if (isItem) {
-          _itemImageFile = img;
-        } else if (patternIndex != null) {
-          _patterns[patternIndex].imageFile = img;
-        }
+        if (isItem) _itemImageFile = img;
+        else if (patternIndex != null) _patterns[patternIndex].imageFile = img;
       });
-    }
-  }
-
-  Future<void> _pickFile(bool isCad) async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.isNotEmpty) {
-      setState(() {
-        if (isCad) {
-          _cadFile = result.files.first;
-        } else {
-          _instructionDocFile = result.files.first;
-        }
-      });
-    }
-  }
-
-  Future<void> _playAudio(String? url, XFile? local) async {
-    if (local != null) {
-      await _audioPlayer.play(DeviceFileSource(local.path));
-    } else if (url != null && url.isNotEmpty) {
-      await _audioPlayer.play(UrlSource(ApiConstants.getImageUrl(url)));
     }
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
-
     try {
       final Map<String, dynamic> data = {
         'itemName': _itemName,
@@ -302,23 +204,16 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
       };
 
       if (_itemImageFile != null) data['itemImage'] = _itemImageFile;
-      if (_cadFile?.path != null) data['cadFile'] = XFile(_cadFile!.path!);
-      if (_instructionAudioFile != null) data['instructionAudio'] = _instructionAudioFile;
-      if (_instructionDocFile?.path != null) data['instructionDoc'] = XFile(_instructionDocFile!.path!);
 
       final List<Map<String, String>> patternRows = [];
       for (int i = 0; i < _patterns.length; i++) {
         final p = _patterns[i];
         patternRows.add({
           'partyName': p.partName ?? '',
-          'patternMeasurement': p.patternMeasurementController.text,
-          'finishingMeasurement': p.finishingController.text,
-          'noOfPunches': p.punchesController.text,
+          'patternMeasurement': p.ctrlMeasurement.text,
           'patternImage': p.imageUrl ?? '',
         });
-        if (p.imageFile != null) {
-          data['patternImage_$i'] = p.imageFile;
-        }
+        if (p.imageFile != null) data['patternImage_$i'] = p.imageFile;
       }
       data['patternDetails'] = patternRows;
 
@@ -327,689 +222,390 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
           : await _api.updateCuttingMaster(widget.entryId!, data);
 
       if (mounted && resultData != null) {
-        _showSuccessDialog(resultData);
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cutting Master Synchronized'), backgroundColor: ColorPalette.success));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  void _showSuccessDialog(Map<String, dynamic> entry) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Column(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 60),
-            SizedBox(height: 16),
-            Text('Saved Successfully'),
-          ],
-        ),
-        content: const Text('Cutting master entry has been saved. What would you like to do next?', textAlign: TextAlign.center),
-        actions: [
-          Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _actionButton(Icons.share, 'Share', Colors.green, () => _shareEntry(entry)),
-                  _actionButton(Icons.print, 'Print', Colors.purple, () => _printEntry(entry)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context); // Close dialog
-                    Navigator.pop(context, true); // Go back to list
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Back to List'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionButton(IconData icon, String label, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  void _shareEntry(Map<String, dynamic> entry) {
-    final summary = "Cutting Master: ${entry['itemName']}\nLot: ${entry['lotName']}\nSize: ${entry['size']}\nInstructions: ${entry['instructionText'] ?? 'N/A'}";
-    Share.share(summary);
-  }
-
-  void _printEntry(Map<String, dynamic> entry) {
-    final printService = LotAllocationPrintService();
-    printService.printCuttingMasterDetail(entry);
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.entryId == null ? 'New Cutting Master' : 'Edit Cutting Master',
-          style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        centerTitle: true,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: DefaultTabController(
-        length: 3,
-        child: Column(
-          children: [
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9FAFB),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 1,
+          leading: IconButton(
+            icon: const Icon(LucideIcons.arrowLeft, color: Color(0xFF0F172A), size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: null,
+          centerTitle: false,
+          actions: [
             Container(
-              color: Colors.white,
-              child: const TabBar(
-                isScrollable: false,
-                labelColor: ColorPalette.primary,
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: ColorPalette.primary,
-                indicatorWeight: 4,
-                labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                tabs: [
-                  Tab(text: 'Identity', icon: Icon(Icons.inventory_2_outlined, size: 20)),
-                  Tab(text: 'Production', icon: Icon(Icons.calculate_outlined, size: 20)),
-                  Tab(text: 'Media', icon: Icon(Icons.camera_alt_outlined, size: 20)),
-                ],
+              margin: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: _isSaving ? null : _save,
+                  icon: _isSaving 
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: ColorPalette.primary))
+                      : const Icon(LucideIcons.check, size: 14, color: Colors.white),
+                  label: Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: Colors.white)),
+                  style: TextButton.styleFrom(
+                    backgroundColor: ColorPalette.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                ),
               ),
             ),
-            Expanded(
+          ],
+          bottom: TabBar(
+            labelColor: ColorPalette.primary,
+            unselectedLabelColor: ColorPalette.textMuted,
+            indicatorColor: ColorPalette.primary,
+            indicatorSize: TabBarIndicatorSize.label,
+            indicatorWeight: 2,
+            labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5),
+            tabs: const [
+              Tab(text: 'IDENTITY'),
+              Tab(text: 'PRODUCTION'),
+              Tab(text: 'MEDIA'),
+            ],
+          ),
+        ),
+        body: _isLoading 
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : Form(
+              key: _formKey,
               child: TabBarView(
                 children: [
-                  // Tab 1: Item & Lot Details
-                  _buildIdentityTab(),
-                  // Tab 2: Production & Weights
-                  _buildProductionTab(),
-                  // Tab 3: Patterns & Instructions
-                  _buildMediaTab(),
+                   _buildContentWrapper(_buildIdentityTab()),
+                   _buildContentWrapper(_buildProductionTab()),
+                   _buildContentWrapper(_buildMediaTab()),
                 ],
               ),
             ),
-          ],
-        ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
-          ],
-        ),
-        child: ElevatedButton(
-          onPressed: _isSaving ? null : _save,
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size.fromHeight(60),
-            backgroundColor: ColorPalette.primary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
-          ),
-          child: _isSaving
-              ? const CircularProgressIndicator(color: Colors.white)
-              : Text(
-                  widget.entryId == null ? 'Save Cutting Master' : 'Update Cutting Master',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
+    );
+  }
+
+  Widget _buildContentWrapper(Widget child) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 850),
+          child: child,
         ),
       ),
     );
   }
 
   Widget _buildIdentityTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        child: Column(
+    return Column(
+      children: [
+        _formCard(
+          title: 'Item Details',
           children: [
-            _buildCard(
-              title: 'Item Details',
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: CustomDropdownField(
-                        label: 'Item',
-                        items: _itemList,
-                        value: _itemName,
-                        onChanged: (v) => setState(() => _itemName = v),
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 1,
-                      child: CustomDropdownField(
-                        label: 'Size',
-                        items: _sizeList,
-                        value: _size,
-                        onChanged: (v) => setState(() => _size = v),
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  flex: 2,
+                  child: CustomDropdownField(
+                    label: 'Item',
+                    items: _itemList,
+                    value: _itemName,
+                    onChanged: (v) => setState(() => _itemName = v),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _buildImagePreview('Item Image', _itemImageFile, _itemImageUrl, () => _pickImage(true)),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 1,
+                  child: CustomDropdownField(
+                    label: 'Size',
+                    items: _sizeList,
+                    value: _size,
+                    onChanged: (v) => setState(() => _size = v),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
-            _buildCard(
-              title: 'Lot Details',
+            const SizedBox(height: 24),
+            _buildImagePicker('Item Image', _itemImageFile, _itemImageUrl, () => _pickImage(true)),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _formCard(
+          title: 'Lot Details',
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomDropdownField(
-                        label: 'Lot Name',
-                        items: _lotList,
-                        value: _lotName,
-                        onChanged: (v) => setState(() => _lotName = v),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: CustomDropdownField(
-                        label: 'Dia',
-                        items: _diaNames,
-                        value: _selectedDiaName,
-                        onChanged: (v) {
-                          setState(() {
-                            _selectedDiaName = v;
-                            _knittingDia = null;
-                            _cuttingDia = null;
-                            _knittingDiaSpecific = null;
-                          });
-                        },
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: CustomDropdownField(
+                    label: 'Lot Name',
+                    items: _lotList,
+                    value: _lotName,
+                    onChanged: (v) => setState(() => _lotName = v),
+                  ),
                 ),
-                if (_selectedDiaName != null) ...[
-                  const SizedBox(height: 16),
-                  CustomDropdownField(
-                    label: 'Knitting Dia',
-                    items: _diaObjects
-                        .where((d) => d['name'] == _selectedDiaName)
-                        .map((d) => d['knittingDia']?.toString() ?? '')
-                        .where((s) => s.isNotEmpty)
-                        .toList(),
-                    value: _knittingDiaSpecific,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: CustomDropdownField(
+                    label: 'Dia',
+                    items: _diaNames,
+                    value: _selectedDiaName,
                     onChanged: (v) {
-                      final diaObj = _diaObjects.firstWhere(
-                        (d) => d['name'] == _selectedDiaName && d['knittingDia']?.toString() == v,
-                        orElse: () => {},
-                      );
                       setState(() {
-                        _knittingDiaSpecific = v;
-                        _knittingDia = v;
+                        _selectedDiaName = v;
+                        final diaObj = _diaObjects.firstWhere((d) => d['name'] == v, orElse: () => {});
+                        _knittingDiaSpecific = diaObj['knittingDia']?.toString();
                         _cuttingDia = diaObj['cuttingDia']?.toString();
                       });
                     },
                   ),
-                ],
-                if (_knittingDiaSpecific != null) ...[
-                  const SizedBox(height: 16),
-                  _buildReadOnlyField('Cutting Dia (Auto)', _cuttingDia ?? '', Icons.auto_fix_high_outlined),
-                ],
+                ),
               ],
             ),
+            if (_knittingDiaSpecific != null) ...[
+              const SizedBox(height: 24),
+              _buildReadOnlyDisplay('Knitting Dia', _knittingDiaSpecific!),
+              const SizedBox(height: 12),
+              _buildReadOnlyDisplay('Cutting Dia (Auto)', _cuttingDia ?? 'N/A'),
+            ],
           ],
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildProductionTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _buildCard(
-            title: 'Weight & Waste',
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _dozenWeightController,
-                      label: 'Costing weight',
-                      icon: Icons.scale_outlined,
-                      isNumeric: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _foldingController,
-                      label: 'Folding weight',
-                      icon: Icons.monitor_weight_outlined,
-                      isNumeric: true,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _efficiencyController,
-                      label: 'Efficiency (%)',
-                      icon: Icons.speed_outlined,
-                      isNumeric: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _wastePctController,
-                      label: 'Waste (%)',
-                      icon: Icons.delete_outline,
-                      isNumeric: true,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildCard(
-            title: 'Lay & Timing',
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _layLengthController,
-                      label: 'Lay Length (M)',
-                      icon: Icons.square_foot_outlined,
-                      isNumeric: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _layPcsController,
-                      label: 'Lay Pcs',
-                      icon: Icons.view_comfortable_outlined,
-                      isNumeric: true,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _timeToCompleteController,
-                label: 'Time to Complete (per Lay)',
-                icon: Icons.timer_outlined,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _meterPerDozenController,
-                label: 'Meter per Dozen',
-                icon: Icons.straighten_outlined,
-                isNumeric: true,
-              ),
-            ],
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        _formCard(
+          title: 'Weight & Productivity',
+          children: [
+            Row(
+              children: [
+                Expanded(child: _buildTextField('Costing Weight', _dozenWeightController, LucideIcons.scale)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildTextField('Folding Weight', _foldingController, LucideIcons.archive)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(child: _buildTextField('Efficiency (%)', _efficiencyController, LucideIcons.zap)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildTextField('Waste (%)', _wastePctController, LucideIcons.trash2)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _formCard(
+          title: 'Lay & Layout',
+          children: [
+            Row(
+              children: [
+                Expanded(child: _buildTextField('Lay Length (M)', _layLengthController, LucideIcons.moveHorizontal)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildTextField('Lay Pcs', _layPcsController, LucideIcons.layers)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildTextField('Time to Complete', _timeToCompleteController, LucideIcons.clock),
+            const SizedBox(height: 20),
+            _buildTextField('Meter per Dozen', _meterPerDozenController, LucideIcons.trendingUp),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _buildMediaTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _buildCard(
-            title: 'Pattern Details',
-            children: [
-              ..._patterns.asMap().entries.map((entry) => _buildPatternRow(entry.key, entry.value)),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _addPatternRow,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Pattern Row'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+    return Column(
+      children: [
+        _formCard(
+          title: 'Pattern Details',
+          children: [
+            ..._patterns.asMap().entries.map((entry) => _buildPatternRow(entry.key, entry.value)),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _addPatternRow,
+              icon: const Icon(LucideIcons.plus, size: 14),
+              label: Text('Add Pattern Detail', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildCard(
-            title: 'Files & Audio',
-            children: [
-              _buildFilePicker('CAD/CAM file', _cadFile, _cadFileUrl, () => _pickFile(true)),
-              const SizedBox(height: 24),
-              _buildInstructionRecordingSection(),
-              const SizedBox(height: 24),
-              _buildFilePicker('Instruction Document', _instructionDocFile, _instructionDocUrl, () => _pickFile(false)),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _formCard(
+          title: 'Additional Instructions',
+          children: [
+            TextFormField(
+              controller: _instructionTextController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Type instructions here...',
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _buildCard({required String title, required List<Widget> children}) {
+  Widget _formCard({required String title, required List<Widget> children}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10))
+          BoxShadow(
+            color: Colors.black.withOpacity(0.01),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF64748B), fontSize: 13, letterSpacing: 0.8)),
-          const SizedBox(height: 20),
+          Row(
+            children: [
+              Container(width: 3, height: 12, color: ColorPalette.primary),
+              const SizedBox(width: 8),
+              Text(
+                title.toUpperCase(),
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  color: ColorPalette.textPrimary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
           ...children,
         ],
       ),
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool isNumeric = false}) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20, color: const Color(0xFF3B82F6)),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
-        labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-
-  Widget _buildReadOnlyField(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey),
-          const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 2),
-            Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startRecording() async {
-    try {
-      if (await _recorder.hasPermission()) {
-        final dir = await getTemporaryDirectory();
-        final path = p.join(dir.path, 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a');
-        await _recorder.start(const RecordConfig(), path: path);
-        
-        setState(() {
-          _isRecording = true;
-          _instructionAudioFile = null;
-        });
-
-        // Optional: Start speech to text
-        await _startListening();
-      }
-    } catch (e) {
-      debugPrint('Error starting recording: $e');
-    }
-  }
-
-  Future<void> _stopRecording() async {
-    try {
-      final path = await _recorder.stop();
-      await _stopListening();
-      setState(() {
-        _isRecording = false;
-      });
-      if (path != null) {
-        setState(() {
-          _instructionAudioFile = XFile(path);
-        });
-      }
-    } catch (e) {
-      debugPrint('Error stopping recording: $e');
-    }
-  }
-
-  Future<void> _startListening() async {
-    if (!_isSpeechInitialized) {
-      _isSpeechInitialized = await _speechToText.initialize();
-    }
-    if (_isSpeechInitialized) {
-      setState(() => _isListening = true);
-      _speechToText.listen(
-        onResult: (val) => setState(() {
-          _instructionTextController.text = val.recognizedWords;
-        }),
-      );
-    }
-  }
-
-  Future<void> _stopListening() async {
-    await _speechToText.stop();
-    setState(() => _isListening = false);
-  }
-
-  Widget _buildInstructionRecordingSection() {
-    bool hasAudio = _instructionAudioFile != null || (_instructionAudioUrl != null && _instructionAudioUrl!.isNotEmpty);
+  Widget _buildTextField(String label, TextEditingController ctrl, IconData icon) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Voice Instruction', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ColorPalette.textPrimary)),
-          ],
+        Text(
+          label.toUpperCase(),
+          style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
         ),
-        if (hasAudio) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.green.withOpacity(0.3)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Flexible(
-                  child: Row(
-                    children: [
-                      Icon(Icons.audiotrack, color: Colors.green),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Recording Ready to Play',
-                          style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 36,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _playAudio(_instructionAudioUrl, _instructionAudioFile),
-                    icon: const Icon(Icons.play_arrow, size: 20),
-                    label: const Text('Play / Listen'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _isRecording ? Colors.red.shade200 : Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              if (_isRecording)
-                const Column(
-                  children: [
-                    LinearProgressIndicator(color: Colors.red, backgroundColor: Colors.white),
-                    SizedBox(height: 8),
-                    Text('Recording...', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: _isRecording ? _stopRecording : _startRecording,
-                child: Container(
-                  height: 60,
-                  width: 60,
-                  decoration: BoxDecoration(
-                    color: _isRecording ? Colors.red.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _isRecording ? Icons.stop : Icons.mic,
-                    color: _isRecording ? Colors.red : Colors.blue,
-                    size: 30,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _isRecording ? 'Tap to Stop' : (hasAudio ? 'Tap to Re-record' : 'Tap to Start Recording'),
-                style: TextStyle(color: _isRecording ? Colors.red : Colors.grey.shade600, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
         TextFormField(
-          controller: _instructionTextController,
-          maxLines: 3,
+          controller: ctrl,
+          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
           decoration: InputDecoration(
-            labelText: 'Instruction Text (Auto-converted)',
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-            hintText: 'Voice will be converted to text here...',
-            fillColor: Colors.white,
+            prefixIcon: Icon(icon, size: 14, color: ColorPalette.primary.withOpacity(0.5)),
             filled: true,
+            fillColor: const Color(0xFFF9FAFB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: ColorPalette.border),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: ColorPalette.border),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: ColorPalette.primary, width: 1.5),
             ),
-            alignLabelWithHint: true,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSection({required String title, required List<Widget> children, IconData? icon}) {
-    return _buildCard(title: title, children: children); // Simplified for the tabbed view
+  Widget _buildReadOnlyDisplay(String label, String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ColorPalette.border),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted)),
+          Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w900, color: ColorPalette.primary)),
+        ],
+      ),
+    );
   }
 
-  Widget _buildImagePreview(String label, XFile? file, String? url, VoidCallback onTap) {
+  Widget _buildImagePicker(String label, XFile? file, String? url, VoidCallback onTap) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary)),
-        const SizedBox(height: 8),
+        Text(
+          label.toUpperCase(),
+          style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
+        ),
+        const SizedBox(height: 12),
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           child: Container(
-            height: 160,
+            height: 200,
             width: double.infinity,
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              borderRadius: BorderRadius.circular(16),
-              color: const Color(0xFFF8FAFC),
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: ColorPalette.border, style: BorderStyle.solid),
             ),
-            child: file != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: kIsWeb 
-                        ? Image.network(file.path, fit: BoxFit.cover)
-                        : Image.file(File(file.path), fit: BoxFit.cover),
-                  )
-                : (url != null && url.isNotEmpty)
-                    ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(ApiConstants.getImageUrl(url), fit: BoxFit.cover))
-                    : const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.add_a_photo, size: 40, color: Colors.grey), SizedBox(height: 8), Text('Tap to upload image', style: TextStyle(color: Colors.grey, fontSize: 12))]),
+            clipBehavior: Clip.antiAlias,
+            child: file != null 
+              ? Image.network(file.path, fit: BoxFit.contain)
+              : (url != null && url.isNotEmpty)
+                ? Image.network(ApiConstants.getImageUrl(url), fit: BoxFit.contain)
+                : Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.uploadCloud, color: ColorPalette.primary.withOpacity(0.3), size: 40),
+                        const SizedBox(height: 16),
+                        Text(
+                          'SELECT ASSET FILENAME',
+                          style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: ColorPalette.primary, letterSpacing: 1),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Maximum file size: 10MB',
+                          style: GoogleFonts.inter(fontSize: 8, color: ColorPalette.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ],
@@ -1017,130 +613,57 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   }
 
   Widget _buildPatternRow(int index, PatternRowData data) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9).withOpacity(0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
       child: Column(
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Pattern Detail Row ${index + 1}',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF64748B), letterSpacing: -0.3),
+              _buildMicroImage(data.imageFile, data.imageUrl, () => _pickImage(false, patternIndex: index)),
+              const SizedBox(width: 20),
+              Expanded(
+                child: CustomDropdownField(
+                  label: 'PART IDENTIFIER', 
+                  items: _partNameList, 
+                  value: data.partName, 
+                  onChanged: (v) => setState(() => data.partName = v),
+                ),
               ),
+              const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFEF4444), size: 22),
-                onPressed: () => setState(() => _patterns.removeAt(index)),
+                onPressed: () => setState(() => _patterns.removeAt(index)), 
+                icon: const Icon(LucideIcons.minusCircle, color: ColorPalette.error, size: 18),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          CustomDropdownField(
-            label: 'Part Name',
-            items: _partNameList,
-            value: data.partName,
-            onChanged: (v) => setState(() => data.partName = v),
-          ),
           const SizedBox(height: 16),
-          _buildImagePreview('Pattern Image', data.imageFile, data.imageUrl, () => _pickImage(false, patternIndex: index)),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: data.patternMeasurementController,
-            decoration: InputDecoration(
-              labelText: 'Pattern measurement',
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-              prefixIcon: const Icon(Icons.architecture_outlined, color: Color(0xFF3B82F6)),
-              fillColor: Colors.white,
-              filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: data.finishingController,
-            decoration: InputDecoration(
-              labelText: 'Finishing Measurement',
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-              prefixIcon: const Icon(Icons.check_box_outlined, color: Color(0xFF3B82F6)),
-              fillColor: Colors.white,
-              filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: data.punchesController,
-            decoration: InputDecoration(
-              labelText: 'No. of punches',
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-              prefixIcon: const Icon(Icons.pin_outlined, color: Color(0xFF3B82F6)),
-              fillColor: Colors.white,
-              filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
-            ),
-          ),
+          _buildTextField('DIMENSION / MEASUREMENT', data.ctrlMeasurement, LucideIcons.ruler),
+          const SizedBox(height: 24),
+          const Divider(height: 1, color: ColorPalette.border),
         ],
       ),
     );
   }
 
-  Widget _buildFilePicker(String label, PlatformFile? file, String? url, VoidCallback onTap) {
-    String? name = file?.name ?? (url != null && url.isNotEmpty ? url.split('/').last : null);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A), letterSpacing: -0.3)),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withOpacity(0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.insert_drive_file_outlined, color: Colors.orange, size: 20),
-            ),
-            title: Text(name ?? 'No file selected', style: TextStyle(color: name == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w600)),
-            trailing: SizedBox(
-              width: 100,
-              child: ElevatedButton(
-                onPressed: onTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text('Pick File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ),
+  Widget _buildMicroImage(XFile? file, String? url, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: ColorPalette.border),
         ),
-      ],
+        clipBehavior: Clip.antiAlias,
+        child: file != null 
+          ? Image.network(file.path, fit: BoxFit.cover)
+          : (url != null && url.isNotEmpty)
+            ? Image.network(ApiConstants.getImageUrl(url), fit: BoxFit.cover)
+            : Icon(LucideIcons.image, color: ColorPalette.primary.withOpacity(0.2), size: 24),
+      ),
     );
   }
 }
@@ -1149,16 +672,6 @@ class PatternRowData {
   String? partName;
   XFile? imageFile;
   String? imageUrl;
-  final TextEditingController patternMeasurementController;
-  final TextEditingController finishingController;
-  final TextEditingController punchesController;
-
-  PatternRowData({
-    this.partName,
-    this.imageFile,
-    this.imageUrl,
-    required this.patternMeasurementController,
-    required this.finishingController,
-    required this.punchesController,
-  });
+  final TextEditingController ctrlMeasurement;
+  PatternRowData({this.partName, this.imageFile, this.imageUrl, required this.ctrlMeasurement});
 }
