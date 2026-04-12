@@ -284,12 +284,7 @@ class AppDrawer extends ConsumerWidget {
                   ],
                 ),
 
-                ListTile(
-                  leading: const Icon(LucideIcons.scale),
-                  title: const Text('Scale Machine'),
-                  onTap: () =>
-                      _navigateTo(context, const ScaleSettingsScreen()),
-                ),
+
                 ListTile(
                   leading: const Icon(LucideIcons.palette),
                   title: const Text('App Theme'),

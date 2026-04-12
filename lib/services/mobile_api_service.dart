@@ -622,6 +622,7 @@ class MobileApiService {
     }
   }
 
+
   Future<bool> createAssignment(Map<String, dynamic> data) async {
     try {
       final response = await _client.post(ApiConstants.assignments, data: data);
@@ -1948,6 +1949,47 @@ class MobileApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  // --- Dashboard Dependencies ---
+  Future<List<dynamic>> fetchCuttingPlanningDraftList() async {
+    return getCuttingOrders();
+  }
+
+  Future<List<dynamic>> fetchItemAssignments() async {
+    try {
+      final response = await _client.get(ApiConstants.assignments);
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> fetchFabricInventory() async {
+    try {
+      final response = await _client.get(ApiConstants.inward);
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getLotMasters() async {
+    try {
+      final response = await _client.get(ApiConstants.lots);
+      return response.data ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getItemGroupMasters() async {
+    try {
+      final response = await _client.get(ApiConstants.itemGroups);
+      return response.data ?? [];
+    } catch (e) {
+      return [];
     }
   }
 }

@@ -71,46 +71,58 @@ class _ModernDataTableState extends State<ModernDataTable> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ColorPalette.border),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
+        mainAxisSize: MainAxisSize.min, // prevent expansion overflow
         children: [
           // Header
           Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 16 : 24, 
-              vertical: 14
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              border: Border(bottom: BorderSide(color: ColorPalette.border.withOpacity(0.8))),
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0F172A), // Premium Black Header as requested
             ),
             child: Row(
               children: [
-                ...widget.columns.map((col) => Expanded(
-                  flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
-                  child: Text(
-                    col.toUpperCase(),
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
-                      letterSpacing: 0.8,
-                      color: ColorPalette.textMuted,
+                ...widget.columns.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final col = entry.value;
+                  return Expanded(
+                    flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      decoration: BoxDecoration(
+                        border: idx < widget.columns.length - 1 || widget.showActions 
+                          ? const Border(right: BorderSide(color: Colors.white24, width: 0.5)) 
+                          : null,
+                      ),
+                      child: Text(
+                        col.toUpperCase(),
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                          letterSpacing: 1,
+                          color: Colors.white, // White text on black header
+                        ),
+                      ),
                     ),
-                  ),
-                )),
+                  );
+                }),
                 if (widget.showActions)
                   SizedBox(
                     width: isMobile ? 120 : 180,
-                    child: widget.headerTrailing ?? Text(
-                      'ACTIONS',
-                      textAlign: TextAlign.right,
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 10,
-                        letterSpacing: 0.8,
-                        color: ColorPalette.textMuted,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      alignment: Alignment.centerRight,
+                      child: widget.headerTrailing ?? Text(
+                        'ACTIONS',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                          letterSpacing: 1,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
@@ -118,117 +130,75 @@ class _ModernDataTableState extends State<ModernDataTable> {
             ),
           ),
           // Rows
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _paginatedRows.length,
-            itemBuilder: (context, index) {
-              final row = _paginatedRows[index];
-              final isAlternate = index % 2 != 0;
+          Flexible( // allow rows to take available space correctly
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const ClampingScrollPhysics(),
+              itemCount: _paginatedRows.length,
+              itemBuilder: (context, index) {
+                final row = _paginatedRows[index];
 
-              return InkWell(
-                onTap: widget.onView != null ? () => widget.onView!(row) : null,
-                hoverColor: ColorPalette.primary.withOpacity(0.04),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isMobile ? 16 : 24, 
-                    vertical: 16
-                  ),
-                  decoration: BoxDecoration(
-                    color: isAlternate ? const Color(0xFFFDFDFD) : Colors.white,
-                    border: Border(bottom: BorderSide(color: ColorPalette.border.withOpacity(0.5))),
-                  ),
-                  child: Row(
-                    children: [
-                      ...widget.columns.asMap().entries.map((entry) {
-                        final colIdx = entry.key;
-                        final col = entry.value;
-                        final value = row[col]?.toString() ?? '-';
-                        final isFirst = colIdx == 0;
-                        final icon = isFirst ? (widget.columnIcons?[col] ?? _getDefaultIcon(col, value)) : null;
+                return InkWell(
+                  onTap: widget.onView != null ? () => widget.onView!(row) : null,
+                  hoverColor: const Color(0xFFF8FAFC),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                    ),
+                    child: Row(
+                      children: [
+                        ...widget.columns.asMap().entries.map((entry) {
+                          final colIdx = entry.key;
+                          final col = entry.value;
+                          final value = row[col]?.toString() ?? '-';
+                          final isFirst = colIdx == 0;
 
-                        return Expanded(
-                          flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
-                          child: Row(
-                            children: [
-                              if (isFirst && icon != null)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 12),
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: ColorPalette.primary.withOpacity(0.05),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(icon, size: 14, color: ColorPalette.primary),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  value,
-                                  style: GoogleFonts.inter(
-                                    fontSize: isMobile ? 12 : 13,
-                                    fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
-                                    color: ColorPalette.textPrimary,
-                                  ),
+                          return Expanded(
+                            flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                              decoration: BoxDecoration(
+                                border: colIdx < widget.columns.length - 1 || widget.showActions
+                                  ? const Border(right: BorderSide(color: Color(0xFFF1F5F9), width: 0.5)) // Vertical Borders
+                                  : null,
+                              ),
+                              child: Text(
+                                value,
+                                style: GoogleFonts.inter(
+                                  fontSize: isMobile ? 13 : 14,
+                                  fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
+                                  color: isFirst ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                                  letterSpacing: -0.2,
                                 ),
                               ),
-                            ],
+                            ),
+                          );
+                        }),
+                        if (widget.showActions)
+                          SizedBox(
+                            width: isMobile ? 120 : 180,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (widget.onView != null)
+                                  _buildActionBtn(icon: LucideIcons.eye, onTap: () => widget.onView!(row), color: const Color(0xFF3B82F6), isMobile: isMobile),
+                                if (widget.onEdit != null)
+                                  _buildActionBtn(icon: LucideIcons.edit3, onTap: () => widget.onEdit!(row), color: const Color(0xFF2563EB), isMobile: isMobile),
+                                if (widget.onDelete != null)
+                                  _buildActionBtn(icon: LucideIcons.trash2, onTap: () => widget.onDelete!(row), color: const Color(0xFFEF4444), isMobile: isMobile),
+                                if (widget.onShare != null)
+                                  _buildActionBtn(icon: LucideIcons.arrowRightLeft, onTap: () => widget.onShare!(row), color: const Color(0xFFF59E0B), isMobile: isMobile),
+                                const SizedBox(width: 16),
+                              ],
+                            ),
                           ),
-                        );
-                      }),
-                      if (widget.showActions)
-                        SizedBox(
-                          width: isMobile ? 120 : 180,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              if (widget.onView != null)
-                                _buildActionBtn(
-                                  icon: LucideIcons.eye,
-                                  onTap: () => widget.onView!(row),
-                                  color: ColorPalette.info,
-                                  tooltip: 'View',
-                                  isMobile: isMobile,
-                                ),
-                              if (widget.onShare != null)
-                                _buildActionBtn(
-                                  icon: LucideIcons.share2,
-                                  onTap: () => widget.onShare!(row),
-                                  color: Colors.green,
-                                  tooltip: 'Share',
-                                  isMobile: isMobile,
-                                ),
-                              if (widget.onPrint != null)
-                                _buildActionBtn(
-                                  icon: LucideIcons.printer,
-                                  onTap: () => widget.onPrint!(row),
-                                  color: Colors.purple,
-                                  tooltip: 'Print',
-                                  isMobile: isMobile,
-                                ),
-                              if (widget.onEdit != null)
-                                _buildActionBtn(
-                                  icon: LucideIcons.edit,
-                                  onTap: () => widget.onEdit!(row),
-                                  color: ColorPalette.primary,
-                                  tooltip: 'Edit',
-                                  isMobile: isMobile,
-                                ),
-                              if (widget.onDelete != null)
-                                _buildActionBtn(
-                                  icon: LucideIcons.trash2,
-                                  onTap: () => widget.onDelete!(row),
-                                  color: ColorPalette.error,
-                                  tooltip: 'Delete',
-                                  isMobile: isMobile,
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           _buildPaginationFooter(),
         ],
@@ -240,40 +210,23 @@ class _ModernDataTableState extends State<ModernDataTable> {
     if (widget.rows.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8FAFC),
-        border: Border(top: BorderSide(color: ColorPalette.border)),
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Text(
-                'SHOWING ',
-                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
-              ),
-              Text(
-                '${(_currentPage * _pageSize) + 1} - ${(_currentPage * _pageSize) + _paginatedRows.length}',
-                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary),
-              ),
-              Text(
-                ' OF ${widget.rows.length}',
-                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
-              ),
-            ],
+          Text(
+            'Page ${_currentPage + 1} of $_totalPages',
+            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8)),
           ),
           Row(
             children: [
               _buildPaginationBtn(
                 LucideIcons.chevronLeft,
                 _currentPage > 0 ? () => setState(() => _currentPage--) : null,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Page ${_currentPage + 1} of $_totalPages',
-                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
               ),
               const SizedBox(width: 12),
               _buildPaginationBtn(
@@ -291,47 +244,40 @@ class _ModernDataTableState extends State<ModernDataTable> {
     bool isEnabled = onTap != null;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          border: Border.all(color: isEnabled ? ColorPalette.border : Colors.grey.shade100),
-          borderRadius: BorderRadius.circular(6),
-          color: isEnabled ? Colors.white : Colors.grey.shade50,
+          border: Border.all(color: isEnabled ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, size: 16, color: isEnabled ? ColorPalette.textPrimary : Colors.grey.shade300),
+        child: Icon(icon, size: 14, color: isEnabled ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1)),
       ),
     );
   }
 
   Widget _buildEmptyState() {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(64.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ColorPalette.border),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
-      child: Center(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: ColorPalette.background, shape: BoxShape.circle),
-              child: Icon(LucideIcons.database, size: 48, color: ColorPalette.textMuted.withOpacity(0.5)),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              widget.emptyMessage ?? 'No registry entries found',
-              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Try refining your current search parameters.',
-              style: GoogleFonts.inter(fontSize: 13, color: ColorPalette.textMuted),
-            ),
-          ],
-        ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(color: Color(0xFFF8FAFC), shape: BoxShape.circle),
+            child: Icon(LucideIcons.database, size: 48, color: Colors.blueGrey.shade100),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            widget.emptyMessage ?? 'No records found',
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+          ),
+        ],
       ),
     );
   }
@@ -340,36 +286,17 @@ class _ModernDataTableState extends State<ModernDataTable> {
     required IconData icon,
     required VoidCallback onTap,
     required Color color,
-    required String tooltip,
     required bool isMobile,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: EdgeInsets.all(isMobile ? 6 : 8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: isMobile ? 14 : 16, color: color),
-        ),
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, size: 14, color: color.withOpacity(0.7)),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        splashRadius: 18,
       ),
     );
-  }
-
-  IconData _getDefaultIcon(String col, String value) {
-    final lowerCol = col.toLowerCase();
-    final lowerVal = value.toLowerCase();
-    
-    if (lowerCol.contains('color') || lowerVal.contains('shade')) return LucideIcons.palette;
-    if (lowerCol.contains('dia')) return LucideIcons.moveHorizontal;
-    if (lowerCol.contains('gsm')) return LucideIcons.layers;
-    if (lowerCol.contains('lot')) return LucideIcons.package;
-    if (lowerCol.contains('party')) return LucideIcons.briefcase;
-    if (lowerCol.contains('size')) return LucideIcons.ruler;
-    return LucideIcons.tag;
   }
 }

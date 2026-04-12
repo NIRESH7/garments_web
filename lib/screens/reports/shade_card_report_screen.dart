@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/constants/api_constants.dart';
 import '../../services/shade_card_print_service.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 class ShadeCardReportScreen extends StatefulWidget {
   const ShadeCardReportScreen({super.key});
@@ -16,27 +18,7 @@ class _ShadeCardReportScreenState extends State<ShadeCardReportScreen> {
   List<dynamic> _reportData = [];
   bool _isLoading = true;
   bool _isGeneratingPdf = false;
-  String? _selectedLotName;
-
-  List<String> get _availableLotNames {
-    final Set<String> names = {};
-    for (var g in _reportData) {
-      if (g['groupName'] != null && g['groupName'].toString().isNotEmpty) {
-        names.add(g['groupName'].toString());
-      }
-    }
-    final sortedNames = names.toList()..sort();
-    return ['All Lots', ...sortedNames];
-  }
-
-  List<dynamic> get _filteredData {
-    if (_selectedLotName == null || _selectedLotName == 'All Lots') {
-      return _reportData;
-    }
-    return _reportData
-        .where((g) => g['groupName'] == _selectedLotName)
-        .toList();
-  }
+  String _selectedLot = 'ALL LOT GROUPS';
 
   @override
   void initState() {
@@ -50,242 +32,295 @@ class _ShadeCardReportScreenState extends State<ShadeCardReportScreen> {
       final res = await _api.getShadeCardReport();
       setState(() => _reportData = res);
     } catch (e) {
-      debugPrint('Error fetching shade card: $e');
+      debugPrint('Error: $e');
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  List<String> get _availableLots {
+    final Set<String> names = {'ALL LOT GROUPS'};
+    for (var g in _reportData) {
+      if (g['groupName'] != null) names.add(g['groupName'].toString());
+    }
+    return names.toList()..sort();
+  }
+
+  List<dynamic> get _filteredData {
+    if (_selectedLot == 'ALL LOT GROUPS') return _reportData;
+    return _reportData.where((g) => g['groupName'] == _selectedLot).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('Shade Card Module'),
-        backgroundColor: Colors.indigo,
-        actions: [
-          IconButton(
-            icon: _isGeneratingPdf
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(LucideIcons.printer),
-            onPressed: _isGeneratingPdf
-                ? null
-                : () async {
-                    if (_filteredData.isNotEmpty) {
-                      setState(() => _isGeneratingPdf = true);
-                      try {
-                        await ShadeCardPrintService().printShadeCard(
-                          _filteredData,
-                        );
-                      } catch (e) {
-                        debugPrint('Error generating PDF: $e');
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to generate PDF: $e'),
-                            ),
-                          );
-                        }
-                      } finally {
-                        if (mounted) setState(() => _isGeneratingPdf = false);
-                      }
-                    }
-                  },
+        toolbarHeight: 0,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
+      body: Column(
+        children: [
+          // Clinical Header
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(LucideIcons.arrowLeft, size: 20, color: Color(0xFF1E293B)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  'SHADE CARD INTELLIGENCE',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: const Color(0xFF1E293B),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                _buildActionIcons(),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          
+          _buildCompactFilterBar(),
+          _buildSummaryAnalytics(),
+
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                : _filteredData.isEmpty 
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        itemCount: _filteredData.length,
+                        itemBuilder: (context, index) => _buildShadeGroup(_filteredData[index]),
+                      ),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                if (_reportData.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedLotName ?? 'All Lots',
-                      decoration: InputDecoration(
-                        labelText: 'Filter by Lot Name',
-                        prefixIcon: const Icon(LucideIcons.filter),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                      ),
-                      items: _availableLotNames.map((name) {
-                        return DropdownMenuItem(value: name, child: Text(name));
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedLotName = value;
-                        });
-                      },
-                    ),
-                  ),
-                Expanded(
-                  child: _filteredData.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No shade cards found matching the filter.',
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          itemCount: _filteredData.length,
-                          itemBuilder: (context, index) {
-                            final group = _filteredData[index];
-                            return _buildGroupCard(group);
-                          },
-                        ),
-                ),
-              ],
-            ),
     );
   }
 
-  Widget _buildGroupCard(Map<String, dynamic> group) {
-    final List colours = group['colours'] ?? [];
+  Widget _buildSummaryAnalytics() {
+    int totalColors = 0;
+    for (var g in _reportData) {
+      totalColors += (g['colours'] as List? ?? []).length;
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      child: Row(
+        children: [
+          _analyticsChip(LucideIcons.layoutGrid, '${_reportData.length}', 'LOT GROUPS'),
+          const SizedBox(width: 12),
+          _analyticsChip(LucideIcons.palette, '$totalColors', 'COLOR VARIANTS'),
+        ],
+      ),
+    );
+  }
+
+  Widget _analyticsChip(IconData icon, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFF2563EB)),
+          const SizedBox(width: 8),
+          Text(value, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+          const SizedBox(width: 4),
+          Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionIcons() {
+    return Row(
+      children: [
+        if (_isGeneratingPdf)
+          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+        else
+          IconButton(
+            icon: const Icon(LucideIcons.printer, size: 18, color: Color(0xFF64748B)),
+            onPressed: () async {
+              if (_filteredData.isEmpty) return;
+              setState(() => _isGeneratingPdf = true);
+              try {
+                await ShadeCardPrintService().printShadeCard(_filteredData);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Print Error: $e')));
+              } finally {
+                setState(() => _isGeneratingPdf = false);
+              }
+            },
+          ),
+        IconButton(
+          icon: const Icon(LucideIcons.refreshCw, size: 18, color: Color(0xFF64748B)),
+          onPressed: _fetchReport,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactFilterBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+      child: Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('FILTER BY LOT GROUP', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                  const SizedBox(height: 2),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: _selectedLot,
+                      isDense: true,
+                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
+                      items: _availableLots.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+                      onChanged: (v) => setState(() => _selectedLot = v!),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShadeGroup(Map<String, dynamic> group) {
+    final List colors = group['colours'] ?? [];
     final List items = group['items'] ?? [];
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 4,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Colors.indigo,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  group['groupName'] ?? 'No Lot Name',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                group['groupName']?.toString().toUpperCase() ?? 'UNNAMED GROUP',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFF1E293B), letterSpacing: 0.5),
+              ),
+              const SizedBox(width: 8),
+              if (items.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    items.join(' • ').toUpperCase(),
+                    style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF94A3B8)),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (items.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(
-                      'Items: ${items.join(', ')}',
-                      style: TextStyle(
-                        color: Colors.indigo.shade100,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
-
-          // Colours Grid
-          if (colours.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Center(
-                child: Text(
-                  'No colours mapped to this group.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.85,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: colours.length,
-                itemBuilder: (context, idx) {
-                  final color = colours[idx];
-                  return _buildColorTile(color);
-                },
-              ),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 6,
+              childAspectRatio: 0.8,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
             ),
+            itemCount: colors.length,
+            itemBuilder: (context, idx) => _buildSwatchCard(colors[idx]),
+          ),
         ],
-      ),
+      ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.02),
     );
   }
 
-  Widget _buildColorTile(Map<String, dynamic> color) {
+  Widget _buildSwatchCard(Map<String, dynamic> color) {
     final String? photo = color['photo'];
-    final String name = color['name'] ?? 'Unknown';
-    final String gsm = color['gsm'] ?? 'N/A';
+    final String name = color['name'] ?? 'UNKNOWN';
+    final String gsm = color['gsm']?.toString() ?? 'N/A';
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Container(
               width: double.infinity,
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                image: photo != null
-                    ? DecorationImage(
-                        image: NetworkImage(ApiConstants.getImageUrl(photo)),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: photo == null
-                  ? const Center(
-                      child: Icon(LucideIcons.image, color: Colors.grey),
+              color: const Color(0xFFF1F5F9),
+              child: photo != null
+                  ? Image.network(
+                      ApiConstants.getImageUrl(photo),
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => const Icon(LucideIcons.image, size: 16, color: Color(0xFFCBD5E1)),
                     )
-                  : null,
+                  : const Icon(LucideIcons.image, size: 16, color: Color(0xFFCBD5E1)),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 12.0, left: 8, right: 8),
+            padding: const EdgeInsets.all(8),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  textAlign: TextAlign.center,
+                  name.toUpperCase(),
+                  style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
                 Text(
                   'GSM: $gsm',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w700, color: const Color(0xFF64748B)),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(LucideIcons.palette, size: 40, color: const Color(0xFF94A3B8).withOpacity(0.3)),
+          const SizedBox(height: 12),
+          Text('No shade cards identified', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
         ],
       ),
     );

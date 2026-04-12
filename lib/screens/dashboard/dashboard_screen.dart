@@ -59,7 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 2: return 'Inward Transactions';
       case 3: return 'Outward Transactions';
       case 4: return 'Task Management';
-      case 5: return 'Item Assignments';
+      case 5: return 'Lot Requirement Allocation';
       case 6: return 'Cutting Planning';
       case 7: return 'Reports Dashboard';
       default: return 'Executive Dashboard';
@@ -129,7 +129,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             InwardListScreen(key: _inwardKey),        // 2
             OutwardListScreen(key: _outwardKey),       // 3
             const AdminTaskManagementScreen(),        // 4
-            const ItemAssignmentListScreen(),         // 5
+            const LotRequirementAllocationScreen(),   // 5
             const CuttingOrderPlanningScreen(),       // 6
             const ReportsDashboard(),                 // 7
             const _HistoryPlaceholder(),              // 8

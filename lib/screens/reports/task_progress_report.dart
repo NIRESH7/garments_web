@@ -3,7 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../../services/mobile_api_service.dart';
+import '../../utils/print_utils.dart';
 
 class TaskProgressReportScreen extends StatefulWidget {
   const TaskProgressReportScreen({super.key});
@@ -89,12 +93,7 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
                   ),
                 ),
                 const Spacer(),
-                TextButton.icon(
-                  onPressed: _fetchData,
-                  icon: const Icon(LucideIcons.refreshCw, size: 14),
-                  label: Text('REFRESH', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
-                ),
+                _buildActionIcons(),
               ],
             ),
           ),
@@ -352,5 +351,59 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
         ],
       ),
     );
+  }
+  Widget _buildActionIcons() {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(LucideIcons.printer, size: 18, color: Color(0xFF64748B)),
+          onPressed: () async => Printing.layoutPdf(
+            onLayout: (format) async => (await _generatePDF()).save(),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(LucideIcons.refreshCw, size: 18, color: Color(0xFF64748B)),
+          onPressed: _fetchData,
+        ),
+      ],
+    );
+  }
+
+  Future<pw.Document> _generatePDF() async {
+    final pdf = pw.Document();
+    final dataSubset = _tasks.take(500).toList();
+    final bold = pw.Font.helveticaBold();
+    final normal = pw.Font.helvetica();
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: const pw.EdgeInsets.all(32),
+      header: (context) => PrintUtils.buildCompanyHeader(bold, normal),
+      build: (pw.Context context) => [
+        pw.SizedBox(height: 10),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('DEPARTMENTAL TASK PROGRESS REPORT', style: pw.TextStyle(font: bold, fontSize: 12, color: PdfColors.blueGrey800)),
+            pw.Text('Generated: ${DateFormat('dd MMM yyyy HH:mm').format(DateTime.now())}', style: pw.TextStyle(font: normal, fontSize: 8)),
+          ],
+        ),
+        pw.SizedBox(height: 15),
+        pw.TableHelper.fromTextArray(
+          headers: ['DATE', 'DEPARTMENT', 'TASK DESCRIPTION', 'STATUS', 'REPLY'],
+          headerStyle: pw.TextStyle(font: bold, fontSize: 8, color: PdfColors.white),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+          cellStyle: pw.TextStyle(font: normal, fontSize: 7),
+          data: dataSubset.map((i) => [
+             DateFormat('dd MMM yy HH:mm').format(DateTime.parse(i['createdAt'].toString())),
+             (i['assignedTo']?.toString().toUpperCase() ?? 'UNKNOWN'),
+             i['text']?.toString() ?? 'N/A',
+             (i['isSolved'] == true ? 'SOLVED' : 'PENDING'),
+             i['replyText']?.toString() ?? '-',
+          ]).toList(),
+        ),
+      ],
+    ));
+    return pdf;
   }
 }

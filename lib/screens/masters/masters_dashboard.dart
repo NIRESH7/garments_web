@@ -10,6 +10,7 @@ import 'item_master_screen.dart';
 import 'party_master_screen.dart';
 import 'color_prediction_screen.dart';
 import 'stock_limit_master_screen.dart';
+import '../assessment/item_assignment_list_screen.dart';
 
 class MastersDashboard extends StatelessWidget {
   const MastersDashboard({super.key});
@@ -22,40 +23,53 @@ class MastersDashboard extends StatelessWidget {
 
     final List<Map<String, dynamic>> menuItems = [
       {
-        'title': 'Categories Master',
+        'title': 'Registry Hierarchy',
         'subtitle': 'Define core garment classification levels',
         'icon': LucideIcons.layoutTemplate,
-        'screen': const CategoriesMasterScreen(),
+        'screen': CategoriesMasterScreen(),
+        'color': const Color(0xFF6366F1), // Indigo
       },
       {
-        'title': 'Dropdown Setup',
+        'title': 'Global Registry',
         'subtitle': 'Manage registry values for all dropdowns',
         'icon': LucideIcons.listPlus,
-        'screen': const DropdownSetupScreen(),
+        'screen': DropdownSetupScreen(),
+        'color': const Color(0xFF06B6D4), // Cyan
       },
       {
-        'title': 'Party Master',
+        'title': 'Entity Directory',
         'subtitle': 'Registry for suppliers, clients and vendors',
         'icon': LucideIcons.users,
-        'screen': const PartyMasterScreen(),
+        'screen': PartyMasterScreen(),
+        'color': const Color(0xFF10B981), // Emerald
       },
       {
-        'title': 'Item Group Master',
+        'title': 'Product Clusters',
         'subtitle': 'Configure fabric groups and item specifications',
         'icon': LucideIcons.layoutGrid,
-        'screen': const ItemMasterScreen(),
+        'screen': ItemMasterScreen(),
+        'color': const Color(0xFFF59E0B), // Amber
       },
       {
-        'title': 'Color Prediction',
+        'title': 'Dye Forecasting',
         'subtitle': 'AI-assisted garment dye color forecasting',
         'icon': LucideIcons.palette,
-        'screen': const ColorPredictionScreen(),
+        'screen': ColorPredictionScreen(),
+        'color': const Color(0xFFEC4899), // Pink
       },
       {
-        'title': 'Stock Limit Setup',
+        'title': 'Guardrail Setup',
         'subtitle': 'Configure inventory guardrails and thresholds',
         'icon': LucideIcons.barChart4,
-        'screen': const StockLimitMasterScreen(),
+        'screen': StockLimitMasterScreen(),
+        'color': const Color(0xFF8B5CF6), // Violet
+      },
+      {
+        'title': 'Item Assignment Registry',
+        'subtitle': 'Manage Cutting and Accessories Master assignments',
+        'icon': LucideIcons.clipboardList,
+        'screen': ItemAssignmentListScreen(),
+        'color': const Color(0xFFF97316), // Orange
       },
     ];
 
@@ -65,29 +79,31 @@ class MastersDashboard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Master Data Management',
+              'Master Data Repository',
               style: GoogleFonts.inter(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: ColorPalette.textPrimary,
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF1E293B),
+                letterSpacing: -1,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Configure and manage core system data',
+              'Synchronize and configure the fundamental system structures',
               style: GoogleFonts.inter(
-                fontSize: 14,
-                color: ColorPalette.textSecondary,
+                fontSize: 15,
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 48),
             Expanded(
               child: GridView.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 24,
-                  mainAxisSpacing: 24,
-                  mainAxisExtent: 140,
+                  crossAxisSpacing: 32,
+                  mainAxisSpacing: 32,
+                  mainAxisExtent: 130,
                 ),
                 itemCount: menuItems.length,
                 itemBuilder: (context, index) => _MenuCard(data: menuItems[index]),
@@ -99,26 +115,28 @@ class MastersDashboard extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
+        title: const Text('MASTER DIRECTORY'),
+        titleTextStyle: GoogleFonts.outfit(
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF1E293B),
+          fontSize: 16,
+          letterSpacing: 1.2,
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: isMobile ? null : const SizedBox.shrink(),
-        toolbarHeight: isMobile ? null : 0,
+        centerTitle: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+        ),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isMobile) const SizedBox(height: 32),
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(20),
-              itemCount: menuItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) => _MenuCard(data: menuItems[index]),
-            ),
-          ),
-        ],
+      body: ListView.separated(
+        padding: const EdgeInsets.all(20),
+        itemCount: menuItems.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 16),
+        itemBuilder: (context, index) => _MenuCard(data: menuItems[index]),
       ),
     );
   }
@@ -132,19 +150,20 @@ class _MenuCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWeb = LayoutConstants.isWeb(context);
+    final themeColor = data['color'] as Color;
     
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ColorPalette.border),
-        boxShadow: isWeb ? [
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ] : null,
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -152,18 +171,22 @@ class _MenuCard extends StatelessWidget {
           context,
           MaterialPageRoute(builder: (context) => data['screen']),
         ),
-        hoverColor: ColorPalette.primary.withOpacity(0.04),
+        hoverColor: themeColor.withOpacity(0.02),
         child: Padding(
-          padding: EdgeInsets.all(isWeb ? 28 : 24),
+          padding: EdgeInsets.all(isWeb ? 24 : 20),
           child: Row(
             children: [
               Container(
-                padding: EdgeInsets.all(isWeb ? 14 : 12),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: ColorPalette.primary.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(10),
+                  color: themeColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(data['icon'], color: ColorPalette.primary, size: isWeb ? 24 : 22),
+                child: Icon(
+                  data['icon'], 
+                  color: themeColor, 
+                  size: isWeb ? 28 : 22
+                ),
               ),
               const SizedBox(width: 20),
               Expanded(
@@ -174,31 +197,38 @@ class _MenuCard extends StatelessWidget {
                     Text(
                       data['title'],
                       style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        fontSize: isWeb ? 16 : 15,
-                        color: ColorPalette.textPrimary,
-                        letterSpacing: -0.2,
+                        fontWeight: FontWeight.w800,
+                        fontSize: isWeb ? 17 : 15,
+                        color: const Color(0xFF1E293B),
+                        letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       data['subtitle'],
                       style: GoogleFonts.inter(
                         fontSize: isWeb ? 13 : 11,
-                        color: ColorPalette.textMuted,
+                        color: const Color(0xFF64748B),
                         fontWeight: FontWeight.w500,
                         height: 1.4,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Icon(
-                LucideIcons.chevronRight,
-                size: isWeb ? 18 : 16,
-                color: ColorPalette.primary.withOpacity(0.3),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF8FAFC),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  LucideIcons.arrowRight,
+                  size: isWeb ? 16 : 14,
+                  color: const Color(0xFF94A3B8),
+                ),
               ),
             ],
           ),

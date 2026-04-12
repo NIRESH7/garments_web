@@ -113,7 +113,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(widget.editParty != null ? 'Registry details updated' : 'Party successfully documented'),
-              backgroundColor: ColorPalette.success,
+              backgroundColor: const Color(0xFF10B981),
             ),
           );
           if (widget.editParty != null) {
@@ -124,7 +124,7 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
             await _loadAllData();
           }
         }
-      } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registry Error: $e'), backgroundColor: ColorPalette.error)); }
+      } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registry Error: $e'), backgroundColor: const Color(0xFFEF4444))); }
       finally { if (mounted) setState(() => _isSaving = false); }
     }
   }
@@ -136,297 +136,285 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = LayoutConstants.isMobile(context);
-    return Scaffold(
-      backgroundColor: ColorPalette.background,
-      appBar: AppBar(
-        toolbarHeight: 64,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'PARTY MASTER',
-              style: GoogleFonts.outfit(
-                fontWeight: FontWeight.w800,
-                color: ColorPalette.textPrimary,
-                fontSize: 16,
-                letterSpacing: 0.5,
+    final isWeb = LayoutConstants.isWeb(context);
+    
+    if (isWeb) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFDFDFD),
+        body: WebLayoutWrapper(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildWebHeader(),
+              const SizedBox(height: 48),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Form Side
+                    Expanded(
+                      flex: 4,
+                      child: SingleChildScrollView(
+                        child: Form(
+                          key: _formKey,
+                          child: _buildRegistrationModule(false),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                    // Table Side
+                    Expanded(
+                      flex: 6,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildDatabaseHeader(),
+                          const SizedBox(height: 20),
+                          Expanded(
+                            child: _isLoading 
+                              ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                              : _buildDataTableContainer(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              'REGISTRY & VENDOR MANAGEMENT',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
-                color: ColorPalette.textMuted,
-                fontSize: 9,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: Text('PARTY MASTER', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16)),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
-        iconTheme: const IconThemeData(color: ColorPalette.textPrimary, size: 20),
-        actions: [
-          _buildSearchOverlay(isMobile),
-          IconButton(
-            onPressed: _loadAllData,
-            icon: const Icon(LucideIcons.refreshCw, size: 16, color: ColorPalette.textMuted),
-          ),
-          Gaps.w16,
-        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFF1F5F9), height: 1),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ResponsiveWrapper(
-              maxWidth: 1400,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. REGISTRATION MODULE
-                      _buildRegistrationModule(isMobile),
-                      
-                      Gaps.h32,
-
-                      // 2. DATABASE SECTION
-                      _buildDatabaseHeader(),
-                      
-                      Gaps.h16,
-
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Container(
-                          key: ValueKey(_filteredParties.length),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: ColorPalette.border),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: ModernDataTable(
-                            columns: const ['name', 'process', 'mobileNumber', 'rate'],
-                            rows: _filteredParties,
-                            onDelete: _delete,
-                            emptyMessage: 'No registered entities found in registry',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _buildRegistrationModule(true),
+                    const SizedBox(height: 24),
+                    _buildDatabaseHeader(),
+                    const SizedBox(height: 12),
+                    _buildDataTableContainer(),
+                  ],
                 ),
               ),
             ),
     );
   }
 
-  Widget _buildNameField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildWebHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'IDENTIFICATION NAME',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
-        ),
-        Gaps.h8,
-        TextFormField(
-          controller: _nameController,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: ColorPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Full name or Business entity...',
-            hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted.withOpacity(0.6)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
-          ),
-          validator: (v) => v!.isEmpty ? 'Identity name is required' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAddressField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'PHYSICAL ADDRESS',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
-        ),
-        Gaps.h8,
-        TextFormField(
-          controller: _addressController,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: ColorPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Office / Unit location details...',
-            hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted.withOpacity(0.6)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
-          ),
-          maxLines: 2,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'CONTACT IDENTIFIER',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
-        ),
-        Gaps.h8,
-        TextFormField(
-          controller: _mobileController,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: ColorPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Primary mobile number...',
-            hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted.withOpacity(0.6)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
-          ),
-          keyboardType: TextInputType.phone,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProcessField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'OPERATIONAL CONTEXT',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
-        ),
-        Gaps.h8,
-        CustomDropdownField(
-          label: '',
-          value: _selectedProcess,
-          items: _processes,
-          onChanged: (val) => setState(() => _selectedProcess = val),
-          validator: (v) => v == null || v.isEmpty ? 'Process context required' : null,
-          hint: 'Select assigned process',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGstField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'TAX IDENTITY (GST)',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
-        ),
-        Gaps.h8,
-        TextFormField(
-          controller: _gstController,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: ColorPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: '15-digit GST identification...',
-            hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted.withOpacity(0.6)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRateField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'AGREED RATE',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
-        ),
-        Gaps.h8,
-        TextFormField(
-          controller: _rateController,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: ColorPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Base service charge...',
-            hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted.withOpacity(0.6)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
-          ),
-          keyboardType: TextInputType.number,
-          validator: (v) => v!.isEmpty ? 'Base rate is required' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      height: 44,
-      child: ElevatedButton(
-        onPressed: _isSaving ? null : _save,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: ColorPalette.textPrimary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        ),
-        child: _isSaving
-            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Text(
-                widget.editParty != null ? 'SAVE CHANGES' : 'SAVE ENTRY',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Entity Directory',
+              style: GoogleFonts.inter(
+                fontSize: 36,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF1E293B),
+                letterSpacing: -1.5,
               ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Manage registered parties, vendors, and shared resources',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: const Color(0xFF94A3B8),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        _buildSearchField(),
+      ],
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      width: 320,
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.search, size: 16, color: Color(0xFF94A3B8)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Search entities...',
+                hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSearchOverlay(bool isMobile) {
-    if (isMobile) return const SizedBox.shrink();
+  Widget _buildDataTableContainer() {
+    return ModernDataTable(
+      columns: const ['name', 'process', 'mobileNumber', 'rate'],
+      rows: _filteredParties,
+      onDelete: _delete,
+      emptyMessage: 'No entities registered yet',
+    );
+  }
+
+  Widget _buildRegistrationModule(bool isMobile) {
     return Container(
-      width: 240,
-      height: 36,
-      margin: const EdgeInsets.only(right: 16),
-      child: TextField(
-        controller: _searchController,
-        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
-        decoration: InputDecoration(
-          hintText: 'Search registry...',
-          hintStyle: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textMuted),
-          prefixIcon: const Icon(LucideIcons.search, size: 14, color: ColorPalette.textMuted),
-          filled: true,
-          fillColor: ColorPalette.background,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'New Registration',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w900, 
+              fontSize: 20, 
+              color: const Color(0xFF1E293B),
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fill in the details to document a new party entry',
+            style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 32),
+          _buildFieldLabel('IDENTITY NAME'),
+          _buildTextField(_nameController, 'Full name or Business entity...', validator: (v) => v!.isEmpty ? 'Identity name is required' : null),
+          const SizedBox(height: 24),
+          _buildFieldLabel('OPERATIONAL CONTEXT'),
+          CustomDropdownField(
+            label: '',
+            value: _selectedProcess,
+            items: _processes,
+            onChanged: (val) => setState(() => _selectedProcess = val),
+            validator: (v) => v == null || v.isEmpty ? 'Process context required' : null,
+            hint: 'Select assigned process',
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFieldLabel('CONTACT'),
+                    _buildTextField(_mobileController, 'Mobile number...', keyboardType: TextInputType.phone),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFieldLabel('BASE RATE'),
+                    _buildTextField(_rateController, 'Service charge...', keyboardType: TextInputType.number),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildFieldLabel('TAX IDENTITY (GST)'),
+          _buildTextField(_gstController, '15-digit GST identification...'),
+          const SizedBox(height: 24),
+          _buildFieldLabel('PHYSICAL ADDRESS'),
+          _buildTextField(_addressController, 'Location details...', maxLines: 2),
+          const SizedBox(height: 48),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _isSaving ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E293B),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: _isSaving
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(
+                      widget.editParty != null ? 'UPDATE REGISTRY' : 'DOCUMENT ENTRY',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.5),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, left: 2),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: const Color(0xFF94A3B8),
+          letterSpacing: 1,
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String hint, {int maxLines = 1, TextInputType? keyboardType, String? Function(String?)? validator}) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      validator: validator,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, fontWeight: FontWeight.normal),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF1E293B), width: 1.5)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFEF4444))),
       ),
     );
   }
@@ -437,81 +425,22 @@ class _PartyMasterScreenState extends State<PartyMasterScreen> {
         Text(
           'REGISTRY DATABASE',
           style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: ColorPalette.textPrimary,
-            letterSpacing: -0.2,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF1E293B),
+            letterSpacing: 0.5,
           ),
         ),
-        Gaps.w12,
-        Text(
-          '(${_filteredParties.length} ENTRIES)',
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textMuted),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+          child: Text(
+            '${_filteredParties.length} entries',
+            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF64748B)),
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _buildRegistrationModule(bool isMobile) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ColorPalette.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isMobile)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildNameField(),
-                        const SizedBox(height: 24),
-                        _buildMobileField(),
-                        const SizedBox(height: 24),
-                        _buildRateField(),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildProcessField(),
-                        const SizedBox(height: 24),
-                        _buildGstField(),
-                        const SizedBox(height: 24),
-                        _buildAddressField(),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            else
-              Column(
-                children: [
-                  _buildNameField(), const SizedBox(height: 24),
-                  _buildProcessField(), const SizedBox(height: 24),
-                  _buildMobileField(), const SizedBox(height: 24),
-                  _buildGstField(), const SizedBox(height: 24),
-                  _buildRateField(), const SizedBox(height: 24),
-                  _buildAddressField(),
-                ],
-              ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: isMobile ? double.infinity : 200,
-              child: _buildSubmitButton(),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

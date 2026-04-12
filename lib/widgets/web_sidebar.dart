@@ -45,11 +45,9 @@ class WebSidebar extends StatelessWidget {
                 const SizedBox(height: 24),
                 _buildSectionHeader('ANALYTICS'),
                 _buildNavItem(7, LucideIcons.barChart3, 'Reports'),
-                _buildNavItem(8, LucideIcons.history, 'History Logs'),
 
                 const SizedBox(height: 24),
                 _buildSectionHeader('SYSTEM'),
-                _buildNavItem(9, LucideIcons.scale, 'Scale Machine'),
                 _buildNavItem(10, LucideIcons.palette, 'App Theme'),
                 _buildNavItem(11, LucideIcons.bot, 'AI Chatbot'),
               ],
