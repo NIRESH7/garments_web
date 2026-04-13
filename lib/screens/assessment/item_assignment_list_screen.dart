@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
+import '../../widgets/responsive_wrapper.dart';
 import 'cutting_master_form_screen.dart';
 import 'accessories_master_form_screen.dart';
 import '../../widgets/modern_data_table.dart';
@@ -57,52 +58,88 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> wit
 
   @override
   Widget build(BuildContext context) {
-    bool isWeb = MediaQuery.of(context).size.width > 900;
-    
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Column(
-        children: [
-          // Header removed as requested
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: isWeb ? 40 : 16, vertical: 24),
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 1400),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTabSwitcher(),
-                      const SizedBox(height: 24),
-                      _isLoading 
-                        ? const Center(child: Padding(padding: EdgeInsets.all(100), child: CircularProgressIndicator(strokeWidth: 2)))
-                        : _tabController.index == 0 
-                          ? _buildListView(_cuttingMasters, true)
-                          : _buildListView(_accessoriesMasters, false),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          Widget screen = _tabController.index == 0 
-            ? const CuttingMasterFormScreen() 
-            : const AccessoriesMasterFormScreen();
-          final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
-          if (result == true) _loadData();
-        },
-        backgroundColor: const Color(0xFF475569), // Lightened slate grey
+      backgroundColor: ColorPalette.background,
+      appBar: AppBar(
+        toolbarHeight: 60,
+        backgroundColor: Colors.white,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        icon: const Icon(LucideIcons.plus, size: 18, color: Colors.white),
-        label: Text(
-          'CREATE NEW ASSIGNMENT', 
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1, color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft, size: 18, color: Color(0xFF475569)),
+          onPressed: () => Navigator.pop(context),
+          tooltip: 'Back',
+        ),
+        title: Text(
+          'ITEM ASSIGNMENT',
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+            fontSize: 16,
+            letterSpacing: 0.5,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF475569)),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+        ),
+      ),
+      body: ResponsiveWrapper(
+        padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Tab switcher + compact create button in same row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _buildTabSwitcher(),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () async {
+                      Widget screen = _tabController.index == 0
+                        ? const CuttingMasterFormScreen()
+                        : const AccessoriesMasterFormScreen();
+                      final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+                      if (result == true) _loadData();
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF475569),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(LucideIcons.plus, size: 14, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(
+                            'CREATE NEW ASSIGNMENT',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              letterSpacing: 0.8,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _isLoading
+                ? const Center(child: Padding(padding: EdgeInsets.all(100), child: CircularProgressIndicator(strokeWidth: 2)))
+                : _tabController.index == 0
+                  ? _buildListView(_cuttingMasters, true)
+                  : _buildListView(_accessoriesMasters, false),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -147,35 +184,36 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> wit
 
   Widget _buildListView(List<Map<String, dynamic>> items, bool isCutting) {
     if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              LucideIcons.clipboardList,
-              size: 80,
-              color: Colors.grey.withOpacity(0.3),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              isCutting ? 'No cutting master entries found' : 'No accessory matrices found',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: ColorPalette.textMuted,
-                fontWeight: FontWeight.w500,
+      return SizedBox(
+        height: 300,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                LucideIcons.clipboardList,
+                size: 80,
+                color: Colors.grey.withOpacity(0.3),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Text(
+                isCutting ? 'No cutting master entries found' : 'No accessory matrices found',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: ColorPalette.textMuted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: ModernDataTable(
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 1200),
+        child: ModernDataTable(
             columns: isCutting 
               ? const ['itemName', 'lotName', 'size', 'createdAt']
               : const ['groups', 'assignments', 'createdAt'],
@@ -219,9 +257,8 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> wit
             emptyMessage: 'No entries found in this partition.',
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Future<void> _deleteEntry(String id, bool isCutting) async {
     final confirmed = await showDialog<bool>(

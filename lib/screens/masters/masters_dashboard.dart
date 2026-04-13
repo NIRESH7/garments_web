@@ -23,43 +23,43 @@ class MastersDashboard extends StatelessWidget {
 
     final List<Map<String, dynamic>> menuItems = [
       {
-        'title': 'Registry Hierarchy',
+        'title': 'Categories Master',
         'subtitle': 'Define core garment classification levels',
         'icon': LucideIcons.layoutTemplate,
         'screen': CategoriesMasterScreen(),
         'color': const Color(0xFF6366F1), // Indigo
       },
       {
-        'title': 'Global Registry',
+        'title': 'Dropdown Setup',
         'subtitle': 'Manage registry values for all dropdowns',
         'icon': LucideIcons.listPlus,
         'screen': DropdownSetupScreen(),
         'color': const Color(0xFF06B6D4), // Cyan
       },
       {
-        'title': 'Entity Directory',
+        'title': 'Party Master',
         'subtitle': 'Registry for suppliers, clients and vendors',
         'icon': LucideIcons.users,
         'screen': PartyMasterScreen(),
         'color': const Color(0xFF10B981), // Emerald
       },
       {
-        'title': 'Product Clusters',
+        'title': 'Item Group Master',
         'subtitle': 'Configure fabric groups and item specifications',
         'icon': LucideIcons.layoutGrid,
         'screen': ItemMasterScreen(),
         'color': const Color(0xFFF59E0B), // Amber
       },
       {
-        'title': 'Dye Forecasting',
+        'title': 'Colour Prediction',
         'subtitle': 'AI-assisted garment dye color forecasting',
         'icon': LucideIcons.palette,
         'screen': ColorPredictionScreen(),
         'color': const Color(0xFFEC4899), // Pink
       },
       {
-        'title': 'Guardrail Setup',
-        'subtitle': 'Configure inventory guardrails and thresholds',
+        'title': 'Stock Limit Setup',
+        'subtitle': 'Configure inventory stock limits and thresholds',
         'icon': LucideIcons.barChart4,
         'screen': StockLimitMasterScreen(),
         'color': const Color(0xFF8B5CF6), // Violet

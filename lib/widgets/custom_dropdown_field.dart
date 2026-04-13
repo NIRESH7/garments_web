@@ -214,7 +214,7 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
                                   color: widget.value == null
-                                      ? ColorPalette.textMuted.withOpacity(0.6)
+                                      ? ColorPalette.textMuted
                                       : ColorPalette.textPrimary,
                                   fontWeight: widget.value == null ? FontWeight.normal : FontWeight.w600,
                                 ),

@@ -224,7 +224,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'REGISTRY SETUP',
+              'DROPDOWN SETUP',
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.w800,
                 color: ColorPalette.textPrimary,

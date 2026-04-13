@@ -130,75 +130,73 @@ class _ModernDataTableState extends State<ModernDataTable> {
             ),
           ),
           // Rows
-          Flexible( // allow rows to take available space correctly
-            child: ListView.builder(
-              shrinkWrap: true,
-              physics: const ClampingScrollPhysics(),
-              itemCount: _paginatedRows.length,
-              itemBuilder: (context, index) {
-                final row = _paginatedRows[index];
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _paginatedRows.length,
+            itemBuilder: (context, index) {
+              final row = _paginatedRows[index];
 
-                return InkWell(
-                  onTap: widget.onView != null ? () => widget.onView!(row) : null,
-                  hoverColor: const Color(0xFFF8FAFC),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                    ),
-                    child: Row(
-                      children: [
-                        ...widget.columns.asMap().entries.map((entry) {
-                          final colIdx = entry.key;
-                          final col = entry.value;
-                          final value = row[col]?.toString() ?? '-';
-                          final isFirst = colIdx == 0;
+              return InkWell(
+                onTap: widget.onView != null ? () => widget.onView!(row) : null,
+                hoverColor: const Color(0xFFF8FAFC),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      ...widget.columns.asMap().entries.map((entry) {
+                        final colIdx = entry.key;
+                        final col = entry.value;
+                        final value = row[col]?.toString() ?? '-';
+                        final isFirst = colIdx == 0;
 
-                          return Expanded(
-                            flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                              decoration: BoxDecoration(
-                                border: colIdx < widget.columns.length - 1 || widget.showActions
-                                  ? const Border(right: BorderSide(color: Color(0xFFF1F5F9), width: 0.5)) // Vertical Borders
-                                  : null,
-                              ),
-                              child: Text(
-                                value,
-                                style: GoogleFonts.inter(
-                                  fontSize: isMobile ? 13 : 14,
-                                  fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
-                                  color: isFirst ? const Color(0xFF1E293B) : const Color(0xFF64748B),
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
+                        return Expanded(
+                          flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                            decoration: BoxDecoration(
+                              border: colIdx < widget.columns.length - 1 || widget.showActions
+                                ? const Border(right: BorderSide(color: Color(0xFFF1F5F9), width: 0.5))
+                                : null,
                             ),
-                          );
-                        }),
-                        if (widget.showActions)
-                          SizedBox(
-                            width: isMobile ? 120 : 180,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                if (widget.onView != null)
-                                  _buildActionBtn(icon: LucideIcons.eye, onTap: () => widget.onView!(row), color: const Color(0xFF3B82F6), isMobile: isMobile),
-                                if (widget.onEdit != null)
-                                  _buildActionBtn(icon: LucideIcons.edit3, onTap: () => widget.onEdit!(row), color: const Color(0xFF2563EB), isMobile: isMobile),
-                                if (widget.onDelete != null)
-                                  _buildActionBtn(icon: LucideIcons.trash2, onTap: () => widget.onDelete!(row), color: const Color(0xFFEF4444), isMobile: isMobile),
-                                if (widget.onShare != null)
-                                  _buildActionBtn(icon: LucideIcons.arrowRightLeft, onTap: () => widget.onShare!(row), color: const Color(0xFFF59E0B), isMobile: isMobile),
-                                const SizedBox(width: 16),
-                              ],
+                            child: Text(
+                              value,
+                              style: GoogleFonts.inter(
+                                fontSize: isMobile ? 13 : 14,
+                                fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
+                                color: isFirst ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                                letterSpacing: -0.2,
+                              ),
                             ),
                           ),
-                      ],
-                    ),
+                        );
+                      }),
+                      if (widget.showActions)
+                        SizedBox(
+                          width: isMobile ? 120 : 180,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              if (widget.onView != null)
+                                _buildActionBtn(icon: LucideIcons.eye, onTap: () => widget.onView!(row), color: const Color(0xFF3B82F6), isMobile: isMobile),
+                              if (widget.onEdit != null)
+                                _buildActionBtn(icon: LucideIcons.edit3, onTap: () => widget.onEdit!(row), color: const Color(0xFF2563EB), isMobile: isMobile),
+                              if (widget.onDelete != null)
+                                _buildActionBtn(icon: LucideIcons.trash2, onTap: () => widget.onDelete!(row), color: const Color(0xFFEF4444), isMobile: isMobile),
+                              if (widget.onShare != null)
+                                _buildActionBtn(icon: LucideIcons.arrowRightLeft, onTap: () => widget.onShare!(row), color: const Color(0xFFF59E0B), isMobile: isMobile),
+                              const SizedBox(width: 16),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
           _buildPaginationFooter(),
         ],

@@ -199,7 +199,7 @@ class _ColorPredictionScreenState extends State<ColorPredictionScreen> with Sing
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'CHROMATICS AGENT',
+              'COLOUR PREDICTION',
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.w800,
                 color: ColorPalette.textPrimary,
