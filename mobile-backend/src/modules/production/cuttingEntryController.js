@@ -12,6 +12,14 @@ export const createCuttingEntry = asyncHandler(async (req, res) => {
   if (data.dyedDcNos && typeof data.dyedDcNos === 'string') {
     data.dyedDcNos = JSON.parse(data.dyedDcNos);
   }
+
+  if (req.files && Array.isArray(req.files)) {
+      req.files.forEach(file => {
+          if (file.fieldname === 'authorizedSign') data.authorizedSign = file.key || file.path;
+          if (file.fieldname === 'inchargeSign') data.inchargeSign = file.key || file.path;
+      });
+  }
+
   data.createdBy = req.user._id;
 
   const entry = new CuttingEntry(data);
@@ -61,6 +69,13 @@ export const updateCuttingEntry = asyncHandler(async (req, res) => {
   }
   if (data.dyedDcNos && typeof data.dyedDcNos === 'string') {
     data.dyedDcNos = JSON.parse(data.dyedDcNos);
+  }
+
+  if (req.files && Array.isArray(req.files)) {
+      req.files.forEach(file => {
+          if (file.fieldname === 'authorizedSign') data.authorizedSign = file.key || file.path;
+          if (file.fieldname === 'inchargeSign') data.inchargeSign = file.key || file.path;
+      });
   }
 
   const entry = await CuttingEntry.findByIdAndUpdate(req.params.id, data, {

@@ -4,7 +4,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../core/constants/layout_constants.dart';
+import '../../core/theme/color_palette.dart';
 import '../../services/mobile_api_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:garments/dialogs/signature_pad_dialog.dart';
 import '../../core/constants/api_constants.dart';
 import 'cutting_entry_page2_screen.dart';
@@ -512,22 +516,19 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.only(top: 8, bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
+          Row(
+            children: [
+              Text(title.toUpperCase(),
+                  style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w800, fontSize: 13, color: const Color(0xFF0F172A), letterSpacing: 0.5)),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
         ],
       ),
     );
@@ -540,25 +541,30 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
       bool readOnly = false,
       VoidCallback? onChanged}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
         controller: ctrl,
         keyboardType: type,
         readOnly: readOnly,
         onChanged: onChanged != null ? (_) => onChanged() : null,
+        style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E293B)),
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
           suffixText: suffix,
           filled: true,
-          fillColor: readOnly ? Colors.grey.shade100 : Colors.grey.shade50,
+          fillColor: readOnly ? const Color(0xFFF1F5F9) : Colors.white,
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300)),
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300)),
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: Color(0xFF0F172A), width: 1.5)),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
         validator: required
             ? (v) => (v == null || v.isEmpty) ? 'Required' : null
@@ -570,20 +576,28 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
   Widget _buildDropdownField(String label, String? value, List<String> options,
       Function(String?) onChanged, {bool required = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: DropdownButtonFormField<String>(
         value: options.contains(value) ? value : null,
+        style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E293B)),
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
           filled: true,
-          fillColor: Colors.grey.shade50,
+          fillColor: Colors.white,
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: Color(0xFF0F172A), width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
         isExpanded: true,
-        items: options.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
+        items: options.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis))).toList(),
         onChanged: onChanged,
         validator: required ? (v) => (v == null || v.isEmpty) ? 'Required' : null : null,
       ),
@@ -592,21 +606,24 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
 
   Widget _buildColourRowCard(int idx) {
     final row = _colourRows[idx];
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
-                  child: Text('Colour ${idx + 1}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  child: Text('Colour Layer ${idx + 1}',
+                      style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF475569))),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline,
@@ -763,22 +780,24 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
 
   Widget _buildRowField(String label, String value, Function(String) onChanged, {String? suffix}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         key: Key('${label}_${value}'),
         initialValue: value,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         onChanged: onChanged,
-        style: const TextStyle(fontSize: 13),
+        style: GoogleFonts.inter(fontSize: 14),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(fontSize: 12),
+          labelStyle: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B)),
           suffixText: suffix,
-          suffixStyle: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 10),
+          suffixStyle: GoogleFonts.inter(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 10),
           filled: true,
-          fillColor: Colors.grey.shade50,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF0F172A))),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
       ),
     );
@@ -788,9 +807,10 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF94A3B8))),
+        const SizedBox(height: 2),
         Text(value,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF0F172A))),
       ],
     );
   }
@@ -850,53 +870,88 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        title: Text(
-          _entryId != null ? 'Edit Cutting Entry' : 'New Cutting Entry',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0.5,
-        actions: [
-          if (_entryId != null)
-            TextButton.icon(
-              icon: const Icon(Icons.looks_two_outlined, size: 18),
-              label: const Text('Page 2'),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CuttingEntryPage2Screen(entryId: _entryId!),
-                ),
-              ),
-            ),
-          const SizedBox(width: 4),
-        ],
-      ),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(
               key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(12),
+              child: Column(
                 children: [
-                  // Header info card
-                  Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionTitle('Basic Information'),
-                          // Cutting date picker
+                  Container(
+                    height: 60,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 20),
+                          onPressed: () => Navigator.maybePop(context),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          (_entryId != null ? 'Edit Cutting Entry' : 'New Cutting Entry').toUpperCase(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A), letterSpacing: 0.5),
+                        ),
+                        const Spacer(),
+                        if (_entryId != null) ...[
+                          TextButton.icon(
+                            icon: const Icon(Icons.looks_two_outlined, size: 16, color: Color(0xFF0F172A)),
+                            label: const Text('Page 2', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A), fontSize: 13)),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CuttingEntryPage2Screen(entryId: _entryId!),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                        ],
+                        ElevatedButton.icon(
+                          onPressed: _saving ? null : _save,
+                          icon: _saving 
+                             ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                             : const Icon(Icons.save, size: 14),
+                          label: Text(
+                            _entryId != null ? 'UPDATE' : 'SAVE ENTRY',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.5),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(120, 42),
+                            backgroundColor: const Color(0xFF0F172A),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1000),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                      // Header info card
+                      Container(
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFE2E8F0))),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionTitle('Basic Information'),
+                              // Cutting date picker
                           InkWell(
                             onTap: () async {
                               final picked = await showDatePicker(
@@ -1051,14 +1106,15 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
                   // Lay Information
-                  Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                  Container(
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFE2E8F0))),
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1149,14 +1205,15 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
                   // Colour Rows
-                  Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                  Container(
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFE2E8F0))),
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1171,6 +1228,7 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
                                   icon: const Icon(Icons.add, size: 16),
                                   label: const Text('Add Colour', overflow: TextOverflow.ellipsis),
                                   style: ElevatedButton.styleFrom(
+                                    minimumSize: const Size(0, 0),
                                     backgroundColor: Theme.of(context).primaryColor,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1193,20 +1251,27 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
                                 ),
                               ),
                             ),
-                          ...List.generate(_colourRows.length,
-                              (i) => _buildColourRowCard(i)),
+                          MediaQuery.of(context).size.width > 800 && _colourRows.isNotEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: _buildWebColourTable(),
+                                )
+                              : Column(
+                                  children: List.generate(_colourRows.length, (i) => _buildColourRowCard(i)),
+                                ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
                   // Remarks & Signatures
-                  Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                  Container(
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFE2E8F0))),
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1253,43 +1318,178 @@ class _CuttingEntryFormScreenState extends State<CuttingEntryFormScreen> {
                     ),
                   ),
                   const SizedBox(height: 80),
+                              ],
+                            ),
+                          ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  Widget _buildWebColourTable() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -3),
-            ),
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: DataTable(
+          headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
+          dataRowMaxHeight: 52,
+          dataRowMinHeight: 52,
+          columnSpacing: 16,
+          columns: const [
+            DataColumn(label: Text('Colour', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Fresh L.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Mini L.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('M. Mark', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Roll WT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Cost WT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Act. Fold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('CAD Eff%', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Total Pcs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)))),
+            DataColumn(label: Text('Final Bal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)))),
+            DataColumn(label: Text('Differ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)))),
+            DataColumn(label: Text('End Bit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Mistake', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('R. WT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Lay Bal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('Complaint', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B)))),
+            DataColumn(label: Text('', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))), 
           ],
+          rows: _colourRows.asMap().entries.map((e) {
+            int idx = e.key;
+            var row = e.value;
+            return DataRow(cells: [
+              DataCell(Container(
+                width: 140,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: _buildWebDropdownField(row['colour']?.toString() ?? '', 
+                  _outwards.expand((o) {
+                    final items = o['items'] as List? ?? [];
+                    return items.expand((i) {
+                      final cols = i['colours'] as List? ?? [];
+                      return cols.map((c) => c['colour']?.toString() ?? '');
+                    });
+                  }).toSet().where((c) => c.isNotEmpty).toList(), 
+                  (v) => setState(() => _colourRows[idx]['colour'] = v)),
+              )),
+              DataCell(_buildWebTableField((row['freshLayer'] ?? 0).toString(), (v) { _colourRows[idx]['freshLayer'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['miniLay'] ?? 0).toString(), (v) { _colourRows[idx]['miniLay'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['miniMarkingPcs'] ?? 0).toString(), (v) { _colourRows[idx]['miniMarkingPcs'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['rollWT'] ?? 0).toString(), (v) { _colourRows[idx]['rollWT'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['costingWeight'] ?? 0).toString(), (v) { _colourRows[idx]['costingWeight'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['actualFolding'] ?? 0).toString(), (v) { _colourRows[idx]['actualFolding'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['cadEff'] ?? 0).toString(), (v) { _colourRows[idx]['cadEff'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              
+              DataCell(Text('${row['totalPcs'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+              DataCell(Text('${row['finalBal'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+              DataCell(Text('${row['differ'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+              
+              DataCell(_buildWebTableField((row['endBit'] ?? 0).toString(), (v) { _colourRows[idx]['endBit'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['mistake'] ?? 0).toString(), (v) { _colourRows[idx]['mistake'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['returnWT'] ?? 0).toString(), (v) { _colourRows[idx]['returnWT'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['layBal'] ?? 0).toString(), (v) { _colourRows[idx]['layBal'] = double.tryParse(v) ?? 0; _recalcRow(idx); }, width: 60)),
+              DataCell(_buildWebTableField((row['complaint'] ?? '').toString(), (v) { _colourRows[idx]['complaint'] = v; }, isNumber: false, width: 100)),
+              
+              DataCell(Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(icon: const Icon(Icons.calculate, color: Colors.blue, size: 20), onPressed: () => _showCalculationsDialog(idx), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                  const SizedBox(width: 8),
+                  IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: () => setState(() => _colourRows.removeAt(idx)), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                ],
+              )),
+            ]);
+          }).toList(),
         ),
-        child: ElevatedButton(
-          onPressed: _saving ? null : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildWebDropdownField(String? value, List<String> options, Function(String?) onChanged) {
+    return Container(
+      width: 140,
+      height: 36,
+      child: DropdownButtonFormField<String>(
+        value: options.contains(value) ? value : null,
+        style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF0F172A))),
+        ),
+        isExpanded: true,
+        items: options.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)))).toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildWebTableField(String value, Function(String) onChanged, {bool isNumber = true, double width = 80}) {
+    return Container(
+      width: width,
+      height: 36,
+      child: TextFormField(
+        initialValue: value,
+        keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        onChanged: onChanged,
+        style: const TextStyle(fontSize: 12),
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: Colors.grey.shade300)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF0F172A))),
+        ),
+      ),
+    );
+  }
+
+  void _showCalculationsDialog(int idx) {
+    if (idx >= _colourRows.length) return;
+    var row = _colourRows[idx];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        title: Text('Calculations (Row ${idx + 1})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+        content: Container(
+          width: 400,
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: [
+               _calcChip('Total Pcs', '${row['totalPcs'] ?? 0}'),
+               _calcChip('Doz', '${row['doz'] ?? 0}'),
+               _calcChip('Bal Pcs', '${row['balancePcs'] ?? 0}'),
+               _calcChip('Roll Mtr', '${row['rollMtr'] ?? 0}'),
+               _calcChip('Act Roll Mtr', '${row['actualRollMtr'] ?? 0}'),
+               _calcChip('Fold Req', '${row['foldReq'] ?? 0}'),
+               _calcChip('Fold Diff', '${row['foldDiff'] ?? 0}'),
+               _calcChip('Act Roll WT', '${row['actRollWt'] ?? 0}'),
+               _calcChip('Doz WT', '${row['dozWeight'] ?? 0}'),
+               _calcChip('WT Diff', '${row['weightDifference'] ?? 0}'),
+               _calcChip('Cutter Waste', '${row['cutterWaste'] ?? 0}'),
+               _calcChip('Off Waste', '${row['offWaste'] ?? 0}'),
+               _calcChip('Total Waste', '${row['totalWaste'] ?? 0}'),
+               _calcChip('Cut WT', '${row['cutWt'] ?? 0}'),
+               _calcChip('Final Bal', '${row['finalBal'] ?? 0}'),
+               _calcChip('Differ', '${row['differ'] ?? 0}'),
+               _calcChip('Act Eff %', '${row['actualEff'] ?? 0}%'),
+               _calcChip('Eff Diff', '${row['effDifference'] ?? 0}%'),
+            ],
           ),
-          child: _saving
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
-                )
-              : Text(
-                  _entryId != null ? 'Update Entry' : 'Save Cutting Entry',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CLOSE', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold))),
+        ],
       ),
     );
   }

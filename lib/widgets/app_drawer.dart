@@ -38,6 +38,11 @@ import '../screens/reports/rack_pallet_report_screen.dart';
 import '../screens/tasks/admin_task_management_screen.dart';
 import '../screens/tasks/worker_task_dashboard_screen.dart';
 import '../screens/reports/cut_order_plan_report_screen.dart';
+import '../screens/cutting_entry/cutting_entry_list_screen.dart';
+import '../screens/stitching/stitching_delivery_screen.dart';
+import '../screens/packing/iron_packing_dc_screen.dart';
+import '../screens/reports/cut_stock_report_screen.dart';
+import '../screens/reports/cutting_entry_report_screen.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
@@ -209,6 +214,21 @@ class AppDrawer extends ConsumerWidget {
                       "Lot Requirement",
                       const LotRequirementAllocationScreen(),
                     ),
+                    _buildSubItem(
+                      context,
+                      "Cutting Entry",
+                      const CuttingEntryListScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Stitching Delivery DC",
+                      const StitchingDeliveryScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Iron & Packing DC",
+                      const IronPackingDcScreen(),
+                    ),
                   ],
                 ),
 
@@ -280,6 +300,16 @@ class AppDrawer extends ConsumerWidget {
                       context,
                       "Cut Order Plan Report",
                       const CutOrderPlanReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Cut Stock Report",
+                      const CutStockReportScreen(),
+                    ),
+                    _buildSubItem(
+                      context,
+                      "Cutting Entry Report",
+                      const CuttingEntryReportScreen(),
                     ),
                   ],
                 ),

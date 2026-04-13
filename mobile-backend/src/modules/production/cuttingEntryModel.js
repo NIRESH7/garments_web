@@ -88,7 +88,7 @@ const cuttingEntrySchema = new mongoose.Schema(
 );
 
 // Auto-generate cutNo, trnNo, and stickerNo before saving
-cuttingEntrySchema.pre('save', async function (next) {
+cuttingEntrySchema.pre('save', async function () {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -121,7 +121,6 @@ cuttingEntrySchema.pre('save', async function (next) {
     });
     this.stickerNo = `STK/${year}/${count + 1}`;
   }
-  next();
 });
 
 const CuttingEntry = mongoose.model('CuttingEntry', cuttingEntrySchema);

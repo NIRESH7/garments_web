@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
+import '../../core/theme/color_palette.dart';
+import '../../widgets/responsive_wrapper.dart';
+import '../../widgets/modern_data_table.dart';
 import 'cutting_entry_form_screen.dart';
 
 class CuttingEntryListScreen extends StatefulWidget {
@@ -20,30 +25,35 @@ class _CuttingEntryListScreenState extends State<CuttingEntryListScreen> {
   void initState() {
     super.initState();
     _load();
+    _searchCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load({String? search}) async {
     setState(() => _loading = true);
-    final data = await _api.getCuttingEntries(itemName: search);
-    setState(() {
-      _entries = data;
-      _loading = false;
-    });
+    try {
+      final data = await _api.getCuttingEntries(itemName: search);
+      if (mounted) setState(() { _entries = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _delete(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Entry'),
-        content: const Text('Are you sure?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        title: Text('DELETE ENTRY', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF0F172A))),
+        content: Text('This cutting entry will be permanently removed.', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B))),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('CANCEL', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: const Color(0xFF94A3B8), fontSize: 11))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: ColorPalette.error, fontSize: 11))),
         ],
       ),
     );
@@ -53,237 +63,114 @@ class _CuttingEntryListScreenState extends State<CuttingEntryListScreen> {
     }
   }
 
-  String _statusColor(String? status) {
+  Color _statusColor(String? status) {
     switch (status) {
-      case 'Completed':
-        return 'green';
-      case 'In Progress':
-        return 'orange';
-      default:
-        return 'red';
-    }
-  }
-
-  Color _colorFromName(String name) {
-    switch (name) {
-      case 'green':
-        return Colors.green;
-      case 'orange':
-        return Colors.orange;
-      default:
-        return Colors.red;
+      case 'Completed': return const Color(0xFF10B981);
+      case 'In Progress': return const Color(0xFFF59E0B);
+      default: return const Color(0xFFEF4444);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _searchCtrl.text.isEmpty
+        ? _entries
+        : _entries.where((e) => (e['itemName'] ?? '').toString().toLowerCase().contains(_searchCtrl.text.toLowerCase())).toList();
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text('Cutting Entries',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0.5,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _load(),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const CuttingEntryFormScreen()),
-          );
-          _load();
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('New Entry'),
-        backgroundColor: Theme.of(context).primaryColor,
-      ),
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Search by item name...',
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                suffixIcon: _searchCtrl.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _load();
-                        })
-                    : null,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              onChanged: (v) => _load(search: v.isNotEmpty ? v : null),
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _entries.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.content_cut,
-                                size: 64, color: Colors.grey.shade300),
-                            const SizedBox(height: 12),
-                            Text('No cutting entries found',
-                                style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 16)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _entries.length,
-                        itemBuilder: (context, i) {
-                          final e = _entries[i];
-                          final date = e['cuttingDate'] != null
-                              ? DateFormat('dd MMM yyyy').format(
-                                  DateTime.parse(e['cuttingDate']).toLocal())
-                              : '-';
-                          final colCount =
-                              (e['colourRows'] as List?)?.length ?? 0;
-                          final totalPcs = ((e['colourRows'] as List?) ?? [])
-                              .fold<int>(
-                                  0,
-                                  (sum, row) =>
-                                      sum +
-                                      ((row['totalPcs'] ?? 0) as num).toInt());
-                          final statusColor =
-                              _colorFromName(_statusColor(e['status']));
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CuttingEntryFormScreen(
-                                        entryId: e['_id']?.toString()),
-                                  ),
-                                );
-                                _load();
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 44,
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Icon(Icons.content_cut,
-                                          color:
-                                              Theme.of(context).primaryColor),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Text(
-                                                'Cut #${e['cutNo'] ?? '-'}',
-                                                style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 15),
-                                              ),
-                                              const Spacer(),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: statusColor
-                                                      .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  e['status'] ?? 'Pending',
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: statusColor,
-                                                      fontWeight:
-                                                          FontWeight.w600),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${e['itemName'] ?? '-'} | Size: ${e['size'] ?? '-'}',
-                                            style: TextStyle(
-                                                color: Colors.grey.shade600,
-                                                fontSize: 13),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              Text(date,
-                                                  style: TextStyle(
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                      fontSize: 12)),
-                                              const SizedBox(width: 12),
-                                              Text(
-                                                '$colCount colours  •  $totalPcs pcs',
-                                                style: TextStyle(
-                                                    color:
-                                                        Colors.grey.shade500,
-                                                    fontSize: 12),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline,
-                                          color: Colors.red, size: 20),
-                                      onPressed: () =>
-                                          _delete(e['_id']?.toString() ?? ''),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+      backgroundColor: ColorPalette.background,
+      body: ResponsiveWrapper(
+        padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Controls row
+              Row(
+                children: [
+                  // Search field
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        borderRadius: BorderRadius.circular(6),
                       ),
+                      child: TextField(
+                        controller: _searchCtrl,
+                        style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF0F172A)),
+                        decoration: InputDecoration(
+                          hintText: 'Search by item name...',
+                          hintStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8)),
+                          prefixIcon: const Icon(LucideIcons.search, size: 14, color: Color(0xFF94A3B8)),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onChanged: (v) => _load(search: v.isNotEmpty ? v : null),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // New Entry button
+                  InkWell(
+                    onTap: () async {
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const CuttingEntryFormScreen()));
+                      _load();
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(color: const Color(0xFF475569), borderRadius: BorderRadius.circular(6)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(LucideIcons.plus, size: 14, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('NEW ENTRY', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.8, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Data table
+              _loading
+                ? const Center(child: Padding(padding: EdgeInsets.all(80), child: CircularProgressIndicator(strokeWidth: 2)))
+                : ModernDataTable(
+                    columns: const ['CUT NO', 'ITEM NAME', 'SIZE', 'DATE', 'COLOURS', 'TOTAL PCS', 'STATUS'],
+                    rows: filtered.map((e) {
+                      final date = e['cuttingDate'] != null
+                          ? DateFormat('dd MMM yyyy').format(DateTime.parse(e['cuttingDate']).toLocal())
+                          : '-';
+                      final colCount = (e['colourRows'] as List?)?.length ?? 0;
+                      final totalPcs = ((e['colourRows'] as List?) ?? [])
+                          .fold<int>(0, (sum, row) => sum + ((row['totalPcs'] ?? 0) as num).toInt());
+                      final status = e['status'] ?? 'Pending';
+                      return {
+                        '_id': e['_id'],
+                        'CUT NO': e['cutNo']?.toString() ?? '-',
+                        'ITEM NAME': e['itemName']?.toString() ?? '-',
+                        'SIZE': e['size']?.toString() ?? '-',
+                        'DATE': date,
+                        'COLOURS': colCount.toString(),
+                        'TOTAL PCS': totalPcs.toString(),
+                        'STATUS': status,
+                      };
+                    }).toList().cast<Map<String, dynamic>>(),
+                    onEdit: (row) async {
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => CuttingEntryFormScreen(entryId: row['_id']?.toString())));
+                      _load();
+                    },
+                    onDelete: (row) => _delete(row['_id']?.toString() ?? ''),
+                    emptyMessage: 'No cutting entries found',
+                  ),
+              const SizedBox(height: 40),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

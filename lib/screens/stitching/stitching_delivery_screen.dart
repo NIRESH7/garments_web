@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
+import '../../core/theme/color_palette.dart';
+import '../../widgets/responsive_wrapper.dart';
+import '../../widgets/modern_data_table.dart';
 
 class StitchingDeliveryScreen extends StatefulWidget {
   const StitchingDeliveryScreen({super.key});
@@ -29,40 +34,34 @@ class _StitchingDeliveryScreenState extends State<StitchingDeliveryScreen>
   final _foldingReqCtrl = TextEditingController();
   DateTime _dcDate = DateTime.now();
   List<Map<String, dynamic>> _colourRows = [];
-  List<Map<String, dynamic>> _cutDetails = [];
-  List<Map<String, dynamic>> _accessories = [];
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl.addListener(() => setState(() {}));
     _loadList();
   }
 
   @override
   void dispose() {
     _tabCtrl.dispose();
-    _cutNoCtrl.dispose();
-    _itemNameCtrl.dispose();
-    _sizeCtrl.dispose();
-    _lotNoCtrl.dispose();
-    _hsnCtrl.dispose();
-    _diaCtrl.dispose();
-    _vehicleNoCtrl.dispose();
-    _rateCtrl.dispose();
-    _processCtrl.dispose();
+    _cutNoCtrl.dispose(); _itemNameCtrl.dispose(); _sizeCtrl.dispose();
+    _lotNoCtrl.dispose(); _hsnCtrl.dispose(); _diaCtrl.dispose();
+    _vehicleNoCtrl.dispose(); _rateCtrl.dispose(); _processCtrl.dispose();
     _foldingReqCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadList() async {
     setState(() => _loading = true);
-    final data = await _api.getStitchingDeliveries();
-    setState(() {
-      _list = data;
-      _loading = false;
-    });
+    try {
+      final data = await _api.getStitchingDeliveries();
+      if (mounted) setState(() { _list = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _save() async {
@@ -81,16 +80,14 @@ class _StitchingDeliveryScreenState extends State<StitchingDeliveryScreen>
       'foldingReqPerDozen': double.tryParse(_foldingReqCtrl.text) ?? 0,
       'dcDate': _dcDate.toIso8601String(),
       'colourRows': _colourRows,
-      'cutDetails': _cutDetails,
-      'accessories': _accessories,
       'totalValue': (_colourRows.fold<double>(0, (s, r) => s + ((r['foldingActualWt'] ?? 0) as num).toDouble())) *
           (double.tryParse(_rateCtrl.text) ?? 0),
     };
     final ok = await _api.createStitchingDelivery(data);
-    setState(() => _saving = false);
+    if (mounted) setState(() => _saving = false);
     if (ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('DC created!'), backgroundColor: Colors.green));
+          const SnackBar(content: Text('DC created successfully'), backgroundColor: Color(0xFF10B981)));
       _clearForm();
       _loadList();
       _tabCtrl.animateTo(0);
@@ -98,37 +95,31 @@ class _StitchingDeliveryScreenState extends State<StitchingDeliveryScreen>
   }
 
   void _clearForm() {
-    _cutNoCtrl.clear();
-    _itemNameCtrl.clear();
-    _sizeCtrl.clear();
-    _lotNoCtrl.clear();
-    _hsnCtrl.clear();
-    _diaCtrl.clear();
-    _vehicleNoCtrl.clear();
-    _rateCtrl.clear();
-    _processCtrl.clear();
-    _foldingReqCtrl.clear();
-    _colourRows.clear();
-    _cutDetails.clear();
-    _accessories.clear();
-    _dcDate = DateTime.now();
+    _cutNoCtrl.clear(); _itemNameCtrl.clear(); _sizeCtrl.clear();
+    _lotNoCtrl.clear(); _hsnCtrl.clear(); _diaCtrl.clear();
+    _vehicleNoCtrl.clear(); _rateCtrl.clear(); _processCtrl.clear();
+    _foldingReqCtrl.clear(); _colourRows = []; _dcDate = DateTime.now();
+    setState(() {});
   }
 
-  Widget _buildField(String label, TextEditingController ctrl,
-      {TextInputType type = TextInputType.text, bool required = false}) {
+  Widget _field(String label, TextEditingController ctrl, {bool req = false, TextInputType type = TextInputType.text}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
         controller: ctrl,
         keyboardType: type,
+        style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF0F172A)),
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
           filled: true,
-          fillColor: Colors.grey.shade50,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          fillColor: const Color(0xFFF8FAFC),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF475569))),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
-        validator: required ? (v) => (v?.isEmpty ?? true) ? 'Required' : null : null,
+        validator: req ? (v) => (v?.isEmpty ?? true) ? 'Required' : null : null,
       ),
     );
   }
@@ -136,214 +127,198 @@ class _StitchingDeliveryScreenState extends State<StitchingDeliveryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text('Stitching Delivery', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0.5,
-        bottom: TabBar(
-          controller: _tabCtrl,
-          tabs: const [Tab(text: 'DC List'), Tab(text: 'New DC')],
-          labelColor: Colors.blue.shade700,
-          indicatorColor: Colors.blue.shade700,
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
+      backgroundColor: ColorPalette.background,
+      body: Column(
         children: [
-          // List tab
-          _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _list.isEmpty
-                  ? const Center(child: Text('No delivery notes found.'))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _list.length,
-                      itemBuilder: (context, i) {
-                        final dc = _list[i];
-                        final date = dc['dcDate'] != null
-                            ? DateFormat('dd MMM yyyy').format(DateTime.parse(dc['dcDate']).toLocal())
-                            : '-';
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            leading: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.teal.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(Icons.local_shipping, color: Colors.teal.shade600, size: 22),
-                            ),
-                            title: Text('DC: ${dc['dcNo'] ?? '-'}',
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('${dc['itemName'] ?? '-'} — ${dc['size'] ?? '-'}\n$date'),
-                            isThreeLine: true,
-                            trailing: Text('₹${dc['totalValue']?.toStringAsFixed(0) ?? '0'}',
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        );
-                      },
-                    ),
-          // New DC form tab
-          Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
+          Container(
+            color: Colors.white,
+            child: Column(
               children: [
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('DC Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        const SizedBox(height: 12),
-                        // Date picker
-                        InkWell(
-                          onTap: () async {
-                            final d = await showDatePicker(
-                              context: context,
-                              initialDate: _dcDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2030),
-                            );
-                            if (d != null) setState(() => _dcDate = d);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade300),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today, size: 18, color: Colors.teal),
-                                const SizedBox(width: 8),
-                                Text('DC Date: ${DateFormat('dd MMM yyyy').format(_dcDate)}'),
-                              ],
-                            ),
-                          ),
-                        ),
-                        _buildField('Cut No *', _cutNoCtrl, required: true),
-                        Row(children: [
-                          Expanded(child: _buildField('Item Name *', _itemNameCtrl, required: true)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildField('Size', _sizeCtrl)),
-                        ]),
-                        Row(children: [
-                          Expanded(child: _buildField('Lot No', _lotNoCtrl)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildField('Dia', _diaCtrl)),
-                        ]),
-                        _buildField('HSN Code', _hsnCtrl),
-                        _buildField('Vehicle No', _vehicleNoCtrl),
-                        Row(children: [
-                          Expanded(child: _buildField('Process', _processCtrl)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildField('Rate/Kg (₹)', _rateCtrl, type: TextInputType.number)),
-                        ]),
-                        _buildField('Folding Req/Dozen', _foldingReqCtrl, type: TextInputType.number),
-                      ],
-                    ),
-                  ),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                TabBar(
+                  controller: _tabCtrl,
+                  labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.5),
+                  unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12),
+                  labelColor: const Color(0xFF475569),
+                  unselectedLabelColor: const Color(0xFF94A3B8),
+                  indicatorColor: const Color(0xFF475569),
+                  indicatorWeight: 2,
+                  tabs: const [Tab(text: 'DC LIST'), Tab(text: 'NEW DC')],
                 ),
-                const SizedBox(height: 12),
-                // Colour rows
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Colour Details', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: TextButton.icon(
-                                icon: const Icon(Icons.add, size: 16),
-                                label: const Text('Add', overflow: TextOverflow.ellipsis),
-                                onPressed: () => setState(() => _colourRows.add({
-                                  'colour': '', 'pcs': 0, 'foldingReqWt': 0,
-                                  'foldingActualWt': 0, 'elasticReqMtr': 0,
-                                })),
-                              ),
-                            ),
-                          ],
-                        ),
-                        ...List.generate(_colourRows.length, (i) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: TextFormField(
-                                    initialValue: _colourRows[i]['colour'] ?? '',
-                                    decoration: const InputDecoration(labelText: 'Colour', isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                      border: OutlineInputBorder()),
-                                    onChanged: (v) => _colourRows[i]['colour'] = v,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: TextFormField(
-                                    initialValue: (_colourRows[i]['pcs'] ?? 0).toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Pcs', isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                      border: OutlineInputBorder()),
-                                    onChanged: (v) => _colourRows[i]['pcs'] = int.tryParse(v) ?? 0,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: TextFormField(
-                                    initialValue: (_colourRows[i]['foldingActualWt'] ?? 0).toString(),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: const InputDecoration(labelText: 'Fold Act Wt', isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                      border: OutlineInputBorder()),
-                                    onChanged: (v) => _colourRows[i]['foldingActualWt'] = double.tryParse(v) ?? 0,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                                  onPressed: () => setState(() => _colourRows.removeAt(i)),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _saving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _saving
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Save DC', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 40),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
               ],
             ),
           ),
+          Expanded(
+            child: TabBarView(
+        controller: _tabCtrl,
+        children: [
+          // ── LIST TAB ──────────────────────────────
+          ResponsiveWrapper(
+            padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _loading
+                    ? const Center(child: Padding(padding: EdgeInsets.all(80), child: CircularProgressIndicator(strokeWidth: 2)))
+                    : ModernDataTable(
+                        columns: const ['DC NO', 'ITEM NAME', 'SIZE', 'DATE', 'VALUE (₹)'],
+                        showActions: false,
+                        rows: _list.map((dc) {
+                          final date = dc['dcDate'] != null
+                              ? DateFormat('dd MMM yyyy').format(DateTime.parse(dc['dcDate']).toLocal())
+                              : '-';
+                          return {
+                            'DC NO': dc['dcNo']?.toString() ?? '-',
+                            'ITEM NAME': dc['itemName']?.toString() ?? '-',
+                            'SIZE': dc['size']?.toString() ?? '-',
+                            'DATE': date,
+                            'VALUE (₹)': '₹${(dc['totalValue'] ?? 0).toStringAsFixed(0)}',
+                          };
+                        }).toList().cast<Map<String, dynamic>>(),
+                        emptyMessage: 'No delivery notes found',
+                      ),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
+          // ── FORM TAB ──────────────────────────────
+          ResponsiveWrapper(
+            padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
+            child: SingleChildScrollView(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionCard('DC DETAILS', [
+                      // Date picker
+                      InkWell(
+                        onTap: () async {
+                          final d = await showDatePicker(context: context, initialDate: _dcDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                          if (d != null) setState(() => _dcDate = d);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(6)),
+                          child: Row(children: [
+                            const Icon(LucideIcons.calendar, size: 16, color: Color(0xFF475569)),
+                            const SizedBox(width: 10),
+                            Text('DC Date: ${DateFormat('dd MMM yyyy').format(_dcDate)}', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF0F172A))),
+                          ]),
+                        ),
+                      ),
+                      _field('Cut No *', _cutNoCtrl, req: true),
+                      Row(children: [
+                        Expanded(child: _field('Item Name *', _itemNameCtrl, req: true)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _field('Size', _sizeCtrl)),
+                      ]),
+                      Row(children: [
+                        Expanded(child: _field('Lot No', _lotNoCtrl)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _field('Dia', _diaCtrl)),
+                      ]),
+                      _field('HSN Code', _hsnCtrl),
+                      _field('Vehicle No', _vehicleNoCtrl),
+                      Row(children: [
+                        Expanded(child: _field('Process', _processCtrl)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _field('Rate/Kg (₹)', _rateCtrl, type: TextInputType.number)),
+                      ]),
+                      _field('Folding Req/Dozen', _foldingReqCtrl, type: TextInputType.number),
+                    ]),
+                    const SizedBox(height: 16),
+                    _sectionCard('COLOUR DETAILS', [
+                      Row(
+                        children: [
+                          Text('Colour Rows', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, color: const Color(0xFF475569))),
+                          const Spacer(),
+                          InkWell(
+                            onTap: () => setState(() => _colourRows.add({'colour': '', 'pcs': 0, 'foldingActualWt': 0})),
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(4)),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(LucideIcons.plus, size: 12, color: Color(0xFF475569)),
+                                const SizedBox(width: 4),
+                                Text('ADD ROW', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                              ]),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...List.generate(_colourRows.length, (i) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(children: [
+                          Expanded(flex: 2, child: TextFormField(
+                            initialValue: _colourRows[i]['colour'] ?? '',
+                            style: GoogleFonts.inter(fontSize: 12),
+                            decoration: InputDecoration(labelText: 'Colour', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), border: const OutlineInputBorder(), labelStyle: GoogleFonts.inter(fontSize: 11)),
+                            onChanged: (v) => _colourRows[i]['colour'] = v,
+                          )),
+                          const SizedBox(width: 8),
+                          Expanded(child: TextFormField(
+                            initialValue: (_colourRows[i]['pcs'] ?? 0).toString(),
+                            keyboardType: TextInputType.number,
+                            style: GoogleFonts.inter(fontSize: 12),
+                            decoration: InputDecoration(labelText: 'Pcs', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), border: const OutlineInputBorder(), labelStyle: GoogleFonts.inter(fontSize: 11)),
+                            onChanged: (v) => _colourRows[i]['pcs'] = int.tryParse(v) ?? 0,
+                          )),
+                          const SizedBox(width: 8),
+                          Expanded(child: TextFormField(
+                            initialValue: (_colourRows[i]['foldingActualWt'] ?? 0).toString(),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: GoogleFonts.inter(fontSize: 12),
+                            decoration: InputDecoration(labelText: 'Fold Wt', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), border: const OutlineInputBorder(), labelStyle: GoogleFonts.inter(fontSize: 11)),
+                            onChanged: (v) => _colourRows[i]['foldingActualWt'] = double.tryParse(v) ?? 0,
+                          )),
+                          IconButton(icon: const Icon(LucideIcons.x, size: 16, color: Color(0xFFEF4444)), onPressed: () => setState(() => _colourRows.removeAt(i))),
+                        ]),
+                      )),
+                    ]),
+                    const SizedBox(height: 24),
+                    InkWell(
+                      onTap: _saving ? null : _save,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(color: const Color(0xFF475569), borderRadius: BorderRadius.circular(6)),
+                        child: Center(child: _saving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : Text('SAVE DC', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.8, color: Colors.white))),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ), // ResponsiveWrapper
+          ), // TabBarView second child
+        ],
+      ), // TabBarView
+    ), // Expanded
+  ], // Column children
+), // body Column
+    );
+  }
+
+  Widget _sectionCard(String title, List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 0),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: const Color(0xFF94A3B8), letterSpacing: 1)),
+          const SizedBox(height: 16),
+          ...children,
         ],
       ),
     );

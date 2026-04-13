@@ -35,6 +35,7 @@ import {
     deleteAccessoriesMaster,
 } from './accessoriesMasterController.js';
 import { protect } from '../../middleware/authMiddleware.js';
+import upload from '../../middleware/uploadMiddleware.js';
 
 // ─── NEW MODULE IMPORTS ──────────────────────────────────────────────────────
 import {
@@ -140,11 +141,11 @@ router.get('/cutting-entry/reports/entry-report', protect, getCuttingEntryReport
 
 // Cutting Entry (Page 1)
 router.route('/cutting-entry')
-    .post(protect, createCuttingEntry)
+    .post(protect, upload.any(), createCuttingEntry)
     .get(protect, getCuttingEntries);
 router.route('/cutting-entry/:id')
     .get(protect, getCuttingEntryById)
-    .put(protect, updateCuttingEntry)
+    .put(protect, upload.any(), updateCuttingEntry)
     .delete(protect, deleteCuttingEntry);
 
 // Cutting Entry Page 2

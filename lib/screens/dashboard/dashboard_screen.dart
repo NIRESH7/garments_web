@@ -63,6 +63,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 6: return 'Cutting Planning';
       case 7: return 'Reports Dashboard';
       case 8: return 'Item Assignments';
+      case 9: return 'Cutting Entry';
+      case 10: return 'Stitching Delivery DC';
+      case 11: return 'Iron & Packing DC';
+      case 12: return 'Cut Stock Report';
+      case 13: return 'Cutting Entry Report';
       default: return 'Executive Dashboard';
     }
   }
@@ -97,13 +102,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       selectedIndex: _pageIndex,
       onIndexChanged: (index) {
         if (LayoutConstants.isWeb(context)) {
-          if (index >= 9) {
+          if (index >= 14) {
             // Handle System/Settings as Navigation
             Widget target;
             switch (index) {
-              case 9: target = const ScaleSettingsScreen(); break;
-              case 10: target = const ThemeSettingsScreen(); break;
-              case 11: target = const ChatScreen(); break;
+              case 14: target = const ScaleSettingsScreen(); break;
+              case 15: target = const ThemeSettingsScreen(); break;
+              case 16: target = const ChatScreen(); break;
               default: return;
             }
             Navigator.push(context, MaterialPageRoute(builder: (context) => target));
@@ -123,7 +128,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: IndexedStack(
-          index: _pageIndex >= 11 ? 0 : _pageIndex, // Keep on home if navigating away
+          index: _pageIndex >= 16 ? 0 : _pageIndex, // Keep on home if navigating away
           children: [
             const _DynamicDataHomeTab(),              // 0
             const MastersDashboard(),                 // 1
@@ -134,7 +139,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const CuttingOrderPlanningScreen(),       // 6
             const ReportsDashboard(),                 // 7
             const ItemAssignmentListScreen(),         // 8
-            const _HistoryPlaceholder(),              // 9
+            const CuttingEntryListScreen(),           // 9
+            const StitchingDeliveryScreen(),          // 10
+            const IronPackingDcScreen(),              // 11
+            const CutStockReportScreen(),             // 12
+            const CuttingEntryReportScreen(),         // 13
+            const _HistoryPlaceholder(),              // 14
           ],
         ),
         bottomNavigationBar: LayoutConstants.isMobile(context) 
