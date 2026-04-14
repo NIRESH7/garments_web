@@ -36,6 +36,10 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   ];
 
   String? _selectedCategoryId;
+  String? _selectedSizeType;
+  bool _isEditing = false;
+  String? _editingOriginalValue;
+  
   List<dynamic> _categories = [];
   List<dynamic> _values = [];
   String _searchQuery = '';
@@ -155,7 +159,33 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     );
   }
 
-  Future<void> _add() async {
+  void _startEdit(Map<String, dynamic> item) {
+    setState(() {
+      _isEditing = true;
+      _editingOriginalValue = item['name'].toString();
+      _valueController.text = item['name'].toString();
+      _selectedSizeType = item['sizeType']?.toString();
+      _gsmController.text = item['gsm']?.toString() ?? '';
+      _knittingDiaController.text = item['knittingDia']?.toString() ?? '';
+      _cuttingDiaController.text = item['cuttingDia']?.toString() ?? '';
+    });
+    // Scroll to top to see the form
+    PrimaryScrollController.of(context).animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _isEditing = false;
+      _editingOriginalValue = null;
+      _valueController.clear();
+      _selectedSizeType = null;
+      _gsmController.clear();
+      _knittingDiaController.clear();
+      _cuttingDiaController.clear();
+    });
+  }
+
+  Future<void> _saveEntry() async {
     if (_valueController.text.isEmpty || _selectedCategoryId == null) return;
     setState(() => _isLoading = true);
     try {
@@ -177,18 +207,38 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         photoUrl = await _api.uploadImage(_selectedXFile!);
       }
 
-      final success = await _api.addCategoryValue(
-        categoryId, _valueController.text.trim(), photo: photoUrl,
-        gsm: _isColoursCategory ? _gsmController.text.trim() : null,
-        knittingDia: _isDiaCategory ? _knittingDiaController.text.trim() : null,
-        cuttingDia: _isDiaCategory ? _cuttingDiaController.text.trim() : null,
-      );
+      bool success;
+      if (_isEditing && _editingOriginalValue != null) {
+        success = await _api.updateCategoryValue(
+          categoryId, 
+          _editingOriginalValue!, 
+          _valueController.text.trim(),
+          photo: photoUrl,
+          gsm: _isColoursCategory ? _gsmController.text.trim() : null,
+          knittingDia: _isDiaCategory ? _knittingDiaController.text.trim() : null,
+          cuttingDia: _isDiaCategory ? _cuttingDiaController.text.trim() : null,
+          sizeType: _isItemNameCategory ? _selectedSizeType : null,
+        );
+      } else {
+        success = await _api.addCategoryValue(
+          categoryId, _valueController.text.trim(), photo: photoUrl,
+          gsm: _isColoursCategory ? _gsmController.text.trim() : null,
+          knittingDia: _isDiaCategory ? _knittingDiaController.text.trim() : null,
+          cuttingDia: _isDiaCategory ? _cuttingDiaController.text.trim() : null,
+          sizeType: _isItemNameCategory ? _selectedSizeType : null,
+        );
+      }
 
       if (success) {
         _valueController.clear(); _gsmController.clear(); _knittingDiaController.clear(); _cuttingDiaController.clear();
-        setState(() => _selectedXFile = null);
+        setState(() {
+          _selectedXFile = null;
+          _isEditing = false;
+          _editingOriginalValue = null;
+          _selectedSizeType = null;
+        });
         await _loadCategories(); _loadValues();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registry entry finalized'), backgroundColor: ColorPalette.success));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isEditing ? 'Registry entry updated' : 'Registry entry finalized'), backgroundColor: ColorPalette.success));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: ColorPalette.error));
@@ -286,13 +336,14 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: ModernDataTable(
-                        columns: const ['name'],
+                        columns: _isItemNameCategory ? const ['name', 'sizeType'] : const ['name'],
                         rows: _filteredValues.map((v) {
                           if (v is String) return {'name': v};
                           if (v is Map) return Map<String, dynamic>.from(v);
                           return {'name': v.toString()};
                         }).toList(),
                         onDelete: _delete,
+                        onEdit: _startEdit,
                         emptyMessage: _selectedCategoryId == null ? 'Select a category context' : 'No entries documented yet',
                       ),
                     ),
@@ -303,6 +354,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
       ),
     );
   }
+
 
   Widget _buildSearchOverlay(bool isMobile) {
     if (isMobile) return const SizedBox.shrink();
@@ -361,15 +413,28 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_isEditing) ...[
+              Row(
+                children: [
+                   const Icon(LucideIcons.edit3, size: 14, color: ColorPalette.primary),
+                   Gaps.w8,
+                   Text('EDITING REGISTRY ENTRY', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.primary)),
+                   const Spacer(),
+                   TextButton(onPressed: _cancelEdit, child: Text('Cancel', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: ColorPalette.error))),
+                ],
+              ),
+              Gaps.h16,
+            ],
             if (!isMobile) Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: _buildCategoryDropdown()), const SizedBox(width: 20),
               Expanded(child: _buildValueTextField()),
             ]) else ...[ _buildCategoryDropdown(), const SizedBox(height: 24), _buildValueTextField() ],
             
-            if (_isColoursCategory || _isAccessoriesCategory || _isDiaCategory) const SizedBox(height: 24),
+            if (_isColoursCategory || _isAccessoriesCategory || _isDiaCategory || _isItemNameCategory) const SizedBox(height: 24),
             
             if (!isMobile) Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (_isColoursCategory) Expanded(child: _buildGSMField()),
+              if (_isItemNameCategory) Expanded(child: _buildSizeTypeField()),
               if (_isDiaCategory) ...[ Expanded(child: _buildKnittingDiaField()), const SizedBox(width: 20), Expanded(child: _buildCuttingDiaField()) ],
               if (_isColoursCategory || _isAccessoriesCategory) ...[
                 if (_isColoursCategory) const SizedBox(width: 20),
@@ -377,6 +442,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
               ],
             ]) else ...[
               if (_isColoursCategory) ...[ _buildGSMField(), const SizedBox(height: 24) ],
+              if (_isItemNameCategory) ...[ _buildSizeTypeField(), const SizedBox(height: 24) ],
               if (_isDiaCategory) ...[ _buildKnittingDiaField(), const SizedBox(height: 24), _buildCuttingDiaField(), const SizedBox(height: 24) ],
               if (_isColoursCategory || _isAccessoriesCategory) _buildImagePicker(isMobile),
             ],
@@ -386,6 +452,25 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSizeTypeField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'SIZE TYPE',
+          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: ColorPalette.textSecondary, letterSpacing: 0.2),
+        ),
+        Gaps.h8,
+        CustomDropdownField(
+          label: '',
+          value: _selectedSizeType,
+          items: const ['Senior', 'Junior'],
+          onChanged: (val) => setState(() => _selectedSizeType = val),
+        ),
+      ],
     );
   }
 
@@ -545,7 +630,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
     return SizedBox(
       height: 44,
       child: ElevatedButton(
-        onPressed: _selectedCategoryId == null || _isLoading ? null : _add,
+        onPressed: _selectedCategoryId == null || _isLoading ? null : _saveEntry,
         style: ElevatedButton.styleFrom(
           backgroundColor: ColorPalette.textPrimary,
           foregroundColor: Colors.white,
@@ -555,7 +640,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
         child: _isLoading
             ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
             : Text(
-                'SAVE ENTRY',
+                _isEditing ? 'UPDATE ENTRY' : 'SAVE ENTRY',
                 style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12),
               ),
       ),
@@ -569,6 +654,7 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
   }
 
   bool get _isDiaCategory { final name = _selectedCategoryName.toLowerCase().trim(); return name == 'dia'; }
+  bool get _isItemNameCategory { final name = _selectedCategoryName.toLowerCase().trim(); return name == 'item name'; }
   bool get _isColoursCategory { final name = _selectedCategoryName.toLowerCase(); return name == 'colours' || name == 'colors' || name == 'colour' || name == 'color'; }
   bool get _isAccessoriesCategory { final name = _selectedCategoryName.toLowerCase().trim(); return name == 'accessories'; }
 

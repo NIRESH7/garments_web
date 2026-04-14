@@ -2427,7 +2427,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       child: Column(
         children: [
           _buildExecutiveGrid([
-            _buildExecutiveField("Inward No", _inwardNoController, icon: LucideIcons.hash),
+            _buildExecutiveField("Inward No", _inwardNoController, icon: LucideIcons.hash, readOnly: true),
             _buildExecutiveDatePicker("Inward Date", _inwardDate, () => _selectDate(context)),
           ], isWeb),
           const SizedBox(height: 16),
@@ -2438,7 +2438,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           const SizedBox(height: 16),
           _buildExecutiveGrid([
             _buildModernDropdown("Lot Name", _selectedLotName, _lotNames, _onLotNameChanged, icon: LucideIcons.package),
-             _buildExecutiveField("Lot No", _lotNumberController, icon: LucideIcons.hash, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+             _buildExecutiveField("Lot No", _lotNumberController, icon: LucideIcons.hash, isNumeric: true, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
           ], isWeb),
           const SizedBox(height: 16),
           _buildExecutiveGrid([
@@ -2447,7 +2447,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           ], isWeb),
           const SizedBox(height: 16),
           _buildExecutiveGrid([
-            _buildExecutiveField("GSM", _gsmController, icon: LucideIcons.layers),
+            _buildExecutiveField("GSM", _gsmController, icon: LucideIcons.layers, isNumeric: true),
             _buildExecutiveField("Rate", _rateController, icon: LucideIcons.dollarSign, isNumeric: true, onChanged: (v) {
                 final r = double.tryParse(v) ?? 0;
                 setState(() {
@@ -2474,26 +2474,36 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _buildExecutiveField(String label, TextEditingController controller, {IconData? icon, bool isNumeric = false, Function(String)? onChanged, String? Function(String?)? validator}) {
+  Widget _buildExecutiveField(String label, TextEditingController controller, {
+    IconData? icon, 
+    bool isNumeric = false, 
+    bool readOnly = false,
+    Function(String)? onChanged, 
+    String? Function(String?)? validator
+  }) {
     return Column(
+      key: ValueKey('field_$label'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5)),
         const SizedBox(height: 6),
         TextFormField(
+          key: ValueKey('input_$label'),
           controller: controller,
           onChanged: onChanged,
           validator: validator,
-          keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
-          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
+          readOnly: readOnly,
+          keyboardType: isNumeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+          inputFormatters: isNumeric ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
+          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: readOnly ? ColorPalette.textMuted : ColorPalette.textPrimary),
           decoration: InputDecoration(
             isDense: true,
             prefixIcon: icon != null ? Icon(icon, size: 14, color: ColorPalette.textMuted) : null,
             filled: true,
-            fillColor: ColorPalette.background.withOpacity(0.5),
+            fillColor: readOnly ? ColorPalette.background.withOpacity(0.8) : ColorPalette.background.withOpacity(0.5),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: ColorPalette.border)),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: ColorPalette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: ColorPalette.primary, width: 1.5)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: readOnly ? ColorPalette.border : ColorPalette.primary, width: 1.5)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),

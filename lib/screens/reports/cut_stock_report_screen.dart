@@ -16,16 +16,38 @@ class _CutStockReportScreenState extends State<CutStockReportScreen> {
   final _api = MobileApiService();
   List<dynamic> _data = [];
   bool _loading = false;
-  final _itemNameCtrl = TextEditingController();
+  List<String> _items = [];
+  String? _selectedItem;
   DateTimeRange? _dateRange;
-
   final List<String> _sizes = ['75', '80', '85', '90', '95', '100', '105', '110'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMasters();
+  }
+
+  Future<void> _loadMasters() async {
+    try {
+      final cats = await _api.getCategories();
+      if (mounted) {
+        setState(() {
+          for (var c in cats) {
+            final name = (c['name'] ?? '').toString().toUpperCase();
+            if (name.contains('ITEM')) {
+              _items = (c['values'] as List? ?? []).map((v) => (v['name'] ?? '').toString()).toList();
+            }
+          }
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _load() async {
     try {
       setState(() => _loading = true);
       final data = await _api.getCutStockReport(
-        itemName: _itemNameCtrl.text.trim().isNotEmpty ? _itemNameCtrl.text.trim() : null,
+        itemName: _selectedItem,
         startDate: _dateRange?.start.toIso8601String(),
         endDate: _dateRange?.end.toIso8601String(),
       ).timeout(const Duration(seconds: 15));
@@ -40,7 +62,6 @@ class _CutStockReportScreenState extends State<CutStockReportScreen> {
 
   @override
   void dispose() {
-    _itemNameCtrl.dispose();
     super.dispose();
   }
 
@@ -59,18 +80,6 @@ class _CutStockReportScreenState extends State<CutStockReportScreen> {
 
     return Scaffold(
       backgroundColor: ColorPalette.background,
-      appBar: AppBar(
-        toolbarHeight: 60,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, size: 18, color: Color(0xFF475569)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('CUT STOCK REPORT', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF0F172A), fontSize: 16, letterSpacing: 0.5)),
-        iconTheme: const IconThemeData(color: Color(0xFF475569)),
-        bottom: const PreferredSize(preferredSize: Size.fromHeight(1), child: Divider(height: 1, color: Color(0xFFE2E8F0))),
-      ),
       body: Column(
         children: [
           // Filter bar
@@ -79,21 +88,24 @@ class _CutStockReportScreenState extends State<CutStockReportScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             child: Row(
               children: [
-                // Item search
+                // Item dropdown
                 Expanded(
                   flex: 3,
                   child: Container(
                     height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(6)),
-                    child: TextField(
-                      controller: _itemNameCtrl,
-                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF0F172A)),
-                      decoration: InputDecoration(
-                        hintText: 'Item name...',
-                        hintStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8)),
-                        prefixIcon: const Icon(LucideIcons.search, size: 14, color: Color(0xFF94A3B8)),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        isExpanded: true,
+                        value: _selectedItem,
+                        hint: Text('Item name...', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8))),
+                        icon: const Icon(LucideIcons.search, size: 14, color: Color(0xFF94A3B8)),
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('All Items', style: TextStyle(fontSize: 12))),
+                          ..._items.map((i) => DropdownMenuItem<String?>(value: i, child: Text(i, style: GoogleFonts.inter(fontSize: 13)))),
+                        ],
+                        onChanged: (v) => setState(() => _selectedItem = v),
                       ),
                     ),
                   ),
@@ -107,6 +119,14 @@ class _CutStockReportScreenState extends State<CutStockReportScreen> {
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2030),
                       initialDateRange: _dateRange,
+                      builder: (context, child) {
+                        return Center(
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+                            child: child,
+                          ),
+                        );
+                      }
                     );
                     if (range != null) setState(() => _dateRange = range);
                   },
@@ -178,68 +198,80 @@ class _CutStockReportScreenState extends State<CutStockReportScreen> {
                     ),
                   )
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.all(32),
-                    scrollDirection: Axis.vertical,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Summary chips
-                          Row(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Summary chips
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
                             children: [
                               _summaryChip('TOTAL ROWS', _data.length.toString()),
                               const SizedBox(width: 12),
                               _summaryChip('GRAND TOTAL', grandTotal.toStringAsFixed(1)),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          // Table
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: DataTable(
-                                headingRowColor: WidgetStateProperty.all(const Color(0xFF475569)),
-                                headingTextStyle: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.5),
-                                dataTextStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF0F172A)),
-                                columnSpacing: 16,
-                                headingRowHeight: 44,
-                                dataRowMinHeight: 40,
-                                dataRowMaxHeight: 40,
-                                columns: [
-                                  const DataColumn(label: Text('ITEM NAME')),
-                                  ..._sizes.map((s) => DataColumn(label: Text(s), numeric: true)),
-                                  const DataColumn(label: Text('TOTAL'), numeric: true),
-                                ],
-                                rows: [
-                                  ..._data.map((row) {
-                                    final rowTotal = _sizes.fold<double>(0, (sum, s) => sum + ((row[s] ?? 0) as num).toDouble());
-                                    return DataRow(cells: [
-                                      DataCell(Text(row['itemName'] ?? '-')),
-                                      ..._sizes.map((s) => DataCell(Text((row[s] ?? 0).toString()))),
-                                      DataCell(Text(rowTotal.toStringAsFixed(1), style: GoogleFonts.inter(fontWeight: FontWeight.w700))),
-                                    ]);
-                                  }),
-                                  // Totals row
-                                  DataRow(
-                                    color: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
-                                    cells: [
-                                      DataCell(Text('TOTAL', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11))),
-                                      ..._sizes.map((s) => DataCell(Text(totals[s]!.toStringAsFixed(1), style: GoogleFonts.inter(fontWeight: FontWeight.w700)))),
-                                      DataCell(Text(grandTotal.toStringAsFixed(1), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF475569)))),
+                        ),
+                        const SizedBox(height: 16),
+                        // Table
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            return Container(
+                              width: constraints.maxWidth,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                  child: DataTable(
+                                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                                    headingTextStyle: GoogleFonts.outfit(color: const Color(0xFF475569), fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.5),
+                                    dataTextStyle: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF0F172A)),
+                                    dividerThickness: 0,
+                                    columnSpacing: (constraints.maxWidth - 200) / 10, // Dynamic spacing
+                                    headingRowHeight: 40,
+                                    dataRowMinHeight: 36,
+                                    dataRowMaxHeight: 36,
+                                    horizontalMargin: 12,
+                                    border: TableBorder.all(
+                                      color: const Color(0xFFE2E8F0),
+                                      width: 1,
+                                    ),
+                                    columns: [
+                                      const DataColumn(label: Text('ITEM NAME')),
+                                      ..._sizes.map((s) => DataColumn(label: Text(s), numeric: true)),
+                                      const DataColumn(label: Text('TOTAL'), numeric: true),
+                                    ],
+                                    rows: [
+                                      ..._data.map((row) {
+                                        final rowTotal = _sizes.fold<double>(0, (sum, s) => sum + ((row[s] ?? 0) as num).toDouble());
+                                        return DataRow(cells: [
+                                          DataCell(Text(row['itemName'] ?? '-', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12))),
+                                          ..._sizes.map((s) => DataCell(Text((row[s] ?? 0).toString(), style: GoogleFonts.inter(fontSize: 12)))),
+                                          DataCell(Text(rowTotal.toStringAsFixed(1), style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: const Color(0xFF475569)))),
+                                        ]);
+                                      }),
+                                      // Totals row
+                                      DataRow(
+                                        color: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
+                                        cells: [
+                                          DataCell(Text('TOTALS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: const Color(0xFF64748B)))),
+                                          ..._sizes.map((s) => DataCell(Text(totals[s]!.toStringAsFixed(1), style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: const Color(0xFF475569))))),
+                                          DataCell(Text(grandTotal.toStringAsFixed(1), style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFF0F172A)))),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
           ),

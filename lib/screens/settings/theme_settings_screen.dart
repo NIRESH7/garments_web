@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/theme_provider.dart';
 
 class ThemeSettingsScreen extends ConsumerWidget {
@@ -10,115 +11,221 @@ class ThemeSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentPrimary = ref.watch(themeProvider);
 
-    final List<Color> presets = [
-      const Color(0xFF0EA5E9), // Sky Blue (Default)
-      const Color(0xFF6366F1), // Indigo
-      const Color(0xFFEC4899), // Pink
-      const Color(0xFF10B981), // Emerald
-      const Color(0xFFF59E0B), // Amber
-      const Color(0xFFEF4444), // Red
-      const Color(0xFF8B5CF6), // Violet
-      const Color(0xFF14B8A6), // Teal
-      const Color(0xFFF97316), // Orange
-      const Color(0xFF64748B), // Slate
-      Colors.black,
-      Colors.brown,
+    final List<Map<String, dynamic>> presets = [
+      {'name': 'Sky Blue', 'color': const Color(0xFF0EA5E9)},
+      {'name': 'Indigo', 'color': const Color(0xFF6366F1)},
+      {'name': 'Rose', 'color': const Color(0xFFE11D48)},
+      {'name': 'Emerald', 'color': const Color(0xFF10B981)},
+      {'name': 'Amber', 'color': const Color(0xFFF59E0B)},
+      {'name': 'Crimson', 'color': const Color(0xFFDC2626)},
+      {'name': 'Violet', 'color': const Color(0xFF8B5CF6)},
+      {'name': 'Teal', 'color': const Color(0xFF0D9488)},
+      {'name': 'Orange', 'color': const Color(0xFFEA580C)},
+      {'name': 'Slate', 'color': const Color(0xFF475569)},
+      {'name': 'Midnight', 'color': const Color(0xFF0F172A)},
+      {'name': 'Earth', 'color': const Color(0xFF78350F)},
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('App Theme'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Choose Primary Color',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select a color to personalize your app experience. This will change the color of buttons, headers, and highlights.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 32),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-              ),
-              itemCount: presets.length,
-              itemBuilder: (context, index) {
-                final color = presets[index];
-                final isSelected = currentPrimary.value == color.value;
-
-                return GestureDetector(
-                  onTap: () => ref.read(themeProvider.notifier).setThemeColor(color),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: isSelected
-                          ? Border.all(color: Colors.white, width: 3)
-                          : null,
-                      boxShadow: [
-                        if (isSelected)
-                          BoxShadow(
-                            color: color.withOpacity(0.4),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                      ],
-                    ),
-                    child: isSelected
-                        ? const Icon(LucideIcons.check, color: Colors.white)
-                        : null,
+      backgroundColor: const Color(0xFFF1F5F9),
+      body: Column(
+        children: [
+          // Header
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(LucideIcons.arrowLeft, size: 20, color: Color(0xFF475569)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  'THEME SETTINGS',
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: const Color(0xFF0F172A),
+                    letterSpacing: 0.5,
                   ),
-                );
-              },
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => ref.read(themeProvider.notifier).resetTheme(),
+                  icon: const Icon(LucideIcons.rotateCcw, size: 14),
+                  label: Text('RESET TO DEFAULT', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
+                ),
+              ],
             ),
-            const SizedBox(height: 48),
-            const Text(
-              'Preview',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {},
-                      child: const Text('Sample Button'),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'This is a sample text with highlights',
-                      style: TextStyle(color: currentPrimary),
-                    ),
-                  ],
+          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(32),
+              child: Container(
+                width: double.infinity,
+                alignment: Alignment.topCenter,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionTitle('PRIMARY ACCENT', 'Choose a color to personalize buttons, highlights, and active states.'),
+                      const SizedBox(height: 24),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 6,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                          childAspectRatio: 1,
+                        ),
+                        itemCount: presets.length,
+                        itemBuilder: (context, index) {
+                          final item = presets[index];
+                          final color = item['color'] as Color;
+                          final isSelected = currentPrimary.value == color.value;
+
+                          return GestureDetector(
+                            onTap: () => ref.read(themeProvider.notifier).setThemeColor(color),
+                            child: Column(
+                              children: [
+                                Container(
+                                  height: 60,
+                                  width: 60,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected ? Colors.white : Colors.transparent,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      if (isSelected)
+                                        BoxShadow(
+                                          color: color.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
+                                    ],
+                                  ),
+                                  child: isSelected
+                                      ? const Center(child: Icon(LucideIcons.check, color: Colors.white, size: 20))
+                                      : null,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item['name'],
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 48),
+                      _sectionTitle('PREVIEW', 'Visualization of the selected accent color in common UI elements.'),
+                      const SizedBox(height: 24),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                ElevatedButton(
+                                  onPressed: () {},
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: currentPrimary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    minimumSize: const Size(120, 40),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  child: const Text('Button'),
+                                ),
+                                const SizedBox(width: 12),
+                                OutlinedButton(
+                                  onPressed: () {},
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: currentPrimary,
+                                    side: BorderSide(color: currentPrimary),
+                                    minimumSize: const Size(120, 40),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  child: const Text('Secondary'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Sample Title Text',
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: currentPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'This is how the accent color looks on standard components.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: const Color(0xFF475569),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 40),
-            Center(
-              child: TextButton(
-                onPressed: () => ref.read(themeProvider.notifier).resetTheme(),
-                child: const Text('Reset to Default'),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _sectionTitle(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w900,
+            fontSize: 11,
+            letterSpacing: 1.2,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+      ],
     );
   }
 }

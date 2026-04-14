@@ -913,6 +913,7 @@ class MobileApiService {
     String? gsm,
     String? knittingDia,
     String? cuttingDia,
+    String? sizeType,
   }) async {
     try {
       final response = await _client.post(
@@ -923,11 +924,42 @@ class MobileApiService {
           'gsm': gsm,
           'knittingDia': knittingDia,
           'cuttingDia': cuttingDia,
+          'sizeType': sizeType,
         },
       );
       return response.statusCode == 201;
     } on DioException catch (e) {
       throw e.response?.data['message'] ?? 'Failed to add value';
+    } catch (e) {
+      throw e.toString();
+    }
+  }
+
+  Future<bool> updateCategoryValue(
+    String categoryId,
+    String oldValueName,
+    String newName, {
+    String? photo,
+    String? gsm,
+    String? knittingDia,
+    String? cuttingDia,
+    String? sizeType,
+  }) async {
+    try {
+      final response = await _client.put(
+        '${ApiConstants.categories}/$categoryId/values/$oldValueName',
+        data: {
+          'name': newName,
+          'photo': photo,
+          'gsm': gsm,
+          'knittingDia': knittingDia,
+          'cuttingDia': cuttingDia,
+          'sizeType': sizeType,
+        },
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw e.response?.data['message'] ?? 'Failed to update value';
     } catch (e) {
       throw e.toString();
     }

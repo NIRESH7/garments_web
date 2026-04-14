@@ -4,6 +4,7 @@ import {
     getCategories,
     deleteCategory,
     addCategoryValue,
+    updateCategoryValue,
     createParty,
     getParties,
     updateParty,
@@ -37,6 +38,7 @@ router.route('/categories/:id/values')
     .post(addCategoryValue);
 
 router.route('/categories/:id/values/:value')
+    .put(updateCategoryValue)
     .delete(deleteCategoryValue);
 
 // Party Master

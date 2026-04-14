@@ -136,37 +136,29 @@ class _IronPackingDcScreenState extends State<IronPackingDcScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ColorPalette.background,
-      appBar: AppBar(
-        toolbarHeight: 60,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, size: 18, color: Color(0xFF475569)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('IRON & PACKING DC', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFF0F172A), fontSize: 16, letterSpacing: 0.5)),
-        iconTheme: const IconThemeData(color: Color(0xFF475569)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(49),
-          child: Column(children: [
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            Container(
-              color: Colors.white,
-              child: TabBar(
-                controller: _tabCtrl,
-                labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.5),
-                unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12),
-                labelColor: const Color(0xFF475569),
-                unselectedLabelColor: const Color(0xFF94A3B8),
-                indicatorColor: const Color(0xFF475569),
-                indicatorWeight: 2,
-                tabs: const [Tab(text: 'OUTWARD'), Tab(text: 'INWARD GRN'), Tab(text: 'NEW DC')],
-              ),
+      body: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            child: Column(
+              children: [
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                TabBar(
+                  controller: _tabCtrl,
+                  labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.5),
+                  unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 12),
+                  labelColor: const Color(0xFF475569),
+                  unselectedLabelColor: const Color(0xFF94A3B8),
+                  indicatorColor: const Color(0xFF475569),
+                  indicatorWeight: 2,
+                  tabs: const [Tab(text: 'OUTWARD'), Tab(text: 'INWARD GRN'), Tab(text: 'NEW DC')],
+                ),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              ],
             ),
-          ]),
-        ),
-      ),
-      body: TabBarView(
+          ),
+          Expanded(
+            child: TabBarView(
         controller: _tabCtrl,
         children: [
           // Outward
@@ -317,10 +309,13 @@ class _IronPackingDcScreenState extends State<IronPackingDcScreen>
                   ],
                 ),
               ),
-            ),
-          ),
+            ), // SingleChildScrollView
+          ), // TabBarView third child
         ],
-      ),
+      ), // TabBarView
+    ), // Expanded
+  ], // Column children
+), // body Column
     );
   }
 }

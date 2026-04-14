@@ -95,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Image.asset(
-                          'assets/images/logo.png',
+                          'assets/images/app_logo.png',
                           height: 70,
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) => const Icon(LucideIcons.image, color: Color(0xFF475569), size: 40),

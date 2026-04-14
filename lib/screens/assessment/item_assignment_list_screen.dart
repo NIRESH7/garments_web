@@ -60,30 +60,6 @@ class _ItemAssignmentListScreenState extends State<ItemAssignmentListScreen> wit
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ColorPalette.background,
-      appBar: AppBar(
-        toolbarHeight: 60,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, size: 18, color: Color(0xFF475569)),
-          onPressed: () => Navigator.pop(context),
-          tooltip: 'Back',
-        ),
-        title: Text(
-          'ITEM ASSIGNMENT',
-          style: GoogleFonts.outfit(
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF0F172A),
-            fontSize: 16,
-            letterSpacing: 0.5,
-          ),
-        ),
-        iconTheme: const IconThemeData(color: Color(0xFF475569)),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFE2E8F0)),
-        ),
-      ),
       body: ResponsiveWrapper(
         padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
         child: SingleChildScrollView(

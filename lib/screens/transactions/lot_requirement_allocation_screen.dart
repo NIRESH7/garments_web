@@ -662,90 +662,101 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFF1F5F9))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildDividerHeader('ALLOCATION SETTINGS'),
-          const SizedBox(height: 24),
-          CustomDropdownField(
-            label: 'ITEM NAME',
-            items: _masterItemNames,
-            value: _selectedItem,
-            onChanged: _onItemSelected,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: CustomDropdownField(label: 'SIZE', items: _masterSizes, value: _selectedSize, onChanged: _onSizeSelected)),
-              const SizedBox(width: 12),
-              Expanded(child: CustomDropdownField(label: 'DIA', items: _dias, value: _selectedDia, onChanged: (v) => setState(() { _selectedDia = v; _currentSets = []; }))),
-            ],
-          ),
-          const SizedBox(height: 16),
-          CustomDropdownField(label: 'LOT (PREF)', items: _lotNames, value: _selectedLotName, onChanged: (v) => setState(() { _selectedLotName = v; _currentSets = []; })),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildInputField('QUANTITY DOZEN', _dozenCtrl),
-                    const SizedBox(height: 4),
-                    Text('Pending Plan: ${_pendingDozenForSelection.toStringAsFixed(0)} Doz', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: _pendingDozenForSelection > 0 ? const Color(0xFF3B82F6) : const Color(0xFFEF4444))),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: _buildInputField('DOZEN WEIGHT (KG)', _dozenWeightCtrl)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _buildInputField('FOLDING WT (KG)', _foldingWtCtrl)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildInputField('EFFICIENCY %', _efficiencyCtrl)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(child: _buildEstimate('Target', '${_fabricRequiredKg.toStringAsFixed(2)}Kg', LucideIcons.target, Colors.blue)),
-              const SizedBox(width: 10),
-              Expanded(child: _buildEstimate('Rolls', '±$_rollsRequired', LucideIcons.box, Colors.indigo)),
-              const SizedBox(width: 10),
-              Expanded(child: _buildEstimate('Sets', '$_setsRequired', LucideIcons.layers, Colors.purple)),
-            ],
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: _isAllocating ? null : _runAllocation,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-              elevation: 0,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildDividerHeader('ALLOCATION SETTINGS'),
+            const SizedBox(height: 24),
+            CustomDropdownField(
+              label: 'ITEM NAME',
+              items: _masterItemNames,
+              value: _selectedItem,
+              onChanged: _onItemSelected,
             ),
-            child: _isAllocating 
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text('RUN FIFO ENGINE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, letterSpacing: 1)),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: CustomDropdownField(label: 'SIZE', items: _masterSizes, value: _selectedSize, onChanged: _onSizeSelected)),
+                const SizedBox(width: 12),
+                Expanded(child: CustomDropdownField(label: 'DIA', items: _dias, value: _selectedDia, onChanged: (v) => setState(() { _selectedDia = v; _currentSets = []; }))),
+              ],
+            ),
+            const SizedBox(height: 16),
+            CustomDropdownField(label: 'LOT (PREF)', items: _lotNames, value: _selectedLotName, onChanged: (v) => setState(() { _selectedLotName = v; _currentSets = []; })),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInputField('QUANTITY DOZEN', _dozenCtrl),
+                      const SizedBox(height: 4),
+                      Text('Pending Plan: ${_pendingDozenForSelection.toStringAsFixed(0)} Doz', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: _pendingDozenForSelection > 0 ? const Color(0xFF3B82F6) : const Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: _buildInputField('DOZEN WEIGHT (KG)', _dozenWeightCtrl)),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(child: _buildInputField('GSM', _gsmCtrl)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildInputField('FOLDING WT (KG)', _foldingWtCtrl)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildInputField('EFFICIENCY %', _efficiencyCtrl)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildInputField('WASTE %', _wasteCtrl, readOnly: true)),
+              ],
+            ),
+            const SizedBox(height: 24),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _buildEstimateChip('Target', '${_fabricRequiredKg.toStringAsFixed(2)}Kg', LucideIcons.target, Colors.blue),
+                  _buildEstimateChip('Rolls', '±$_rollsRequired', LucideIcons.box, Colors.indigo),
+                  _buildEstimateChip('Sets', '$_setsRequired', LucideIcons.layers, Colors.purple),
+                  _buildEstimateChip('Rule', '1 Set = 11 Rolls', LucideIcons.info, const Color(0xFF64748B)),
+                ],
+              ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _isAllocating ? null : _runAllocation,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                elevation: 0,
+              ),
+              child: _isAllocating 
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text('RUN FIFO ENGINE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, letterSpacing: 1)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildEstimate(String label, String value, IconData icon, Color color) {
+  Widget _buildEstimateChip(String label, String value, IconData icon, Color color) {
     return Container(
+      width: 145,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.1))),
       child: Column(
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(height: 8),
-          Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: color.withOpacity(0.6))),
-          Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+          Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: color.withOpacity(0.8))),
+          Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: color)),
         ],
       ),
     );
@@ -771,7 +782,7 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
         ),
         const SizedBox(height: 24),
         Container(
-          height: 540,
+          constraints: const BoxConstraints(maxHeight: 540),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFF1F5F9))),
           clipBehavior: Clip.antiAlias,
           child: _isAllocating 
@@ -867,7 +878,7 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
             child: SizedBox(
               width: 1400,
               child: ModernDataTable(
-                columns: const ['DATE', 'ITEM', 'SIZE', 'DIA', 'LOTS', 'SET NO', 'RACK', 'PALLET', 'WEIGHT', 'DOZEN'],
+                columns: const ['DATE', 'ITEM', 'SIZE', 'DOZEN', 'NEED WT', 'LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK', 'PALLET', 'SET WEIGHT'],
                 onShare: _navigateToOutward,
                 onEdit: (row) => _showError('Edit operation initialized for ${row['ITEM']}'),
                 onDelete: (row) => _showError('Archive operation initialized for ${row['ITEM']}'),
@@ -876,13 +887,16 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                   'DATE': r['date'] ?? '-',
                   'ITEM': r['itemName'] ?? '-',
                   'SIZE': r['size'] ?? '-',
+                  'DOZEN': (r['dozen'] ?? 0).toString(),
+                  'NEED WT': _formatWeight(r['neededWeight']),
+                  'LOT NAME': r['lotName'] ?? '-',
+                  'LOT NO': r['lotNo'] ?? '-',
                   'DIA': r['dia']?.toString() ?? '-',
-                  'LOTS': r['lotInfo'] ?? '-',
+                  'SET REQUIRED': "${(r['sets'] as List?)?.length ?? 1}",
                   'SET NO': r['setList'] ?? '-',
                   'RACK': r['rackName'] ?? '-',
                   'PALLET': r['palletNumber']?.toString() ?? '-',
-                  'WEIGHT': _formatWeight(r['weight']),
-                  'DOZEN': (r['dozen'] ?? 0).toString(),
+                  'SET WEIGHT': _formatWeight(r['weight']),
                 }).toList(),
                 emptyMessage: 'No activity logs found for this plan.',
               ),
@@ -893,17 +907,22 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController ctrl) {
+  Widget _buildInputField(String label, TextEditingController ctrl, {bool readOnly = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
         const SizedBox(height: 8),
         Container(
-          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+          decoration: BoxDecoration(
+            color: readOnly ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC), 
+            borderRadius: BorderRadius.circular(12), 
+            border: Border.all(color: const Color(0xFFE2E8F0))
+          ),
           child: TextField(
             controller: ctrl,
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+            readOnly: readOnly,
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: readOnly ? const Color(0xFF64748B) : const Color(0xFF0F172A)),
             decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14), border: InputBorder.none),
           ),
         ),

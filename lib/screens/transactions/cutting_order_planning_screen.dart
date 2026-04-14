@@ -31,6 +31,8 @@ class _CuttingOrderPlanningScreenState
   final _planNameCtrl = TextEditingController();
 
   List<String> _itemNames = [];
+  Map<String, String?> _itemSizeTypeMap = {}; // Maps item name to its configured size type
+  
   List<int> get _sizes => _sizeType == 'Senior'
       ? [75, 80, 85, 90, 95, 100, 105, 110]
       : [50, 55, 60, 65, 70, 75];
@@ -63,7 +65,30 @@ class _CuttingOrderPlanningScreenState
     try {
       final categories = await _api.getCategories();
       setState(() {
-        _itemNames = _getValues(categories, ['Item Name', 'itemName', 'item']);
+        _itemNames = [];
+        _itemSizeTypeMap = {};
+        
+        final matches = categories.where((c) {
+          final name = (c['name'] ?? '').toString().toLowerCase();
+          return ['item name', 'itemname', 'item'].contains(name);
+        });
+
+        for (var cat in matches) {
+          final values = cat['values'] as List<dynamic>?;
+          if (values != null) {
+            for (var v in values) {
+              if (v is Map) {
+                final name = v['name']?.toString() ?? '';
+                if (name.isNotEmpty) {
+                  if (!_itemNames.contains(name)) _itemNames.add(name);
+                  _itemSizeTypeMap[name] = v['sizeType']?.toString();
+                }
+              } else if (v is String && v.isNotEmpty) {
+                if (!_itemNames.contains(v)) _itemNames.add(v);
+              }
+            }
+          }
+        }
         _isLoading = false;
       });
     } catch (e) {
@@ -72,24 +97,6 @@ class _CuttingOrderPlanningScreenState
         _showError('Error loading master data: $e');
       }
     }
-  }
-
-  List<String> _getValues(List<dynamic> categories, List<String> matchNames) {
-    final List<String> result = [];
-    final matches = categories.where((c) {
-      final name = (c['name'] ?? '').toString().toLowerCase();
-      return matchNames.any((m) => name == m.toLowerCase());
-    });
-    for (var cat in matches) {
-      final values = cat['values'] as List<dynamic>?;
-      if (values != null) {
-        for (var v in values) {
-          final val = (v is Map ? v['name'] : v).toString();
-          if (val.isNotEmpty && !result.contains(val)) result.add(val);
-        }
-      }
-    }
-    return result;
   }
 
   void _calculateTotal(int index) {
@@ -165,6 +172,46 @@ class _CuttingOrderPlanningScreenState
         }
       });
     }
+  }
+
+  void _updateSizeType(String newType) {
+    if (_sizeType == newType) return;
+    setState(() {
+      _sizeType = newType;
+      // Re-initialize sizeQuantities for all rows to match new sizes
+      for (var entry in _cuttingEntries) {
+        final oldQty = Map<String, dynamic>.from(entry['sizeQuantities']);
+        final newSizes = _sizes;
+        final newQty = {for (var s in newSizes) s.toString(): 0};
+        
+        // Preserve values for overlapping sizes (e.g., 75)
+        oldQty.forEach((size, qty) {
+          if (newQty.containsKey(size)) {
+            newQty[size] = qty;
+          }
+        });
+        
+        entry['sizeQuantities'] = newQty;
+      }
+      
+      // Re-calculate totals for all rows
+      for (int i = 0; i < _cuttingEntries.length; i++) {
+        _calculateTotal(i);
+      }
+    });
+  }
+
+  void _onItemChanged(int index, String? itemName) {
+    if (itemName == null) return;
+    setState(() {
+      _cuttingEntries[index]['itemName'] = itemName;
+      
+      // Auto-update Size Type if item has a preferred one
+      final preferredSizeType = _itemSizeTypeMap[itemName];
+      if (preferredSizeType != null && (preferredSizeType == 'Senior' || preferredSizeType == 'Junior')) {
+        _updateSizeType(preferredSizeType);
+      }
+    });
   }
 
   void _printPlanningSheet() {
@@ -252,77 +299,57 @@ class _CuttingOrderPlanningScreenState
               key: _formKey,
               child: Column(
                 children: [
-                  // Minimalist Header Actions
-                  Container(
-                    color: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(LucideIcons.arrowLeft, size: 20, color: Color(0xFF1E293B)),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          _editingId == null ? 'NEW BLUEPRINT' : 'EDIT BLUEPRINT',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            color: const Color(0xFF1E293B),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: _printPlanningSheet,
-                          icon: const Icon(LucideIcons.printer, size: 14),
-                          label: Text('PRINT', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
-                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const CuttingOrderListScreen()),
-                            );
-                          },
-                          icon: const Icon(LucideIcons.list, size: 14),
-                          label: Text('RECORDS', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
-                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: _isSaving ? null : _savePlanningSheet,
-                          icon: _isSaving 
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Icon(LucideIcons.check, size: 14, color: Colors.white),
-                          label: Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: Colors.white)),
-                          style: TextButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildPlanParams(),
-                          const SizedBox(height: 24),
-                          _buildEntryTable(),
-                        ],
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Action Row at the top of the form
+                  Row(
+                    children: [
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: _printPlanningSheet,
+                        icon: const Icon(LucideIcons.printer, size: 14),
+                        label: Text('PRINT', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const CuttingOrderListScreen()),
+                          );
+                        },
+                        icon: const Icon(LucideIcons.list, size: 14),
+                        label: Text('RECORDS', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: _isSaving ? null : _savePlanningSheet,
+                        icon: _isSaving 
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(LucideIcons.check, size: 14, color: Colors.white),
+                        label: Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5, color: Colors.white)),
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
+                  _buildPlanParams(),
+                  const SizedBox(height: 24),
+                  _buildEntryTable(),
+                ],
+              ),
+            ),
+          ),
                 ],
               ),
             ),
@@ -407,9 +434,7 @@ class _CuttingOrderPlanningScreenState
                       .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                       .toList(),
                   onChanged: (val) {
-                    setState(() {
-                      _sizeType = val!;
-                    });
+                    if (val != null) _updateSizeType(val);
                   },
                 )),
               ),
@@ -558,7 +583,7 @@ class _CuttingOrderPlanningScreenState
                               value: entry['itemName'].isEmpty ? null : entry['itemName'],
                               style: GoogleFonts.inter(fontSize: 13, color: Colors.black, fontWeight: FontWeight.w600),
                               items: _itemNames.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
-                              onChanged: (v) => setState(() => entry['itemName'] = v ?? ''),
+                              onChanged: (v) => _onItemChanged(index, v),
                               decoration: const InputDecoration(border: InputBorder.none, isDense: true),
                             ),
                           ),

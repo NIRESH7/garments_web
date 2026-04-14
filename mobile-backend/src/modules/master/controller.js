@@ -51,9 +51,8 @@ const deleteCategory = asyncHandler(async (req, res) => {
 // @route   POST /api/master/categories/:id/values
 // @access  Private/Admin
 const addCategoryValue = asyncHandler(async (req, res) => {
-    const { name, photo, gsm, knittingDia, cuttingDia } = req.body;
+    const { name, photo, gsm, knittingDia, cuttingDia, sizeType } = req.body;
 
-    // Use lean() to get a plain JavaScript object, avoiding Mongoose document validation issues on load
     const category = await Category.findById(req.params.id).lean();
 
     if (category) {
@@ -70,7 +69,6 @@ const addCategoryValue = asyncHandler(async (req, res) => {
             return v;
         }).filter(v => v && v.name);
 
-        // Case-insensitive check on the cleaned array
         const exists = values.some(v => v.name.toLowerCase() === name.toLowerCase());
 
         if (exists) {
@@ -78,9 +76,8 @@ const addCategoryValue = asyncHandler(async (req, res) => {
             throw new Error('Value already exists in this category');
         }
 
-        values.push({ name, photo, gsm, knittingDia: knittingDia || null, cuttingDia: cuttingDia || null });
+        values.push({ name, photo, gsm, knittingDia: knittingDia || null, cuttingDia: cuttingDia || null, sizeType });
 
-        // Update the document directly with the sanitized array
         const updatedCategory = await Category.findByIdAndUpdate(
             req.params.id,
             { values: values },
@@ -94,12 +91,43 @@ const addCategoryValue = asyncHandler(async (req, res) => {
     }
 });
 
-const deleteCategoryValue = asyncHandler(async (req, res) => {
-    const { value } = req.params; // 'value' passed as path param is the 'name'
-    const category = await Category.findById(req.params.id);
+const updateCategoryValue = asyncHandler(async (req, res) => {
+    const { id, value: oldValueName } = req.params;
+    const { name: newName, photo, gsm, knittingDia, cuttingDia, sizeType } = req.body;
+
+    const category = await Category.findById(id);
 
     if (category) {
-        category.values = category.values.filter(v => v.name !== value);
+        // Use loose matching or trim for the name since it comes from the URL
+        const valueIndex = category.values.findIndex(v => v.name.trim() === decodeURIComponent(oldValueName).trim());
+
+        if (valueIndex === -1) {
+            res.status(404);
+            throw new Error(`Registry entry "${oldValueName}" not found in this category`);
+        }
+
+        // Update fields
+        category.values[valueIndex].name = newName || category.values[valueIndex].name;
+        category.values[valueIndex].photo = photo !== undefined ? photo : category.values[valueIndex].photo;
+        category.values[valueIndex].gsm = gsm !== undefined ? gsm : category.values[valueIndex].gsm;
+        category.values[valueIndex].knittingDia = knittingDia !== undefined ? knittingDia : category.values[valueIndex].knittingDia;
+        category.values[valueIndex].cuttingDia = cuttingDia !== undefined ? cuttingDia : category.values[valueIndex].cuttingDia;
+        category.values[valueIndex].sizeType = sizeType !== undefined ? sizeType : category.values[valueIndex].sizeType;
+
+        await category.save();
+        res.json(category);
+    } else {
+        res.status(404);
+        throw new Error('Category not found');
+    }
+});
+
+const deleteCategoryValue = asyncHandler(async (req, res) => {
+    const { id, value } = req.params;
+    const category = await Category.findById(id);
+
+    if (category) {
+        category.values = category.values.filter(v => v.name.trim() !== decodeURIComponent(value).trim());
         await category.save();
         res.json(category);
     } else {
@@ -318,6 +346,7 @@ export {
     getCategories,
     deleteCategory,
     addCategoryValue,
+    updateCategoryValue,
     createParty,
     getParties,
     updateParty,
