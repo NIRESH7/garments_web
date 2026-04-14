@@ -37,6 +37,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   final _searchController = TextEditingController();
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _editingId;
 
   @override
   void initState() {
@@ -124,8 +125,9 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
 
       try {
         bool success;
-        if (widget.editGroup != null) {
-          success = await _api.updateItemGroup(widget.editGroup!['_id'], data);
+        final targetId = _editingId ?? widget.editGroup?['_id'];
+        if (targetId != null) {
+          success = await _api.updateItemGroup(targetId, data);
         } else {
           success = await _api.createItemGroup(data);
         }
@@ -136,7 +138,14 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.editGroup != null ? 'Item Group specifications updated' : 'Item Group documented'), backgroundColor: ColorPalette.success));
           if (widget.editGroup != null) { Navigator.pop(context, true); }
           else {
-            setState(() { _selectedGroupName = null; _selectedItemNames.clear(); _selectedGsm = null; _selectedColours.clear(); _rateController.clear(); });
+            setState(() { 
+              _selectedGroupName = null; 
+              _selectedItemNames.clear(); 
+              _selectedGsm = null; 
+              _selectedColours.clear(); 
+              _rateController.clear(); 
+              _editingId = null;
+            });
             await _loadAllData();
           }
         }
@@ -148,6 +157,21 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
   Future<void> _delete(Map<String, dynamic> item) async {
     final success = await _api.deleteItemGroup(item['_id']);
     if (success) { await _loadAllData(); }
+  }
+
+  void _edit(Map<String, dynamic> item) {
+    setState(() {
+      _editingId = item['_id'];
+      _selectedGroupName = item['groupName'];
+      _selectedItemNames.clear();
+      _selectedItemNames.addAll(List<String>.from(item['itemNames'] ?? []));
+      _selectedGsm = item['gsm'];
+      _selectedColours.clear();
+      _selectedColours.addAll(List<String>.from(item['colours'] ?? []));
+      _rate = (item['rate'] as num?)?.toDouble() ?? 0;
+      _rateController.text = _rate.toString();
+    });
+    // Scroll to top
   }
 
   void _showError(String msg) {
@@ -237,6 +261,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
                               'items': (group['itemNames'] as List?)?.join(', ') ?? '-',
                               'rate_formatted': '₹ ${(group['rate'] ?? 0).toString()}',
                             }).toList(),
+                            onEdit: _edit,
                             onDelete: _delete,
                             emptyMessage: 'No registered groups found in registry',
                           ),
@@ -336,7 +361,7 @@ class _ItemMasterScreenState extends State<ItemMasterScreen> {
         child: _isSaving
             ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
             : Text(
-                widget.editGroup != null ? 'FINALIZE UPDATES' : 'COMMIT REGISTRY',
+                (_editingId != null || widget.editGroup != null) ? 'FINALIZE UPDATES' : 'COMMIT REGISTRY',
                 style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12),
               ),
       ),
