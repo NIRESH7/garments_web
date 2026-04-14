@@ -150,27 +150,29 @@ class _ModernDataTableState extends State<ModernDataTable> {
                       ...widget.columns.asMap().entries.map((entry) {
                         final colIdx = entry.key;
                         final col = entry.value;
-                        final value = row[col]?.toString() ?? '-';
+                        final rawValue = row[col];
                         final isFirst = colIdx == 0;
 
                         return Expanded(
                           flex: col == 'description' || col == 'address' || col == 'remarks' ? 2 : 1,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), // Reduced vertical padding for high-density
                             decoration: BoxDecoration(
                               border: colIdx < widget.columns.length - 1 || widget.showActions
                                 ? const Border(right: BorderSide(color: Color(0xFFF1F5F9), width: 0.5))
                                 : null,
                             ),
-                            child: Text(
-                              value,
-                              style: GoogleFonts.inter(
-                                fontSize: isMobile ? 13 : 14,
-                                fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
-                                color: isFirst ? const Color(0xFF1E293B) : const Color(0xFF64748B),
-                                letterSpacing: -0.2,
-                              ),
-                            ),
+                            child: rawValue is Widget 
+                              ? rawValue 
+                              : Text(
+                                  rawValue?.toString() ?? '-',
+                                  style: GoogleFonts.inter(
+                                    fontSize: isMobile ? 12 : 13,
+                                    fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
+                                    color: isFirst ? const Color(0xFF1E293B) : const Color(0xFF64748B),
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
                           ),
                         );
                       }),

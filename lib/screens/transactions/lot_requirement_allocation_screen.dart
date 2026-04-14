@@ -3,12 +3,45 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/layout_constants.dart';
 import '../../core/theme/color_palette.dart';
 import '../../widgets/custom_dropdown_field.dart';
 import '../../widgets/modern_data_table.dart';
 import '../../services/mobile_api_service.dart';
 import 'lot_outward_screen.dart';
+
+const List<String> _kWeekDays = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+class _DayEntry {
+  final String itemName;
+  final String size;
+  final double dozen;
+  final double dozenWeight;
+  final String dia;
+  final double neededWeight;
+  final List<Map<String, dynamic>> sets;
+
+  _DayEntry({
+    required this.itemName,
+    required this.size,
+    required this.dozen,
+    required this.dozenWeight,
+    required this.dia,
+    required this.neededWeight,
+    required this.sets,
+  });
+}
 
 class LotRequirementAllocationScreen extends StatefulWidget {
   const LotRequirementAllocationScreen({super.key});
@@ -67,7 +100,6 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   String? _reportDay;
   DateTime? _reportDate;
 
-  final List<String> _kWeekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // ─── Computed ─────────────────────────────────────────────────────────────
   double get _fabricRequiredKg =>
@@ -131,6 +163,122 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     super.dispose();
   }
 
+  String _dayFromDate(DateTime date) {
+    if (date.weekday >= DateTime.monday && date.weekday <= DateTime.saturday) {
+      return _kWeekDays[date.weekday - DateTime.monday];
+    }
+    return _selectedDay;
+  }
+
+  List<Map<String, dynamic>> _getGroupedSets(List<Map<String, dynamic>> rawSets) {
+    if (rawSets.isEmpty) return [];
+    
+    // Sort raw sets by set number for consistency
+    rawSets.sort((a, b) {
+      final nA = int.tryParse(_toSetNo(a['setNo']).replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      final nB = int.tryParse(_toSetNo(b['setNo']).replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      return nA.compareTo(nB);
+    });
+
+    return rawSets.map((s) => {
+      'lotName': s['lotName']?.toString() ?? '-',
+      'lotNo': s['lotNo']?.toString() ?? '-',
+      'dia': s['dia']?.toString() ?? '-',
+      'setCount': rawSets.length, // Total sets in this allocation
+      'setRange': _toSetNo(s['setNo']), // Current set number (e.g. S-1)
+      'rackName': s['rackName'] ?? '-',
+      'palletNumber': s['palletNumber']?.toString() ?? '-',
+      'setWeight': (s['setWeight'] as num?)?.toDouble() ?? 0.0,
+    }).toList();
+  }
+
+  bool _isMissingRackPalletValue(dynamic value) {
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    return text.isEmpty ||
+        text == 'n/a' ||
+        text == 'na' ||
+        text == 'null' ||
+        text == 'not assigned';
+  }
+
+  String? _pickStorageValue(List<dynamic>? values, int setIndex) {
+    if (values == null || values.isEmpty) return null;
+    if (setIndex >= 0 && setIndex < values.length) {
+      final candidate = values[setIndex]?.toString().trim();
+      if (!_isMissingRackPalletValue(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  String _normalizeDia(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return '';
+    final numericMatch = RegExp(r'-?\d+(\.\d+)?').firstMatch(raw.replaceAll(',', '.'));
+    final numVal = numericMatch == null ? null : double.tryParse(numericMatch.group(0)!);
+    if (numVal == null) return raw.toLowerCase().replaceAll(' ', '');
+    if (numVal == numVal.truncateToDouble()) return numVal.toInt().toString();
+    return numVal.toString();
+  }
+
+  String _toSetNo(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim();
+  }
+
+  Future<List<Map<String, dynamic>>> _fillRackPalletFromInward(List<Map<String, dynamic>> allocations) async {
+    final needsFix = allocations.any((a) => _isMissingRackPalletValue(a['rackName']) || _isMissingRackPalletValue(a['palletNumber']));
+    if (!needsFix) return allocations;
+
+    final lotNos = allocations.map((a) => a['lotNo']?.toString().trim() ?? '').where((lotNo) => lotNo.isNotEmpty).toSet();
+    final Map<String, List<dynamic>> inwardByLotNo = {};
+    for (final lotNo in lotNos) {
+      try {
+        final inwards = await _api.getInwards(lotNo: lotNo);
+        inwardByLotNo[lotNo] = inwards;
+      } catch (_) {}
+    }
+
+    return allocations.map((a) {
+      final lotNo = a['lotNo']?.toString().trim() ?? '';
+      final dia = _normalizeDia(a['dia']);
+      final setNo = _toSetNo(a['setNo']);
+      var rackName = a['rackName']?.toString().trim();
+      var palletNumber = a['palletNumber']?.toString().trim();
+
+      if (lotNo.isEmpty || dia.isEmpty || setNo.isEmpty) return a;
+      if (!_isMissingRackPalletValue(rackName) && !_isMissingRackPalletValue(palletNumber)) return a;
+
+      final inwards = inwardByLotNo[lotNo] ?? const [];
+      for (final inward in inwards) {
+        if ((inward['lotNo']?.toString().trim() ?? '') != lotNo) continue;
+        dynamic storage = inward['storageDetails'];
+        if (storage is String) {
+          try { storage = jsonDecode(storage); } catch (_) { storage = null; }
+        }
+        final List<dynamic> storageList = storage is List ? storage : (storage is Map ? [storage] : const []);
+        for (final sd in storageList) {
+          if (_normalizeDia(sd['dia']) != dia) continue;
+          final setLabels = sd['setLabels'] as List<dynamic>?;
+          int setIndex = -1;
+          if (setLabels != null) setIndex = setLabels.indexWhere((l) => _toSetNo(l) == setNo);
+          if (setIndex == -1) {
+            final numericOnly = setNo.replaceAll(RegExp(r'[^0-9]'), '');
+            if (numericOnly.isNotEmpty) setIndex = (int.tryParse(numericOnly) ?? 0) - 1;
+          }
+          if (_isMissingRackPalletValue(rackName)) rackName = _pickStorageValue(sd['racks'] as List?, setIndex) ?? rackName;
+          if (_isMissingRackPalletValue(palletNumber)) palletNumber = _pickStorageValue(sd['pallets'] as List?, setIndex) ?? palletNumber;
+          if (!_isMissingRackPalletValue(rackName) && !_isMissingRackPalletValue(palletNumber)) break;
+        }
+        if (!_isMissingRackPalletValue(rackName) && !_isMissingRackPalletValue(palletNumber)) break;
+      }
+      return {
+        ...a,
+        'rackName': _isMissingRackPalletValue(a['rackName']) && !_isMissingRackPalletValue(rackName) ? rackName : a['rackName'],
+        'palletNumber': _isMissingRackPalletValue(a['palletNumber']) && !_isMissingRackPalletValue(palletNumber) ? palletNumber : a['palletNumber'],
+      };
+    }).toList();
+  }
+
   // ─── Data loading ─────────────────────────────────────────────────────────
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
@@ -174,80 +322,6 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     return result;
   }
 
-  String _normalizeDia(dynamic value) {
-    final raw = value?.toString().trim() ?? '';
-    if (raw.isEmpty) return '';
-    final numericMatch = RegExp(r'-?\d+(\.\d+)?').firstMatch(raw.replaceAll(',', '.'));
-    final numVal = numericMatch == null ? null : double.tryParse(numericMatch.group(0)!);
-    if (numVal == null) return raw.toLowerCase().replaceAll(' ', '');
-    if (numVal == numVal.truncateToDouble()) return numVal.toInt().toString();
-    return numVal.toString();
-  }
-
-  String _toSetNo(dynamic value) {
-    if (value == null) return '';
-    return value.toString().trim();
-  }
-
-  bool _isMissingRackPallet(dynamic value) {
-    final text = value?.toString().trim().toLowerCase() ?? '';
-    return text.isEmpty || text == 'n/a' || text == 'na' || text == 'null' || text == 'not assigned';
-  }
-
-  Future<List<Map<String, dynamic>>> _fillRackPalletFromInward(List<Map<String, dynamic>> allocations) async {
-    final needsFix = allocations.any((a) => _isMissingRackPallet(a['rackName']) || _isMissingRackPallet(a['palletNumber']));
-    if (!needsFix) return allocations;
-
-    final lotNos = allocations.map((a) => a['lotNo']?.toString().trim() ?? '').where((l) => l.isNotEmpty).toSet();
-    final Map<String, List<dynamic>> inwardByLot = {};
-    for (final lNo in lotNos) {
-      try {
-        final inwards = await _api.getInwards(lotNo: lNo);
-        inwardByLot[lNo] = inwards;
-      } catch (_) {}
-    }
-
-    return allocations.map((a) {
-      final lotNo = a['lotNo']?.toString().trim() ?? '';
-      final dia = _normalizeDia(a['dia']);
-      final setNo = _toSetNo(a['setNo']);
-      var rack = a['rackName']?.toString().trim();
-      var pallet = a['palletNumber']?.toString().trim();
-
-      if (lotNo.isEmpty || dia.isEmpty || setNo.isEmpty) return a;
-      if (!_isMissingRackPallet(rack) && !_isMissingRackPallet(pallet)) return a;
-
-      final inwards = inwardByLot[lotNo] ?? const [];
-      for (final inward in inwards) {
-        dynamic storage = inward['storageDetails'];
-        if (storage is String) {
-          try { storage = jsonDecode(storage); } catch (_) { storage = null; }
-        }
-        final List<dynamic> storageList = storage is List ? storage : (storage is Map ? [storage] : const []);
-        for (final sd in storageList) {
-          if (_normalizeDia(sd['dia']) != dia) continue;
-          final List<dynamic> labels = sd['setLabels'] ?? [];
-          final racks = sd['racks'] ?? [];
-          final pallets = sd['pallets'] ?? [];
-          int idx = labels.indexWhere((l) => _toSetNo(l) == setNo);
-          if (idx == -1) {
-            final numericOnly = setNo.replaceAll(RegExp(r'[^0-9]'), '');
-            if (numericOnly.isNotEmpty) idx = (int.tryParse(numericOnly) ?? 0) - 1;
-          }
-          if (idx >= 0 && idx < racks.length && _isMissingRackPallet(rack)) {
-            final val = racks[idx]?.toString().trim();
-            if (!_isMissingRackPallet(val)) rack = val;
-          }
-          if (idx >= 0 && idx < pallets.length && _isMissingRackPallet(pallet)) {
-            final val = pallets[idx]?.toString().trim();
-            if (!_isMissingRackPallet(val)) pallet = val;
-          }
-        }
-      }
-      return {...a, 'rackName': rack, 'palletNumber': pallet};
-    }).toList();
-  }
-
   void _onItemSelected(String? item) {
     setState(() {
       _selectedItem = item;
@@ -270,43 +344,79 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
 
   void _updateRemainingDozen() {
     if (_selectedPlanId == null || _selectedItem == null || _selectedSize == null) return;
+
     final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId, orElse: () => null);
     if (plan == null) return;
+
     final entry = (plan['cuttingEntries'] as List).firstWhere((e) => e['itemName'] == _selectedItem, orElse: () => null);
     if (entry == null) return;
+
     double plannedDozen = (entry['sizeQuantities'][_selectedSize] ?? 0).toDouble();
-    double allocatedInDb = (plan['lotAllocations'] as List? ?? []).where((a) => a['itemName'] == _selectedItem && a['size'] == _selectedSize).fold(0.0, (sum, a) => sum + ((a['dozen'] as num?)?.toDouble() ?? 0));
+
+    // 1. Subtract already saved allocations for this specific Item + Size in the DB
+    final savedAllocations = plan['lotAllocations'] as List? ?? [];
+    double allocatedInDb = 0;
+    for (var alloc in savedAllocations) {
+      if (alloc['itemName'] == _selectedItem && alloc['size'] == _selectedSize) {
+        allocatedInDb += (alloc['dozen'] as num?)?.toDouble() ?? 0;
+      }
+    }
+
+    // 2. Subtract unsaved allocations in the CURRENT SESSION across ALL days
     double allocatedInSession = 0;
-    _dayEntries.forEach((day, entries) { for (var e in entries) { if (e.itemName == _selectedItem && e.size == _selectedSize) allocatedInSession += e.dozen; } });
+    _dayEntries.forEach((day, entries) {
+      for (var entry in entries) {
+        if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
+          allocatedInSession += entry.dozen;
+        }
+      }
+    });
+
     double remaining = plannedDozen - allocatedInDb - allocatedInSession;
-    setState(() => _pendingDozenForSelection = remaining > 0 ? remaining : 0);
+    if (remaining < 0) remaining = 0;
+
+    setState(() {
+      _pendingDozenForSelection = remaining > 0 ? remaining : 0;
+    });
   }
 
   void _fillFromAssignments() {
     if (_selectedItem == null) return;
-    final itemMatches = _assignments.where((a) => a['fabricItem'].toString().trim().toLowerCase() == _selectedItem!.trim().toLowerCase()).toList();
+    final itemMatches = _assignments
+        .where((a) => a['fabricItem'].toString().trim().toLowerCase() == _selectedItem!.trim().toLowerCase())
+        .toList();
     if (itemMatches.isEmpty) return;
+
     dynamic best;
     if (_selectedSize != null) {
-      best = itemMatches.firstWhere((a) => a['size'].toString().trim().toLowerCase() == _selectedSize!.trim().toLowerCase(), orElse: () => itemMatches.first);
-    } else { best = itemMatches.first; }
+      best = itemMatches.firstWhere(
+        (a) => a['size'].toString().trim().toLowerCase() == _selectedSize!.trim().toLowerCase(),
+        orElse: () => null,
+      );
+    }
+    best ??= itemMatches.first;
 
     setState(() {
       if (_selectedSize == null) _selectedSize = best['size']?.toString();
       if (_selectedLotName == null) {
         final ln = best['lotName']?.toString();
-        if (_lotNames.contains(ln)) _selectedLotName = ln;
+        if (ln != null && _lotNames.contains(ln)) _selectedLotName = ln;
       }
       if (_selectedDia == null) {
         final d = best['dia']?.toString();
-        if (_dias.contains(d)) _selectedDia = d;
+        if (d != null && _dias.contains(d)) _selectedDia = d;
       }
       _dozenWeightCtrl.text = best['dozenWeight']?.toString() ?? '';
       _foldingWtCtrl.text = best['foldingWt']?.toString() ?? '';
       _gsmCtrl.text = best['gsm']?.toString() ?? '';
-      _efficiencyCtrl.text = best['efficiency']?.toString() ?? '100';
+      _efficiencyCtrl.text = best['efficiency']?.toString() ?? '';
       _dozenWeight = double.tryParse(_dozenWeightCtrl.text) ?? 0;
+      if (_efficiencyCtrl.text.isNotEmpty) {
+        final eff = double.tryParse(_efficiencyCtrl.text) ?? 0;
+        _wasteCtrl.text = (100 - eff).toStringAsFixed(2);
+      }
     });
+
     _updateRemainingDozen();
   }
 
@@ -316,43 +426,65 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
       _showError('Please select Item, Size, Dia and enter Dozen + Weight');
       return;
     }
+
     final excludedSets = <String>{};
+
     final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId, orElse: () => null);
     if (plan != null) {
-      for (var a in (plan['lotAllocations'] as List? ?? [])) {
-        if (a['itemName'] == _selectedItem && a['size'] == _selectedSize) {
-          final sNo = _toSetNo(a['setNo']);
-          final lotNo = a['lotNo']?.toString().trim();
-          if (sNo.isNotEmpty) excludedSets.add(lotNo != null && lotNo.isNotEmpty ? '$lotNo|$sNo' : sNo);
-        }
-      }
-    }
-    _dayEntries.forEach((day, entries) {
-      for (var e in entries) {
-        if (e.itemName == _selectedItem && e.size == _selectedSize) {
-          for (var s in e.sets) {
-            final sNo = _toSetNo(s['setNo']);
-            final lotNo = s['lotNo']?.toString().trim();
-            if (sNo.isNotEmpty) excludedSets.add(lotNo != null && lotNo.isNotEmpty ? '$lotNo|$sNo' : sNo);
+      final savedAllocations = plan['lotAllocations'] as List? ?? [];
+      for (var alloc in savedAllocations) {
+        if (alloc['itemName'] == _selectedItem && alloc['size'] == _selectedSize) {
+          final sNo = _toSetNo(alloc['setNo']);
+          final lotNo = alloc['lotNo']?.toString().trim();
+          if (sNo.isNotEmpty) {
+            if (lotNo != null && lotNo.isNotEmpty) {
+              excludedSets.add('$lotNo|$sNo');
+            } else {
+              excludedSets.add(sNo);
+            }
           }
         }
       }
-    });
+    }
+
+    for (var day in _dayEntries.keys) {
+      for (var entry in _dayEntries[day]!) {
+        if (entry.itemName == _selectedItem && entry.size == _selectedSize) {
+          for (var s in entry.sets) {
+            final sNo = _toSetNo(s['setNo']);
+            final lotNo = s['lotNo']?.toString().trim();
+            if (sNo.isNotEmpty) {
+              if (lotNo != null && lotNo.isNotEmpty) {
+                excludedSets.add('$lotNo|$sNo');
+              } else {
+                excludedSets.add(sNo);
+              }
+            }
+          }
+        }
+      }
+    }
 
     setState(() => _isAllocating = true);
     try {
-      final res = await _api.getFifoAllocation(
-        _selectedItem!, _selectedSize!, dozen, _selectedDia!,
+      final result = await _api.getFifoAllocation(
+        _selectedItem!,
+        _selectedSize!,
+        dozen,
+        _selectedDia!,
         _dozenWeight + (double.tryParse(_foldingWtCtrl.text) ?? 0),
-        lotName: _selectedLotName, excludedSets: excludedSets.isEmpty ? null : excludedSets.toList()
+        lotName: _selectedLotName,
+        excludedSets: excludedSets.isEmpty ? null : excludedSets.toList(),
       );
-      final List<Map<String, dynamic>> allocations = List<Map<String, dynamic>>.from(res?['allocations'] ?? []);
-      final resolved = await _fillRackPalletFromInward(allocations);
+      final List<Map<String, dynamic>> allocations = List<Map<String, dynamic>>.from(result?['allocations'] ?? []);
+      final resolvedAllocations = await _fillRackPalletFromInward(allocations);
       setState(() {
-        if (res != null) {
-          _currentSets = resolved;
-          _totalSets = (res['totalSets'] as num?)?.toInt() ?? 0;
-          if (res['success'] == false) _showError(res['message'] ?? 'Insufficient stock');
+        if (result != null) {
+          _currentSets = resolvedAllocations;
+          _totalSets = (result['totalSets'] as num?)?.toInt() ?? 0;
+          if (result['success'] == false) {
+            _showError(result['message'] ?? 'Insufficient stock');
+          }
         }
         _isAllocating = false;
       });
@@ -363,71 +495,129 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   }
 
   void _addItemToDay() {
-    if (_currentSets.isEmpty) { _showError('Run FIFO first'); return; }
+    if (_currentSets.isEmpty) {
+      _showError('Run FIFO first before adding this item.');
+      return;
+    }
     final dozen = double.tryParse(_dozenCtrl.text) ?? 0;
     final entries = List<_DayEntry>.from(_currentDayEntries);
-    final idx = entries.indexWhere((e) => e.itemName == _selectedItem && e.size == _selectedSize && e.dia == _selectedDia);
-    if (idx != -1) {
-      final old = entries[idx];
-      entries[idx] = _DayEntry(
-        itemName: old.itemName, size: old.size, dozen: old.dozen + dozen,
-        dozenWeight: old.dozenWeight, dia: old.dia,
+    final existingIdx = entries.indexWhere(
+      (e) =>
+          e.itemName == _selectedItem &&
+          e.size == _selectedSize &&
+          e.dia == _selectedDia,
+    );
+
+    if (existingIdx != -1) {
+      final old = entries[existingIdx];
+      entries[existingIdx] = _DayEntry(
+        itemName: old.itemName,
+        size: old.size,
+        dozen: old.dozen + dozen,
+        dozenWeight: old.dozenWeight,
+        dia: old.dia,
         neededWeight: old.neededWeight + _fabricRequiredKg,
-        sets: [...old.sets, ..._currentSets]
+        sets: [...old.sets, ..._currentSets],
       );
     } else {
-      entries.add(_DayEntry(
-        itemName: _selectedItem!, size: _selectedSize!, dozen: dozen, 
-        dozenWeight: _dozenWeight, dia: _selectedDia!, 
-        neededWeight: _fabricRequiredKg, sets: List.from(_currentSets)
-      ));
+      entries.add(
+        _DayEntry(
+          itemName: _selectedItem!,
+          size: _selectedSize!,
+          dozen: dozen,
+          dozenWeight: _dozenWeight,
+          dia: _selectedDia!,
+          neededWeight: _fabricRequiredKg,
+          sets: List.from(_currentSets),
+        ),
+      );
     }
+
     setState(() {
       _dayEntries[_selectedDay] = entries;
-      _currentSets = []; _selectedItem = null; _selectedSize = null; _selectedDia = null;
-      _dozenCtrl.clear(); _dozenWeightCtrl.clear(); _foldingWtCtrl.clear();
-      _gsmCtrl.clear(); _efficiencyCtrl.clear(); _wasteCtrl.clear();
-      _dozenWeight = 0; _totalSets = 0;
+      _currentSets = [];
+      _selectedItem = null;
+      _selectedSize = null;
+      _selectedDia = null;
+      _dozenCtrl.clear();
+      _dozenWeightCtrl.clear();
+      _foldingWtCtrl.clear();
+      _gsmCtrl.clear();
+      _efficiencyCtrl.clear();
+      _wasteCtrl.clear();
+      _dozenWeight = 0;
+      _totalSets = 0;
     });
-    _showSuccess('Item added to $_selectedDay');
+    _showSuccess(
+      'Item added to $_selectedDay. Add another item or click Next Day.',
+    );
   }
 
   void _nextDay() {
-    if (_currentDayEntries.isEmpty && _currentSets.isEmpty) { _showError('No entries to record'); return; }
-    if (_currentSets.isNotEmpty) { _addItemToDay(); return; }
+    if (_currentDayEntries.isEmpty && _currentSets.isEmpty) {
+      _showError('No entries for $_selectedDay. Add at least one item.');
+      return;
+    }
+    // If user has an un-added allocation, add it automatically
+    if (_currentSets.isNotEmpty) {
+      _addItemToDay();
+      return;
+    }
+
     final idx = _kWeekDays.indexOf(_selectedDay);
     if (idx < _kWeekDays.length - 1) {
       setState(() {
         _selectedDay = _kWeekDays[idx + 1];
         _selectedDate = _dateForDayInSameWeek(_selectedDay);
       });
+      _showSuccess(
+        '$_selectedDay recorded. Now entering ${_kWeekDays[idx + 1]}.',
+      );
     }
   }
 
   Future<void> _saveDayAllocation({bool allWeek = false}) async {
-    if (_selectedPlanId == null) return;
-    List<String> days = allWeek ? _dayEntries.keys.toList() : [_selectedDay];
+    if (_selectedPlanId == null) {
+      _showError('No plan selected.');
+      return;
+    }
+
+    List<String> daysToSave = allWeek ? _dayEntries.keys.toList() : [_selectedDay];
     if (_currentSets.isNotEmpty) _addItemToDay();
-    if (!days.any((d) => (_dayEntries[d] ?? []).isNotEmpty)) { _showError('No allocations to save'); return; }
+
+    final bool hasAny = daysToSave.any((d) => (_dayEntries[d] ?? []).isNotEmpty);
+    if (!hasAny) {
+      _showError('No allocations to save.');
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {
-      for (final day in days) {
+      for (final day in daysToSave) {
         final entries = _dayEntries[day] ?? [];
-        final dDate = _dateForDayInSameWeek(day);
+        final dayDate = _dateForDayInSameWeek(day);
         for (final entry in entries) {
           await _api.saveLotAllocation(
-            _selectedPlanId!, entry.sets, day: day, 
-            date: DateFormat('yyyy-MM-dd').format(dDate),
-            itemName: entry.itemName, size: entry.size, 
-            dozen: entry.dozen, neededWeight: entry.neededWeight
+            _selectedPlanId!,
+            entry.sets,
+            day: day,
+            date: DateFormat('yyyy-MM-dd').format(dayDate),
+            itemName: entry.itemName,
+            size: entry.size,
+            dozen: entry.dozen,
+            neededWeight: entry.neededWeight,
           );
         }
       }
-      _showSuccess('Allocations saved successfully');
-      setState(() { _dayEntries.clear(); _currentSets = []; });
+      _showSuccess('Allocations saved successfully.');
+      setState(() {
+        _dayEntries.clear();
+        _currentSets = [];
+      });
       _loadReport();
-    } catch (e) { _showError('Save failed: $e'); }
+    } catch (e) {
+      _showError('Save failed: $e');
+    }
     setState(() => _isSaving = false);
   }
 
@@ -473,7 +663,7 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
         final existing = grouped[key]!;
         if (!(existing['lotNos'] as List).contains(lotNo)) (existing['lotNos'] as List).add(lotNo);
         if (setNo.isNotEmpty && !(existing['sets'] as List).contains(setNo)) (existing['sets'] as List).add(setNo);
-        existing['weight'] = (double.tryParse(existing['weight']?.toString() ?? '0') ?? 0) + (double.tryParse(r['weight']?.toString() ?? '0') ?? 0);
+        existing['setWeight'] = (double.tryParse(existing['setWeight']?.toString() ?? '0') ?? 0) + (double.tryParse(r['setWeight']?.toString() ?? '0') ?? 0);
       }
     }
     return grouped.values.map((v) => {
@@ -490,6 +680,115 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
 
   void _showError(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.red));
   void _showSuccess(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.green));
+
+  Future<void> _printReport() async {
+    if (_reportRows.isEmpty) { _showError('No report data to print'); return; }
+    
+    final doc = pw.Document();
+    final fontTitle = await PdfGoogleFonts.outfitBold();
+    final fontHeader = await PdfGoogleFonts.interBold();
+    final fontData = await PdfGoogleFonts.interRegular();
+
+    final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId, orElse: () => null);
+    final planTitle = plan != null ? "${plan['planName']} (${plan['planType']})" : 'Lot Allocation Report';
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Text('Om Vinayaka Garments', style: pw.TextStyle(font: fontTitle, fontSize: 24)),
+                pw.Text('IDEAL innerwear', style: pw.TextStyle(font: fontHeader, fontSize: 16)),
+                pw.SizedBox(height: 4),
+                pw.Text('SF No. 252/1, Merkalath Thottam North, Balaji Nagar, Poyampalayam,', style: pw.TextStyle(font: fontData, fontSize: 10)),
+                pw.Text('Pooluvapatti (P.O), Tirupur - 2.', style: pw.TextStyle(font: fontData, fontSize: 10)),
+                pw.Text('Phone: 97900 52254, 97900 52252', style: pw.TextStyle(font: fontData, fontSize: 10)),
+                pw.Text('Email: idealovg@gmail.com | Web: www.idealinnerwear.com', style: pw.TextStyle(font: fontData, fontSize: 10)),
+                pw.Text('GSTIN: 33BHNPS9629C1ZZ', style: pw.TextStyle(font: fontHeader, fontSize: 11, color: PdfColors.blue900)),
+                pw.SizedBox(height: 10),
+                pw.Divider(thickness: 0.5),
+                pw.SizedBox(height: 10),
+              ],
+            ),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                 pw.Text('Report: $planTitle', style: pw.TextStyle(font: fontHeader, fontSize: 12)),
+                 pw.Text('Date: ${DateFormat('dd-MM-yyyy').format(DateTime.now())}', style: pw.TextStyle(font: fontData, fontSize: 10)),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              headers: ['DATE', 'ITEM', 'SIZE', 'DOZEN', 'LOT NAME', 'LOT NO', 'DIA', 'SET NO', 'WEIGHT'],
+              data: _reportRows.map((r) => [
+                r['date'] ?? '-',
+                r['itemName'] ?? '-',
+                r['size'] ?? '-',
+                (r['dozen'] ?? 0).toString(),
+                r['lotName'] ?? '-',
+                r['lotNo'] ?? '-',
+                r['dia']?.toString() ?? '-',
+                r['setList'] ?? '-',
+                _formatWeight(r['setWeight']),
+              ]).toList(),
+              headerStyle: pw.TextStyle(font: fontHeader, fontSize: 8, color: PdfColors.white),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+              cellStyle: pw.TextStyle(font: fontData, fontSize: 8),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1.2),
+                1: const pw.FlexColumnWidth(2),
+                2: const pw.FlexColumnWidth(1),
+                3: const pw.FlexColumnWidth(0.8),
+                4: const pw.FlexColumnWidth(2),
+                5: const pw.FlexColumnWidth(1.5),
+                6: const pw.FlexColumnWidth(0.8),
+                7: const pw.FlexColumnWidth(2.5),
+                8: const pw.FlexColumnWidth(1),
+              },
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => doc.save());
+  }
+
+  Future<void> _shareWhatsApp() async {
+    if (_reportRows.isEmpty) { _showError('No data to share'); return; }
+
+    final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId, orElse: () => null);
+    final planTitle = plan != null ? "${plan['planName']} (${plan['planType']})" : 'Allocation Report';
+
+    String text = "*LOT ALLOCATION REPORT*\n";
+    text += "*Plan:* $planTitle\n";
+    text += "*Date:* ${DateFormat('dd/MM/yyyy').format(DateTime.now())}\n\n";
+
+    // Take current day or top 10 rows if too many
+    final rowsToShare = _reportRows.length > 15 ? _reportRows.sublist(0, 15) : _reportRows;
+    
+    for (var r in rowsToShare) {
+      text += "📦 *${r['itemName']}* | Sz: ${r['size']} | Dia: ${r['dia']}\n";
+      text += "   Lot: ${r['lotNo']} | Sets: ${r['setList']}\n";
+      text += "   Qty: ${r['dozen']} Doz | Wt: ${_formatWeight(r['setWeight'])}kg\n";
+      text += "------------------\n";
+    }
+
+    if (_reportRows.length > 15) {
+      text += "... and ${_reportRows.length - 15} more items.\n";
+    }
+
+    final url = "https://wa.me/?text=${Uri.encodeComponent(text)}";
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      _showError('Could not launch WhatsApp');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -510,28 +809,17 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
               // MISSION CONTROL TABS
               Row(
                 children: [
-                  _tabButton(0, 'MISSION CONTROL', LucideIcons.rocket),
+                  _tabButton(0, 'ENTRY', LucideIcons.rocket),
                   const SizedBox(width: 8),
-                  _tabButton(1, 'ALLOCATION REPORTS', LucideIcons.fileSpreadsheet),
+                  _tabButton(1, 'REPORT', LucideIcons.fileSpreadsheet),
                 ],
               ),
               const SizedBox(height: 24),
 
               if (_tabIndex == 0) ...[
-                if (isWeb) 
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 2, child: _buildEntryForm(isWeb)),
-                      const SizedBox(width: 32),
-                      Expanded(flex: 3, child: _buildLivePreviewTable()),
-                    ],
-                  )
-                else ...[
-                  _buildEntryForm(isWeb),
-                  const SizedBox(height: 32),
-                  _buildLivePreviewTable(),
-                ],
+                _buildEntryForm(isWeb),
+                const SizedBox(height: 32),
+                _buildLivePreviewTable(),
                 const SizedBox(height: 32),
                 _buildSessionQueue(isWeb),
               ] else ...[
@@ -661,87 +949,135 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   Widget _buildEntryForm(bool isWeb) {
     return Container(
       padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFF1F5F9))),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildDividerHeader('ALLOCATION SETTINGS'),
-            const SizedBox(height: 24),
-            CustomDropdownField(
-              label: 'ITEM NAME',
-              items: _masterItemNames,
-              value: _selectedItem,
-              onChanged: _onItemSelected,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: CustomDropdownField(label: 'SIZE', items: _masterSizes, value: _selectedSize, onChanged: _onSizeSelected)),
-                const SizedBox(width: 12),
-                Expanded(child: CustomDropdownField(label: 'DIA', items: _dias, value: _selectedDia, onChanged: (v) => setState(() { _selectedDia = v; _currentSets = []; }))),
-              ],
-            ),
-            const SizedBox(height: 16),
-            CustomDropdownField(label: 'LOT (PREF)', items: _lotNames, value: _selectedLotName, onChanged: (v) => setState(() { _selectedLotName = v; _currentSets = []; })),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildInputField('QUANTITY DOZEN', _dozenCtrl),
-                      const SizedBox(height: 4),
-                      Text('Pending Plan: ${_pendingDozenForSelection.toStringAsFixed(0)} Doz', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: _pendingDozenForSelection > 0 ? const Color(0xFF3B82F6) : const Color(0xFFEF4444))),
-                    ],
-                  ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildDividerHeader('ALLOCATION SETTINGS'),
+          const SizedBox(height: 24),
+          CustomDropdownField(
+            label: 'ITEM NAME',
+            items: _masterItemNames,
+            value: _selectedItem,
+            onChanged: _onItemSelected,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: CustomDropdownField(
+                  label: 'SIZE',
+                  items: _masterSizes,
+                  value: _selectedSize,
+                  onChanged: _onSizeSelected,
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: _buildInputField('DOZEN WEIGHT (KG)', _dozenWeightCtrl)),
-              ],
-            ),
-            Row(
-              children: [
-                Expanded(child: _buildInputField('GSM', _gsmCtrl)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildInputField('FOLDING WT (KG)', _foldingWtCtrl)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildInputField('EFFICIENCY %', _efficiencyCtrl)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildInputField('WASTE %', _wasteCtrl, readOnly: true)),
-              ],
-            ),
-            const SizedBox(height: 24),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _buildEstimateChip('Target', '${_fabricRequiredKg.toStringAsFixed(2)}Kg', LucideIcons.target, Colors.blue),
-                  _buildEstimateChip('Rolls', '±$_rollsRequired', LucideIcons.box, Colors.indigo),
-                  _buildEstimateChip('Sets', '$_setsRequired', LucideIcons.layers, Colors.purple),
-                  _buildEstimateChip('Rule', '1 Set = 11 Rolls', LucideIcons.info, const Color(0xFF64748B)),
-                ],
               ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _isAllocating ? null : _runAllocation,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                elevation: 0,
+              const SizedBox(width: 16),
+              Expanded(
+                child: CustomDropdownField(
+                  label: 'DIA',
+                  items: _dias,
+                  value: _selectedDia,
+                  onChanged: (v) => setState(() {
+                    _selectedDia = v;
+                    _currentSets = [];
+                  }),
+                ),
               ),
-              child: _isAllocating 
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text('RUN FIFO ENGINE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, letterSpacing: 1)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          CustomDropdownField(
+            label: 'LOT (PREF)',
+            items: _lotNames,
+            value: _selectedLotName,
+            onChanged: (v) => setState(() {
+              _selectedLotName = v;
+              _currentSets = [];
+            }),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInputField('QUANTITY DOZEN', _dozenCtrl),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pending Plan: ${_pendingDozenForSelection.toStringAsFixed(0)} Doz',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _pendingDozenForSelection > 0 ? const Color(0xFF3B82F6) : const Color(0xFFEF4444),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(child: _buildInputField('DOZEN WEIGHT (KG)', _dozenWeightCtrl)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _buildInputField('GSM', _gsmCtrl)),
+              const SizedBox(width: 16),
+              Expanded(child: _buildInputField('FOLDING WT (KG)', _foldingWtCtrl)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(child: _buildInputField('EFFICIENCY %', _efficiencyCtrl)),
+              const SizedBox(width: 16),
+              Expanded(child: _buildInputField('WASTE %', _wasteCtrl, readOnly: true)),
+            ],
+          ),
+          const SizedBox(height: 32),
+          
+          // ESTIMATE CHIPS (MOBILE PARITY)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildEstimateChip('REQUIRED WEIGHT', '${_fabricRequiredKg.toStringAsFixed(2)}Kg', LucideIcons.target, const Color(0xFF2563EB)),
+              _buildEstimateChip('ROLLS NEEDED', '±$_rollsRequired', LucideIcons.box, const Color(0xFF7C3AED)),
+              _buildEstimateChip('SETS REQUIRED', '$_setsRequired', LucideIcons.layers, const Color(0xFFDB2777)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.info, size: 14, color: Color(0xFF64748B)),
+                const SizedBox(width: 8),
+                Text('RULE: 1 Set = 11 Rolls', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFF64748B))),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: _isAllocating ? null : _runAllocation,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F172A),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              elevation: 0,
+            ),
+            child: _isAllocating
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text('RUN FIFO ENGINE', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+          ),
+        ],
       ),
     );
   }
@@ -763,6 +1099,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   }
 
   Widget _buildLivePreviewTable() {
+    final groupedRows = _getGroupedSets(_currentSets);
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -787,7 +1125,7 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
           clipBehavior: Clip.antiAlias,
           child: _isAllocating 
             ? const Center(child: CircularProgressIndicator()) 
-            : _currentSets.isEmpty 
+            : groupedRows.isEmpty 
               ? Center(child: Icon(LucideIcons.database, size: 64, color: const Color(0xFFF1F5F9)))
               : SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -796,16 +1134,25 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
               child: ModernDataTable(
                 showActions: false,
                 columns: const ['LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK NAME', 'PALLET NO', 'TOTAL WEIGHT (kg)', 'DOZEN'],
-                rows: _currentSets.map((s) => {
-                  'LOT NAME': s['lotName']?.toString() ?? '-',
-                  'LOT NO': s['lotNo']?.toString() ?? '-',
-                  'DIA': s['dia']?.toString() ?? '-',
-                  'SET REQUIRED': "${_setsRequired} Set",
-                  'SET NO': "Set ${s['setNo'] ?? s['setNum'] ?? '-'}",
-                  'RACK NAME': s['rackName'] ?? '-',
-                  'PALLET NO': s['palletNumber']?.toString() ?? '-',
-                  'TOTAL WEIGHT (kg)': "${_formatWeight(s['weight'])} kg",
-                  'DOZEN': s['dozen']?.toString() ?? (double.tryParse(_dozenCtrl.text) ?? 0).toStringAsFixed(0),
+                rows: groupedRows.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final s = entry.value;
+                  final isLast = idx == groupedRows.length - 1;
+
+                  return {
+                    'LOT NAME': s['lotName']?.toString() ?? '-',
+                    'LOT NO': s['lotNo']?.toString() ?? '-',
+                    'DIA': s['dia']?.toString() ?? '-',
+                    'SET REQUIRED': _buildBadge("${s['setCount']} Set", const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+                    'SET NO': _buildBadge("Set ${s['setRange']}", const Color(0xFFF5F3FF), const Color(0xFF7C3AED)),
+                    'RACK NAME': s['rackName'] ?? '-',
+                    'PALLET NO': s['palletNumber']?.toString() ?? '-',
+                    'TOTAL WEIGHT (kg)': _buildBadge("${_formatWeight(s['setWeight'])} kg", const Color(0xFFECFDF5), const Color(0xFF059669)),
+                    'DOZEN': isLast 
+                      ? Text((double.tryParse(_dozenCtrl.text) ?? 0).toStringAsFixed(0), 
+                             style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)))
+                      : '',
+                  };
                 }).toList(),
                 emptyMessage: '',
               ),
@@ -813,6 +1160,25 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBadge(String text, Color bgColor, Color textColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: textColor.withOpacity(0.1)),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: textColor,
+        ),
+      ),
     );
   }
 
@@ -866,7 +1232,15 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(child: _buildDividerHeader('BATCH LOGISTICS HISTORY')),
-            IconButton(onPressed: _loadReport, icon: const Icon(LucideIcons.refreshCw, size: 18, color: Color(0xFF64748B))),
+            Row(
+              children: [
+                _actionIconButton(LucideIcons.printer, _printReport, 'PRINT REPORT', Colors.blue),
+                const SizedBox(width: 8),
+                _actionIconButton(LucideIcons.messageCircle, _shareWhatsApp, 'WHATSAPP SHARE', Colors.green),
+                const SizedBox(width: 8),
+                IconButton(onPressed: _loadReport, icon: const Icon(LucideIcons.refreshCw, size: 18, color: Color(0xFF64748B))),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 24),
@@ -896,7 +1270,7 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                   'SET NO': r['setList'] ?? '-',
                   'RACK': r['rackName'] ?? '-',
                   'PALLET': r['palletNumber']?.toString() ?? '-',
-                  'SET WEIGHT': _formatWeight(r['weight']),
+                  'SET WEIGHT': _formatWeight(r['setWeight']),
                 }).toList(),
                 emptyMessage: 'No activity logs found for this plan.',
               ),
@@ -939,24 +1313,26 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
       ],
     );
   }
-}
 
-class _DayEntry {
-  final String itemName;
-  final String size;
-  final double dozen;
-  final double dozenWeight;
-  final String dia;
-  final double neededWeight;
-  final List<Map<String, dynamic>> sets;
-
-  _DayEntry({
-    required this.itemName,
-    required this.size,
-    required this.dozen,
-    required this.dozenWeight,
-    required this.dia,
-    required this.neededWeight,
-    required this.sets,
-  });
+  Widget _actionIconButton(IconData icon, VoidCallback onTap, String tooltip, Color color) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withOpacity(0.1)),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+        ),
+      ),
+    );
+  }
 }

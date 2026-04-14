@@ -1,5 +1,8 @@
-import express from 'express';
+// Load env vars at the very top (using import 'dotenv/config' would be even better but this is safer for now)
 import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
@@ -7,12 +10,6 @@ import path from 'path';
 import connectDB from './config/db.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import fetch from 'node-fetch';
-
-// Load env vars
-dotenv.config();
-
-// Connect to database
-connectDB();
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';

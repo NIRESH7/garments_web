@@ -202,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Image.asset(
-                'assets/images/logo.png',
+                'assets/images/app_logo.png',
                 height: 50,
                 errorBuilder: (context, error, stackTrace) => const Icon(LucideIcons.image, color: Color(0xFF475569), size: 40),
               ),
