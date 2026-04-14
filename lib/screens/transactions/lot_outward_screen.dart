@@ -986,8 +986,72 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
       Container(decoration: BoxDecoration(color: Colors.white, border: Border.all(color: ColorPalette.border.withOpacity(0.3)), borderRadius: BorderRadius.circular(4)), clipBehavior: Clip.antiAlias, child: Column(children: [
         Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), color: const Color(0xFFF8FAFC), child: Row(children: [_buildGridHeaderCell('COLOUR', flex: 3), ..._selectedSets.map((set) => _buildGridHeaderCell('SET ${set['set_no']}', flex: 2, align: TextAlign.right)), _buildGridHeaderCell('ROLLS', flex: 1, align: TextAlign.right), _buildGridHeaderCell('ROLL WT', flex: 1, align: TextAlign.right), _buildGridHeaderCell('METER', flex: 1, align: TextAlign.right)])),
         ...colours.map((col) => _buildGridRow(col, activeSet)),
+        _buildGridFooterRow(),
       ])),
     ]);
+  }
+
+  Widget _buildGridFooterRow() {
+    final totalWeight = _getTotalWeight();
+    final totalRolls = _getTotalRolls();
+    final totalMeters = _getTotalMeters();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border(top: BorderSide(color: ColorPalette.border.withOpacity(0.2), width: 1.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              'TOTAL',
+              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary, letterSpacing: 1),
+            ),
+          ),
+          ..._selectedSets.map((set) {
+            final sw = (set['total_weight'] as num?)?.toDouble() ?? 0.0;
+            return Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Text(
+                  _formatGridNumber(sw),
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w900, color: ColorPalette.primary),
+                ),
+              ),
+            );
+          }),
+          Expanded(
+            flex: 1,
+            child: Text(
+              totalRolls.toString(),
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w900, color: ColorPalette.textPrimary),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              _formatGridNumber(totalWeight),
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w900, color: ColorPalette.primary),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              totalMeters.toStringAsFixed(1),
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w900, color: ColorPalette.primary),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildGridHeaderCell(String label, {int flex = 1, TextAlign align = TextAlign.left}) {

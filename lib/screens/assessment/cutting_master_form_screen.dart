@@ -5,6 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:audioplayers/audioplayers.dart' as audioplayers;
+import 'package:record/record.dart' as record;
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
@@ -22,6 +25,11 @@ class CuttingMasterFormScreen extends StatefulWidget {
 class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   final _api = MobileApiService();
   final _formKey = GlobalKey<FormState>();
+
+  late record.AudioRecorder _recorder;
+  late stt.SpeechToText _speechToText;
+  bool _isRecording = false;
+  bool _isSpeechInitialized = false;
 
   bool _isLoading = false;
   bool _isSaving = false;
@@ -53,6 +61,10 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   final _instructionTextController = TextEditingController();
   PlatformFile? _cadFile;
   String? _cadFileUrl;
+  XFile? _instructionAudioFile;
+  String? _instructionAudioUrl;
+  PlatformFile? _instructionDocFile;
+  String? _instructionDocUrl;
 
   // Dropdown lists
   List<String> _itemList = [];
@@ -65,21 +77,59 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
   @override
   void initState() {
     super.initState();
+    _recorder = record.AudioRecorder();
+    _speechToText = stt.SpeechToText();
     _loadDropdowns();
     if (widget.entryId != null) {
       _loadEntryDetails();
     } else {
       _addPatternRow();
     }
+
+    _efficiencyController.addListener(_updateWasteFromEfficiency);
+    _wastePctController.addListener(_updateEfficiencyFromWaste);
+  }
+
+  bool _isCalculating = false;
+
+  void _updateWasteFromEfficiency() {
+    if (_isCalculating) return;
+    _isCalculating = true;
+    try {
+      final eff = double.tryParse(_efficiencyController.text) ?? 0;
+      final wasteVal = (100 - eff).toStringAsFixed(2);
+      if (_wastePctController.text != wasteVal) {
+        _wastePctController.text = wasteVal;
+      }
+    } finally {
+      _isCalculating = false;
+    }
+  }
+
+  void _updateEfficiencyFromWaste() {
+    if (_isCalculating) return;
+    _isCalculating = true;
+    try {
+      final waste = double.tryParse(_wastePctController.text) ?? 0;
+      final effVal = (100 - waste).toStringAsFixed(2);
+      if (_efficiencyController.text != effVal) {
+        _efficiencyController.text = effVal;
+      }
+    } finally {
+      _isCalculating = false;
+    }
   }
 
   @override
   void dispose() {
     _dozenWeightController.dispose();
+    _recorder.dispose();
+    _wastePctController.removeListener(_updateEfficiencyFromWaste);
     _wastePctController.dispose();
     _layPcsController.dispose();
     _timeToCompleteController.dispose();
     _meterPerDozenController.dispose();
+    _efficiencyController.removeListener(_updateWasteFromEfficiency);
     _efficiencyController.dispose();
     _foldingController.dispose();
     _layLengthController.dispose();
@@ -110,7 +160,8 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         } else if (name == 'dia') {
           _diaObjects = vals.cast<Map<String, dynamic>>();
           _diaNames = _diaObjects.map((v) => v['name'].toString()).toList();
-        } else if (name == 'part name' || name == 'party name') {
+        } else if (name == 'part name') {
+          // STRICT: Only Part names here
           _partNameList = vals.map((v) => v['name'].toString()).toList();
         } else if (name == 'lot name' || name == 'lot') {
           final registryLots = vals.map((v) => v['name'].toString()).toList();
@@ -151,22 +202,30 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         _timeToCompleteController.text = data['timeToComplete'] ?? '';
         _meterPerDozenController.text = (data['meterPerDozen'] ?? '').toString();
 
+        _instructionTextController.text = data['instructionText'] ?? '';
+        _cadFileUrl = data['cadFile'];
+        _instructionAudioUrl = data['instructionAudio'];
+        _instructionDocUrl = data['instructionDoc'];
+
         final pats = data['patternDetails'] as List? ?? [];
         _patterns = pats.map((p) => PatternRowData(
           partName: p['partyName'],
           imageUrl: p['patternImage'],
           ctrlMeasurement: TextEditingController(text: (p['patternMeasurement'] ?? '').toString()),
+          ctrlFinishing: TextEditingController(text: (p['finishingMeasurement'] ?? '').toString()),
+          ctrlPunches: TextEditingController(text: (p['noOfPunches'] ?? '').toString()),
         )).toList();
-
-        _instructionTextController.text = data['instructionText'] ?? '';
-        _cadFileUrl = data['cadFile'];
       });
     }
   }
 
   void _addPatternRow() {
     setState(() {
-      _patterns.add(PatternRowData(ctrlMeasurement: TextEditingController()));
+      _patterns.add(PatternRowData(
+        ctrlMeasurement: TextEditingController(),
+        ctrlFinishing: TextEditingController(),
+        ctrlPunches: TextEditingController(),
+      ));
     });
   }
 
@@ -177,6 +236,19 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
       setState(() {
         if (isItem) _itemImageFile = img;
         else if (patternIndex != null) _patterns[patternIndex].imageFile = img;
+      });
+    }
+  }
+
+  Future<void> _pickFile(bool isCad) async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        if (isCad) {
+          _cadFile = result.files.first;
+        } else {
+          _instructionDocFile = result.files.first;
+        }
       });
     }
   }
@@ -204,6 +276,9 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
       };
 
       if (_itemImageFile != null) data['itemImage'] = _itemImageFile;
+      if (_cadFile?.path != null) data['cadFile'] = XFile(_cadFile!.path!);
+      if (_instructionAudioFile != null) data['instructionAudio'] = _instructionAudioFile;
+      if (_instructionDocFile?.path != null) data['instructionDoc'] = XFile(_instructionDocFile!.path!);
 
       final List<Map<String, String>> patternRows = [];
       for (int i = 0; i < _patterns.length; i++) {
@@ -211,6 +286,8 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         patternRows.add({
           'partyName': p.partName ?? '',
           'patternMeasurement': p.ctrlMeasurement.text,
+          'finishingMeasurement': p.ctrlFinishing.text,
+          'noOfPunches': p.ctrlPunches.text,
           'patternImage': p.imageUrl ?? '',
         });
         if (p.imageFile != null) data['patternImage_$i'] = p.imageFile;
@@ -373,9 +450,27 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
                 ),
               ],
             ),
-            if (_knittingDiaSpecific != null) ...[
+            if (_selectedDiaName != null) ...[
               const SizedBox(height: 24),
-              _buildReadOnlyDisplay('Knitting Dia', _knittingDiaSpecific!),
+              CustomDropdownField(
+                label: 'Knitting Dia',
+                items: _diaObjects
+                    .where((d) => d['name'] == _selectedDiaName)
+                    .map((d) => d['knittingDia']?.toString() ?? '')
+                    .where((s) => s.isNotEmpty)
+                    .toList(),
+                value: _knittingDiaSpecific,
+                onChanged: (v) {
+                   final diaObj = _diaObjects.firstWhere(
+                    (d) => d['name'] == _selectedDiaName && d['knittingDia']?.toString() == v,
+                    orElse: () => {},
+                  );
+                  setState(() {
+                    _knittingDiaSpecific = v;
+                    _cuttingDia = diaObj['cuttingDia']?.toString();
+                  });
+                },
+              ),
               const SizedBox(height: 12),
               _buildReadOnlyDisplay('Cutting Dia (Auto)', _cuttingDia ?? 'N/A'),
             ],
@@ -450,19 +545,216 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
         ),
         const SizedBox(height: 24),
         _formCard(
-          title: 'Additional Instructions',
+          title: 'Files & Instruction Assets',
           children: [
-            TextFormField(
-              controller: _instructionTextController,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: 'Type instructions here...',
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              ),
-            ),
+            _buildFilePicker('CAD/CAM DESIGN FILE', _cadFile, _cadFileUrl, () => _pickFile(true)),
+            const SizedBox(height: 32),
+            _buildVoiceInstructionSection(),
+            const SizedBox(height: 32),
+            _buildInstructionTextSection(),
+            const SizedBox(height: 32),
+            _buildFilePicker('INSTRUCTION DOCUMENT', _instructionDocFile, _instructionDocUrl, () => _pickFile(false)),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVoiceInstructionSection() {
+    bool hasAudio = _instructionAudioFile != null || (_instructionAudioUrl != null && _instructionAudioUrl!.isNotEmpty);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'VOICE INSTRUCTION',
+          style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _isRecording ? ColorPalette.error.withOpacity(0.5) : ColorPalette.border),
+          ),
+          child: Column(
+            children: [
+              if (hasAudio) ...[
+                Row(
+                  children: [
+                    Icon(LucideIcons.volume2, size: 16, color: ColorPalette.success),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text('VOICE RECORDING READY', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: ColorPalette.success))),
+                    TextButton.icon(
+                      onPressed: () => _playAudio(_instructionAudioUrl, _instructionAudioFile),
+                      icon: const Icon(LucideIcons.play, size: 12),
+                      label: Text('PLAYBACK', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Divider(height: 1),
+                const SizedBox(height: 20),
+              ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _recordingButton(),
+                  const SizedBox(width: 24),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isRecording ? 'RECORDING IN PROGRESS...' : 'START VOICE INSTRUCTION',
+                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w900, color: _isRecording ? ColorPalette.error : ColorPalette.textPrimary),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isRecording ? 'Tap the stop icon to finish' : 'Tap mic to record audio guidance',
+                        style: GoogleFonts.inter(fontSize: 10, color: ColorPalette.textMuted),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _recordingButton() {
+    return InkWell(
+      onTap: _isRecording ? _stopRecording : _startRecording,
+      borderRadius: BorderRadius.circular(50),
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: _isRecording ? ColorPalette.error.withOpacity(0.1) : ColorPalette.primary.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          _isRecording ? LucideIcons.square : LucideIcons.mic,
+          color: _isRecording ? ColorPalette.error : ColorPalette.primary,
+          size: 20,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startRecording() async {
+     try {
+       if (await _recorder.hasPermission()) {
+         setState(() => _isRecording = true);
+         // In web, path can be null for record to handle internal stream or we can provide a dummy
+         await _recorder.start(const record.RecordConfig(), path: ''); 
+         _startListening();
+       }
+     } catch (e) {
+       debugPrint('RECORD_ERROR: $e');
+     }
+  }
+
+  Future<void> _stopRecording() async {
+    final path = await _recorder.stop();
+    setState(() {
+      _isRecording = false;
+      if (path != null) {
+        _instructionAudioFile = XFile(path);
+      }
+    });
+    _speechToText.stop();
+  }
+
+  Future<void> _startListening() async {
+    if (!_isSpeechInitialized) {
+      _isSpeechInitialized = await _speechToText.initialize();
+    }
+    if (_isSpeechInitialized) {
+      _speechToText.listen(onResult: (result) {
+        setState(() {
+          _instructionTextController.text = result.recognizedWords;
+        });
+      });
+    }
+  }
+
+  Future<void> _playAudio(String? url, XFile? file) async {
+    final player = audioplayers.AudioPlayer();
+    if (file != null) {
+      await player.play(audioplayers.DeviceFileSource(file.path));
+    } else if (url != null && url.isNotEmpty) {
+      await player.play(audioplayers.UrlSource(ApiConstants.getImageUrl(url)));
+    }
+  }
+
+  Widget _buildInstructionTextSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'INSTRUCTION TEXT / VOICE TRANSCRIPTION',
+          style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _instructionTextController,
+          maxLines: 4,
+          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: ColorPalette.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Type instructions or use voice-to-text...',
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.border)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilePicker(String label, PlatformFile? file, String? url, VoidCallback onTap) {
+    String? name = file?.name ?? (url != null && url.isNotEmpty ? url.split('/').last : null);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: ColorPalette.textMuted, letterSpacing: 0.5),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: ColorPalette.border),
+          ),
+          child: Row(
+            children: [
+              Icon(LucideIcons.fileText, size: 20, color: ColorPalette.primary.withOpacity(0.5)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  name ?? 'NO FILE SELECTED',
+                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: name == null ? ColorPalette.textMuted : ColorPalette.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 16),
+              TextButton(
+                onPressed: onTap,
+                style: TextButton.styleFrom(
+                  backgroundColor: ColorPalette.primary.withOpacity(0.1),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                child: Text('PICK FILE', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: ColorPalette.primary)),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -614,31 +906,50 @@ class _CuttingMasterFormScreenState extends State<CuttingMasterFormScreen> {
 
   Widget _buildPatternRow(int index, PatternRowData data) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 32),
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildMicroImage(data.imageFile, data.imageUrl, () => _pickImage(false, patternIndex: index)),
-              const SizedBox(width: 20),
+              const SizedBox(width: 24),
               Expanded(
-                child: CustomDropdownField(
-                  label: 'PART IDENTIFIER', 
-                  items: _partNameList, 
-                  value: data.partName, 
-                  onChanged: (v) => setState(() => data.partName = v),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CustomDropdownField(
+                            label: 'PART IDENTIFIER', 
+                            items: _partNameList, 
+                            value: data.partName, 
+                            onChanged: (v) => setState(() => data.partName = v),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          onPressed: () => setState(() => _patterns.removeAt(index)), 
+                          icon: const Icon(LucideIcons.minusCircle, color: ColorPalette.error, size: 18),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    _buildTextField('DIMENSION / MEASUREMENT', data.ctrlMeasurement, LucideIcons.ruler),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: _buildTextField('FINISHING MEASUREMENT', data.ctrlFinishing, LucideIcons.checkCircle2)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _buildTextField('PUNCHES', data.ctrlPunches, LucideIcons.hash)),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: () => setState(() => _patterns.removeAt(index)), 
-                icon: const Icon(LucideIcons.minusCircle, color: ColorPalette.error, size: 18),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          _buildTextField('DIMENSION / MEASUREMENT', data.ctrlMeasurement, LucideIcons.ruler),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           const Divider(height: 1, color: ColorPalette.border),
         ],
       ),
@@ -673,5 +984,15 @@ class PatternRowData {
   XFile? imageFile;
   String? imageUrl;
   final TextEditingController ctrlMeasurement;
-  PatternRowData({this.partName, this.imageFile, this.imageUrl, required this.ctrlMeasurement});
+  final TextEditingController ctrlFinishing;
+  final TextEditingController ctrlPunches;
+
+  PatternRowData({
+    this.partName,
+    this.imageFile,
+    this.imageUrl,
+    required this.ctrlMeasurement,
+    required this.ctrlFinishing,
+    required this.ctrlPunches,
+  });
 }
