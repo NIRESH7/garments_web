@@ -6,6 +6,8 @@ import '../../services/mobile_api_service.dart';
 import '../../services/lot_allocation_print_service.dart';
 import 'cutting_order_list_screen.dart';
 import '../../core/theme/color_palette.dart';
+import '../../widgets/custom_dropdown_field.dart';
+import '../../core/constants/layout_constants.dart';
 
 class CuttingOrderPlanningScreen extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -29,6 +31,8 @@ class _CuttingOrderPlanningScreenState
   String _planType = 'Monthly';
   String _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
   final _planNameCtrl = TextEditingController();
+  List<String> _savedPlanNames = [];
+  bool _isManualPlanEntry = false;
 
   List<String> _itemNames = [];
   Map<String, String?> _itemSizeTypeMap = {}; // Maps item name to its configured size type
@@ -91,6 +95,21 @@ class _CuttingOrderPlanningScreenState
         }
         _isLoading = false;
       });
+
+      // Load existing plans for the dropdown
+      final plans = await _api.getCuttingOrders();
+      if (plans != null && plans is List) {
+        final List<String> uniqueNames = [];
+        for (var p in plans) {
+          final name = p['planName']?.toString() ?? '';
+          if (name.isNotEmpty && !uniqueNames.contains(name)) {
+            uniqueNames.add(name);
+          }
+        }
+        setState(() {
+          _savedPlanNames = uniqueNames;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -382,25 +401,49 @@ class _CuttingOrderPlanningScreenState
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _planNameCtrl,
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
-            decoration: InputDecoration(
-              hintText: 'PLAN NAME / REMARKS',
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'PLAN NAME / REMARKS',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  color: const Color(0xFF94A3B8),
+                  letterSpacing: 0.5,
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              TextButton.icon(
+                onPressed: () => setState(() => _isManualPlanEntry = !_isManualPlanEntry),
+                icon: Icon(_isManualPlanEntry ? LucideIcons.history : LucideIcons.type, size: 12),
+                label: Text(_isManualPlanEntry ? 'USE HISTORY' : 'TYPE NEW', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF2563EB),
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
+            ],
           ),
+          const SizedBox(height: 8),
+          _isManualPlanEntry
+              ? TextFormField(
+                  controller: _planNameCtrl,
+                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+                  decoration: _fieldDeco().copyWith(hintText: 'TYPE NEW PLAN NAME...'),
+                )
+              : CustomDropdownField(
+                  label: '',
+                  value: _savedPlanNames.contains(_planNameCtrl.text) ? _planNameCtrl.text : null,
+                  items: _savedPlanNames,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _planNameCtrl.text = val);
+                    }
+                  },
+                  hint: 'SELECT PREVIOUS PLAN...',
+                ),
           const SizedBox(height: 16),
           Row(
             children: [
