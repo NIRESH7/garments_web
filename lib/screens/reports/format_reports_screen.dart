@@ -129,51 +129,117 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
 
   Widget _buildAgingReport() {
     final columns = ['date', 'lot No', 'name', 'dia', 'colour', 'rolls', 'wt', 'val', 'days'];
+    double rolls = 0, wt = 0, val = 0;
     final rows = _agingData.map((item) {
       final aging = _calculateAging(item['inward_date']); final weight = (item['weight'] ?? 0) as num; final rate = (item['rate'] ?? item['Rate'] ?? 0) as num;
+      rolls += ((item['rolls'] ?? 0) as num); wt += weight; val += (weight * rate);
       return { 'date': _formatDate(item['inward_date']), 'lot No': item['lot_number'] ?? '-', 'name': item['lot_name'] ?? '-', 'dia': item['dia']?.toString() ?? '-', 'colour': item['colour']?.toString() ?? '-', 'rolls': item['rolls']?.toString() ?? '0', 'wt': FormatUtils.formatWeight(item['weight']), 'val': FormatUtils.formatCurrency(weight * rate), 'days': '$aging' };
     }).toList();
-    return Center(child: ModernDataTable(columns: columns, rows: rows, emptyMessage: 'No aging records found', showActions: false));
+    return Column(children: [ Center(child: ModernDataTable(columns: columns, rows: rows, emptyMessage: 'No aging records found', showActions: false)), _buildReportFooter(rolls: rolls, weight: wt, value: val) ]);
   }
 
   Widget _buildAgingSummaryReport() {
     final Map<String, dynamic> summary = {};
+    double rolls = 0, wt = 0, val = 0;
     for (var item in _closingData) {
       final balRolls = ((item['balance_rolls'] ?? 0) as num).toInt(); final balWeight = ((item['balance_weight'] ?? 0) as num).toDouble(); final balValue = ((item['balance_value'] ?? 0) as num).toDouble();
       if (balWeight <= 0.05 && balRolls <= 0) continue;
       final rawLotName = item['lot_name']?.toString().trim() ?? 'N/A'; final groupingKey = rawLotName.toUpperCase();
       if (!summary.containsKey(groupingKey)) { summary[groupingKey] = { 'lotName': groupingKey, 'rolls': 0, 'weight': 0.0, 'value': 0.0 }; }
       summary[groupingKey]['rolls'] += balRolls; summary[groupingKey]['weight'] += balWeight; summary[groupingKey]['value'] += balValue;
+      rolls += balRolls; wt += balWeight; val += balValue;
     }
     final columns = ['lotName', 'rolls', 'weight', 'value', 'status'];
     final rows = summary.values.map((v) => { 'lotName': v['lotName'], 'rolls': '${v['rolls']}', 'weight': '${FormatUtils.formatWeight(v['weight'])} Kg', 'value': FormatUtils.formatCurrency(v['value']), 'status': 'In Stock' }).toList();
-    return Center(child: ModernDataTable(columns: columns, rows: rows, emptyMessage: 'Empty summary', showActions: false));
+    return Column(children: [ Center(child: ModernDataTable(columns: columns, rows: rows, emptyMessage: 'Empty summary', showActions: false)), _buildReportFooter(rolls: rolls, weight: wt, value: val) ]);
   }
 
   Widget _buildInwardReport() {
     final List<Map<String, dynamic>> rows = [];
+    double rolls = 0, wt = 0, val = 0;
     for (var inward in _inwardData) {
       for (var entry in (inward['diaEntries'] as List? ?? [])) {
         final weight = (entry['recWt'] ?? 0) as num; final rate = (entry['rate'] ?? inward['rate'] ?? 0) as num;
-        rows.add({ 'date': _formatDate(inward['inwardDate']), 'inward No': inward['inwardNo'] ?? '-', 'party': inward['fromParty'] ?? '-', 'lot No': inward['lotNo'] ?? '-', 'dia': entry['dia']?.toString() ?? '-', 'roll': '${entry['recRoll'] ?? entry['roll']}', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) });
+        final rCount = (entry['recRoll'] ?? entry['roll'] ?? 0) as num;
+        rolls += rCount; wt += weight; val += (weight * rate);
+        rows.add({ 'date': _formatDate(inward['inwardDate']), 'inward No': inward['inwardNo'] ?? '-', 'party': inward['fromParty'] ?? '-', 'lot No': inward['lotNo'] ?? '-', 'dia': entry['dia']?.toString() ?? '-', 'roll': '$rCount', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) });
       }
     }
-    return Center(child: ModernDataTable(columns: const ['date', 'inward No', 'party', 'lot No', 'dia', 'roll', 'wt', 'val'], rows: rows, showActions: false));
+    return Column(children: [ Center(child: ModernDataTable(columns: const ['date', 'inward No', 'party', 'lot No', 'dia', 'roll', 'wt', 'val'], rows: rows, showActions: false)), _buildReportFooter(rolls: rolls, weight: wt, value: val) ]);
   }
 
   Widget _buildOutwardReport() {
     final columns = ['party', 'lotName', 'date', 'dcNo', 'lotNo', 'dia', 'process', 'rolls', 'wt', 'val'];
+    double rolls = 0, wt = 0, val = 0;
     final rows = _outwardData.map((out) {
-      final items = out['items'] as List? ?? []; final weight = items.fold(0.0, (sum, i) => sum + (i['total_weight'] ?? 0)); final rate = (out['rate'] ?? out['Rate'] ?? 0) as num;
+      final items = out['items'] as List? ?? []; final weight = items.fold(0.0, (sum, i) => (sum as double) + (i['total_weight'] ?? 0)); final rate = (out['rate'] ?? out['Rate'] ?? 0) as num;
+      rolls += items.length; wt += weight; val += (weight * rate);
       return { 'party': out['partyName'] ?? '-', 'lotName': out['lotName'] ?? '-', 'date': _formatDate(out['dateTime']), 'dcNo': out['dcNo'] ?? '-', 'lotNo': out['lotNo'] ?? '-', 'dia': out['dia']?.toString() ?? '-', 'process': out['process'] ?? '-', 'rolls': '${items.length}', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) };
     }).toList();
-    return Center(child: ModernDataTable(columns: columns, rows: rows, showActions: false));
+    return Column(children: [ Center(child: ModernDataTable(columns: columns, rows: rows, showActions: false)), _buildReportFooter(rolls: rolls, weight: wt, value: val) ]);
   }
 
   Widget _buildClosingReport() {
     final columns = ['lotNo', 'lotName', 'in Roll', 'in Wt', 'out Roll', 'out Wt', 'bal Roll', 'bal Wt', 'status'];
-    final rows = _closingData.map((item) => { 'lotNo': item['lot_number'] ?? '-', 'lotName': item['lot_name'] ?? '-', 'in Roll': '${item['rec_rolls'] ?? 0}', 'in Wt': FormatUtils.formatWeight(item['rec_weight']), 'out Roll': '${item['deliv_rolls'] ?? 0}', 'out Wt': FormatUtils.formatWeight(item['deliv_weight']), 'bal Roll': '${item['balance_rolls'] ?? 0}', 'bal Wt': FormatUtils.formatWeight(item['balance_weight']), 'status': item['status'] ?? '-' }).toList();
-    return Center(child: ModernDataTable(columns: columns, rows: rows, showActions: false));
+    double inRoll = 0, inWt = 0, outRoll = 0, outWt = 0, balRoll = 0, balWt = 0;
+    final rows = _closingData.map((item) {
+      inRoll += (item['rec_rolls'] ?? 0) as num; inWt += (item['rec_weight'] ?? 0) as num;
+      outRoll += (item['deliv_rolls'] ?? 0) as num; outWt += (item['deliv_weight'] ?? 0) as num;
+      balRoll += (item['balance_rolls'] ?? 0) as num; balWt += (item['balance_weight'] ?? 0) as num;
+      return { 'lotNo': item['lot_number'] ?? '-', 'lotName': item['lot_name'] ?? '-', 'in Roll': '${item['rec_rolls'] ?? 0}', 'in Wt': FormatUtils.formatWeight(item['rec_weight']), 'out Roll': '${item['deliv_rolls'] ?? 0}', 'out Wt': FormatUtils.formatWeight(item['deliv_weight']), 'bal Roll': '${item['balance_rolls'] ?? 0}', 'bal Wt': FormatUtils.formatWeight(item['balance_weight']), 'status': item['status'] ?? '-' };
+    }).toList();
+    return Column(children: [ 
+      Center(child: ModernDataTable(columns: columns, rows: rows, showActions: false)), 
+      _buildReportFooter(rolls: balRoll, weight: balWt, label: 'CLOSING (BAL)') 
+    ]);
+  }
+
+  Widget _buildReportFooter({required double rolls, required double weight, double? value, String label = 'TOTALS'}) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(4)),
+            child: Text(label, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1)),
+          ),
+          const Spacer(),
+          _buildFooterMetric('Total Rolls', '${rolls.toInt()}', LucideIcons.layers),
+          const SizedBox(width: 40),
+          _buildFooterMetric('Total Weight', '${FormatUtils.formatWeight(weight)} Kg', LucideIcons.scale),
+          if (value != null) ...[
+            const SizedBox(width: 40),
+            _buildFooterMetric('Total Value', FormatUtils.formatCurrency(value), LucideIcons.indianRupee),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooterMetric(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF94A3B8), letterSpacing: 0.5)),
+            Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildShareMenu() { return PopupMenuButton<String>( icon: const Icon(LucideIcons.share2, size: 20), onSelected: _handleShare, itemBuilder: (context) => [ const PopupMenuItem(value: 'PDF', child: Row(children: [Icon(LucideIcons.fileText, size: 18), SizedBox(width: 8), Text("Share PDF")])), const PopupMenuItem(value: 'WhatsApp', child: Row(children: [Icon(Icons.message_outlined, size: 18), SizedBox(width: 8), Text("Share WhatsApp")])) ] ); }
