@@ -131,9 +131,12 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final columns = ['date', 'lot No', 'name', 'dia', 'colour', 'rolls', 'wt', 'val', 'days'];
     double rolls = 0, wt = 0, val = 0;
     final rows = _agingData.map((item) {
-      final aging = _calculateAging(item['inward_date']); final weight = (item['weight'] ?? 0) as num; final rate = (item['rate'] ?? item['Rate'] ?? 0) as num;
-      rolls += ((item['rolls'] ?? 0) as num); wt += weight; val += (weight * rate);
-      return { 'date': _formatDate(item['inward_date']), 'lot No': item['lot_number'] ?? '-', 'name': item['lot_name'] ?? '-', 'dia': item['dia']?.toString() ?? '-', 'colour': item['colour']?.toString() ?? '-', 'rolls': item['rolls']?.toString() ?? '0', 'wt': FormatUtils.formatWeight(item['weight']), 'val': FormatUtils.formatCurrency(weight * rate), 'days': '$aging' };
+      final aging = _calculateAging(item['inward_date']); 
+      final weight = _parseNum(item['weight']); 
+      final rate = _parseNum(item['rate'] ?? item['Rate']);
+      final rCount = _parseNum(item['rolls'] ?? 1); // Default to 1 if missing for aging roll details
+      rolls += rCount; wt += weight; val += (weight * rate);
+      return { 'date': _formatDate(item['inward_date']), 'lot No': item['lot_number'] ?? '-', 'name': item['lot_name'] ?? '-', 'dia': item['dia']?.toString() ?? '-', 'colour': item['colour']?.toString() ?? '-', 'rolls': rCount.toInt().toString(), 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate), 'days': '$aging' };
     }).toList();
     return Column(children: [ Center(child: ModernDataTable(columns: columns, rows: rows, emptyMessage: 'No aging records found', showActions: false)), _buildReportFooter(rolls: rolls, weight: wt, value: val) ]);
   }
@@ -142,7 +145,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final Map<String, dynamic> summary = {};
     double rolls = 0, wt = 0, val = 0;
     for (var item in _closingData) {
-      final balRolls = ((item['balance_rolls'] ?? 0) as num).toInt(); final balWeight = ((item['balance_weight'] ?? 0) as num).toDouble(); final balValue = ((item['balance_value'] ?? 0) as num).toDouble();
+      final balRolls = _parseNum(item['balance_rolls']).toInt(); 
+      final balWeight = _parseNum(item['balance_weight']); 
+      final balValue = _parseNum(item['balance_value']);
       if (balWeight <= 0.05 && balRolls <= 0) continue;
       final rawLotName = item['lot_name']?.toString().trim() ?? 'N/A'; final groupingKey = rawLotName.toUpperCase();
       if (!summary.containsKey(groupingKey)) { summary[groupingKey] = { 'lotName': groupingKey, 'rolls': 0, 'weight': 0.0, 'value': 0.0 }; }
@@ -159,8 +164,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     double rolls = 0, wt = 0, val = 0;
     for (var inward in _inwardData) {
       for (var entry in (inward['diaEntries'] as List? ?? [])) {
-        final weight = (entry['recWt'] ?? 0) as num; final rate = (entry['rate'] ?? inward['rate'] ?? 0) as num;
-        final rCount = (entry['recRoll'] ?? entry['roll'] ?? 0) as num;
+        final weight = _parseNum(entry['recWt']); 
+        final rate = _parseNum(entry['rate'] ?? inward['rate']);
+        final rCount = _parseNum(entry['recRoll'] ?? entry['roll']);
         rolls += rCount; wt += weight; val += (weight * rate);
         rows.add({ 'date': _formatDate(inward['inwardDate']), 'inward No': inward['inwardNo'] ?? '-', 'party': inward['fromParty'] ?? '-', 'lot No': inward['lotNo'] ?? '-', 'dia': entry['dia']?.toString() ?? '-', 'roll': '$rCount', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) });
       }
@@ -172,7 +178,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final columns = ['party', 'lotName', 'date', 'dcNo', 'lotNo', 'dia', 'process', 'rolls', 'wt', 'val'];
     double rolls = 0, wt = 0, val = 0;
     final rows = _outwardData.map((out) {
-      final items = out['items'] as List? ?? []; final weight = items.fold(0.0, (sum, i) => (sum as double) + (i['total_weight'] ?? 0)); final rate = (out['rate'] ?? out['Rate'] ?? 0) as num;
+      final items = out['items'] as List? ?? []; 
+      final weight = items.fold(0.0, (sum, i) => (sum as double) + _parseNum(i['total_weight'])); 
+      final rate = _parseNum(out['rate'] ?? out['Rate']);
       rolls += items.length; wt += weight; val += (weight * rate);
       return { 'party': out['partyName'] ?? '-', 'lotName': out['lotName'] ?? '-', 'date': _formatDate(out['dateTime']), 'dcNo': out['dcNo'] ?? '-', 'lotNo': out['lotNo'] ?? '-', 'dia': out['dia']?.toString() ?? '-', 'process': out['process'] ?? '-', 'rolls': '${items.length}', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) };
     }).toList();
@@ -183,9 +191,9 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final columns = ['lotNo', 'lotName', 'in Roll', 'in Wt', 'out Roll', 'out Wt', 'bal Roll', 'bal Wt', 'status'];
     double inRoll = 0, inWt = 0, outRoll = 0, outWt = 0, balRoll = 0, balWt = 0;
     final rows = _closingData.map((item) {
-      inRoll += (item['rec_rolls'] ?? 0) as num; inWt += (item['rec_weight'] ?? 0) as num;
-      outRoll += (item['deliv_rolls'] ?? 0) as num; outWt += (item['deliv_weight'] ?? 0) as num;
-      balRoll += (item['balance_rolls'] ?? 0) as num; balWt += (item['balance_weight'] ?? 0) as num;
+      inRoll += _parseNum(item['rec_rolls']); inWt += _parseNum(item['rec_weight']);
+      outRoll += _parseNum(item['deliv_rolls']); outWt += _parseNum(item['deliv_weight']);
+      balRoll += _parseNum(item['balance_rolls']); balWt += _parseNum(item['balance_weight']);
       return { 'lotNo': item['lot_number'] ?? '-', 'lotName': item['lot_name'] ?? '-', 'in Roll': '${item['rec_rolls'] ?? 0}', 'in Wt': FormatUtils.formatWeight(item['rec_weight']), 'out Roll': '${item['deliv_rolls'] ?? 0}', 'out Wt': FormatUtils.formatWeight(item['deliv_weight']), 'bal Roll': '${item['balance_rolls'] ?? 0}', 'bal Wt': FormatUtils.formatWeight(item['balance_weight']), 'status': item['status'] ?? '-' };
     }).toList();
     return Column(children: [ 
@@ -315,6 +323,12 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
 
   String _formatDate(String? dateStr) { if (dateStr == null) return '-'; try { return DateFormat('dd/MM/yy').format(DateTime.parse(dateStr)); } catch (_) { return dateStr; } }
   int _calculateAging(String? dateStr) { if (dateStr == null) return 0; try { return DateTime.now().difference(DateTime.parse(dateStr)).inDays; } catch (_) { return 0; } }
+
+  double _parseNum(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
 }
 
 class _FilterDialog extends StatefulWidget {

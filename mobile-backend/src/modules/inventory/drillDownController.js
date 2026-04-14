@@ -103,13 +103,17 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
 
                 if (key !== 'DEEP_LEVEL') {
                     const group = getGroup(key, inw.inwardDate || inw.dateTime);
-                    const weight = parseFloat(de.recWt || 0);
-                    const rolls = parseInt(de.recRoll || de.roll || 0);
-                    const rate = parseFloat(de.rate || inw.rate || 0);
                     
-                    group.totalWeight += weight;
-                    group.totalRolls += rolls;
-                    group.totalValue += (weight * rate);
+                    // FIXED: Only add weight/rolls/value if we are NOT in an Outward-only report
+                    if (type !== 'outward') {
+                        const weight = parseFloat(de.recWt || 0);
+                        const rolls = parseInt(de.recRoll || de.roll || 0);
+                        const rate = parseFloat(de.rate || inw.rate || 0);
+                        
+                        group.totalWeight += weight;
+                        group.totalRolls += rolls;
+                        group.totalValue += (weight * rate);
+                    }
                 }
             });
             
@@ -141,9 +145,9 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                                             const diaEntry = inw.diaEntries.find(d => d.dia === dia);
                                             const rate = parseFloat(diaEntry?.rate || inw.rate || 0);
                                             
-                                            group.totalWeight += weight;
-                                            group.totalRolls += 1;
-                                            group.totalValue += (weight * rate);
+                                            group.totalWeight += (type === 'outward' ? 0 : weight);
+                                            group.totalRolls += (type === 'outward' ? 0 : 1);
+                                            group.totalValue += (type === 'outward' ? 0 : (weight * rate));
                                         }
                                     });
                                 }
@@ -167,9 +171,9 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                                     const proportion = totalStorageWeight > 0 ? (weight / totalStorageWeight) : (1 / rows.length);
                                     const allocatedRolls = proportion * totalGridRolls;
 
-                                    group.totalWeight += weight;
-                                    group.totalRolls += allocatedRolls; 
-                                    group.totalValue += (weight * rate);
+                                    group.totalWeight += (type === 'outward' ? 0 : weight);
+                                    group.totalRolls += (type === 'outward' ? 0 : allocatedRolls); 
+                                    group.totalValue += (type === 'outward' ? 0 : (weight * rate));
                                     group.isColorLevel = true; // Signal to frontend
                                     
                                     if (!group.rack) group.rack = s.racks ? s.racks[0] : '';
@@ -193,9 +197,9 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                                     const diaEntry = inw.diaEntries.find(d => d.dia === dia);
                                     const rate = parseFloat(diaEntry?.rate || inw.rate || 0);
                                     
-                                    group.totalWeight += weight;
-                                    group.totalRolls += 1;
-                                    group.totalValue += (weight * rate);
+                                    group.totalWeight += (type === 'outward' ? 0 : weight);
+                                    group.totalRolls += (type === 'outward' ? 0 : 1);
+                                    group.totalValue += (type === 'outward' ? 0 : (weight * rate));
 
                                     // Add details only if not already present or if we want the FIRST one
                                     if (!group.rack) group.rack = s.racks ? s.racks[targetSetIndex] : '';
@@ -269,6 +273,15 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                         
                         group.totalWeight += (weight * multiplier);
                         group.totalRolls += (rolls * multiplier);
+
+                        // FIXED: Added missing value calculation for Outward Sets (Level 4)
+                        const inwardForRate = inwards.find(inw => 
+                            inw.lotNo?.toUpperCase().trim() === out.lotNo?.toUpperCase().trim() &&
+                            inw.lotName?.toUpperCase().trim() === out.lotName?.toUpperCase().trim()
+                        );
+                        const diaEntry = inwardForRate?.diaEntries?.find(d => d.dia === out.dia);
+                        const rate = parseFloat(diaEntry?.rate || inwardForRate?.rate || 0);
+                        group.totalValue += (weight * multiplier * rate);
                     });
                 } else {
                     // Level 5: Group by Colour inside the given Set

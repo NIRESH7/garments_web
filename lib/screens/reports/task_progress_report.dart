@@ -138,6 +138,7 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
               flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('DEPARTMENT', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
                   const SizedBox(height: 8),
@@ -160,39 +161,81 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
             ),
             Container(height: 32, width: 1, color: const Color(0xFFE2E8F0), margin: const EdgeInsets.symmetric(horizontal: 20)),
             Expanded(
-              flex: 3,
-              child: InkWell(
+              flex: 2,
+              child: GestureDetector(
                 onTap: () async {
-                  final range = await showDateRangePicker(
+                  final d = await showDatePicker(
                     context: context,
-                    initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
+                    initialDate: _startDate,
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2100),
                   );
-                  if (range != null) {
-                    setState(() {
-                      _startDate = range.start;
-                      _endDate = range.end;
-                    });
+                  if (d != null) {
+                    setState(() => _startDate = d);
                     _fetchData();
                   }
                 },
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('DATE RANGE', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(LucideIcons.calendar, size: 14, color: Color(0xFF2563EB)),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${DateFormat('dd MMM').format(_startDate)} - ${DateFormat('dd MMM yyyy').format(_endDate)}',
-                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
-                        ),
-                      ],
-                    ),
-                  ],
+                behavior: HitTestBehavior.opaque,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('FROM', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(LucideIcons.calendar, size: 14, color: Color(0xFF2563EB)),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(_startDate),
+                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(height: 32, width: 1, color: const Color(0xFFE2E8F0), margin: const EdgeInsets.symmetric(horizontal: 20)),
+            Expanded(
+              flex: 2,
+              child: GestureDetector(
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _endDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (d != null) {
+                    setState(() => _endDate = d);
+                    _fetchData();
+                  }
+                },
+                behavior: HitTestBehavior.opaque,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('TO', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(LucideIcons.calendar, size: 14, color: Color(0xFF2563EB)),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(_endDate),
+                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -201,6 +244,7 @@ class _TaskProgressReportScreenState extends State<TaskProgressReportScreen> {
       ),
     );
   }
+
 
   Widget _buildTaskEntry(dynamic task, int index) {
     return Container(

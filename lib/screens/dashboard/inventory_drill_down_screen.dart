@@ -62,7 +62,12 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
         endDate: widget.endDate,
       );
       setState(() {
-        _data = res;
+        // Filter out negative values as requested by user
+        _data = res.where((item) {
+          final rolls = (item['totalRolls'] ?? 0) as num;
+          final weight = (item['totalWeight'] ?? 0) as num;
+          return rolls >= 0 && weight >= 0;
+        }).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -366,6 +371,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
                 },
               ),
             ),
+            _buildSummaryFooter(),
             _buildPaginationFooter(),
           ],
         ),
@@ -436,6 +442,67 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon, size: 16, color: isEnabled ? ColorPalette.textPrimary : Colors.grey.shade300),
+      ),
+    );
+  }
+
+  Widget _buildSummaryFooter() {
+    double totalWeight = 0, totalValue = 0;
+    int totalRolls = 0;
+
+    for (var item in _data) {
+      totalRolls += ((item['totalRolls'] ?? 0) as num).toInt();
+      totalWeight += ((item['totalWeight'] ?? 0) as num).toDouble();
+      totalValue += ((item['totalValue'] ?? 0) as num).toDouble();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9), // Light slate for summary
+        border: Border(top: BorderSide(color: ColorPalette.border.withOpacity(0.8))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Row(
+              children: [
+                Icon(LucideIcons.barChart3, size: 14, color: ColorPalette.primary),
+                const SizedBox(width: 8),
+                Text('TOTAL SUMMARY',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 10, color: ColorPalette.primary, letterSpacing: 1.0)),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: widget.setNo != null ? 2 : 1,
+            child: Text(
+              totalRolls.toString(),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, color: ColorPalette.textPrimary),
+            ),
+          ),
+          if (widget.setNo != null || (_data.isNotEmpty && _data.any((i) => i['isColorLevel'] == true)))
+            const Expanded(flex: 2, child: SizedBox.shrink()),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${FormatUtils.formatWeight(totalWeight)} Kg',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, color: ColorPalette.textPrimary),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '₹${FormatUtils.formatCurrency(totalValue)}',
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, color: ColorPalette.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 32),
+        ],
       ),
     );
   }

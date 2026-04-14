@@ -1031,7 +1031,7 @@ class _StockCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '${FormatUtils.formatWeight(weight)} Kg',
+              '${FormatUtils.formatWeight(double.tryParse(weight.toString()) != null && double.parse(weight.toString()) < 0 ? 0 : weight)} Kg',
               style: GoogleFonts.inter(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -1040,7 +1040,7 @@ class _StockCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${FormatUtils.formatQuantity(rolls)} ROLLS',
+              '${FormatUtils.formatQuantity(double.tryParse(rolls.toString()) != null && double.parse(rolls.toString()) < 0 ? 0 : rolls)} ROLLS',
               style: GoogleFonts.inter(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,

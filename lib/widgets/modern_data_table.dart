@@ -265,19 +265,24 @@ class _ModernDataTableState extends State<ModernDataTable> {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(color: Color(0xFFF8FAFC), shape: BoxShape.circle),
-            child: Icon(LucideIcons.database, size: 48, color: Colors.blueGrey.shade100),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            widget.emptyMessage ?? 'No records found',
-            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
-          ),
-        ],
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(color: Color(0xFFF8FAFC), shape: BoxShape.circle),
+              child: Icon(LucideIcons.database, size: 48, color: Colors.blueGrey.shade100),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              widget.emptyMessage ?? 'No records found',
+              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+            ),
+          ],
+        ),
       ),
     );
   }

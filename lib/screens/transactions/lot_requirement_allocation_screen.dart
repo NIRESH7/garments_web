@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -99,6 +100,9 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   bool _isLoadingReport = false;
   String? _reportDay;
   DateTime? _reportDate;
+  
+  final ScrollController _previewScrollCtrl = ScrollController();
+  final ScrollController _historyScrollCtrl = ScrollController();
 
 
   // ─── Computed ─────────────────────────────────────────────────────────────
@@ -160,6 +164,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     _gsmCtrl.dispose();
     _efficiencyCtrl.dispose();
     _wasteCtrl.dispose();
+    _previewScrollCtrl.dispose();
+    _historyScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -1127,37 +1133,55 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
             ? const Center(child: CircularProgressIndicator()) 
             : groupedRows.isEmpty 
               ? Center(child: Icon(LucideIcons.database, size: 64, color: const Color(0xFFF1F5F9)))
-              : SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 1200,
-              child: ModernDataTable(
-                showActions: false,
-                columns: const ['LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK NAME', 'PALLET NO', 'TOTAL WEIGHT (kg)', 'DOZEN'],
-                rows: groupedRows.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final s = entry.value;
-                  final isLast = idx == groupedRows.length - 1;
-
-                  return {
-                    'LOT NAME': s['lotName']?.toString() ?? '-',
-                    'LOT NO': s['lotNo']?.toString() ?? '-',
-                    'DIA': s['dia']?.toString() ?? '-',
-                    'SET REQUIRED': _buildBadge("${s['setCount']} Set", const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
-                    'SET NO': _buildBadge("Set ${s['setRange']}", const Color(0xFFF5F3FF), const Color(0xFF7C3AED)),
-                    'RACK NAME': s['rackName'] ?? '-',
-                    'PALLET NO': s['palletNumber']?.toString() ?? '-',
-                    'TOTAL WEIGHT (kg)': _buildBadge("${_formatWeight(s['setWeight'])} kg", const Color(0xFFECFDF5), const Color(0xFF059669)),
-                    'DOZEN': isLast 
-                      ? Text((double.tryParse(_dozenCtrl.text) ?? 0).toStringAsFixed(0), 
-                             style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)))
-                      : '',
-                  };
-                }).toList(),
-                emptyMessage: '',
-              ),
-            ),
-          ),
+              : Scrollbar(
+                  controller: _previewScrollCtrl,
+                  thumbVisibility: true,
+                  interactive: true,
+                  thickness: 14,
+                  radius: const Radius.circular(8),
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                        PointerDeviceKind.trackpad,
+                      },
+                    ),
+                    child: SingleChildScrollView(
+                      controller: _previewScrollCtrl,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: groupedRows.isEmpty ? MediaQuery.of(context).size.width - 100 : 1800,
+                        child: ModernDataTable(
+                        showActions: false,
+                        columns: const ['LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK NAME', 'PALLET NO', 'TOTAL WEIGHT (kg)', 'DOZEN'],
+                        rows: groupedRows.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final s = entry.value;
+                          final isLast = idx == groupedRows.length - 1;
+        
+                          return {
+                            'LOT NAME': s['lotName']?.toString() ?? '-',
+                            'LOT NO': s['lotNo']?.toString() ?? '-',
+                            'DIA': s['dia']?.toString() ?? '-',
+                            'SET REQUIRED': _buildBadge("${s['setCount']} Set", const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+                            'SET NO': _buildBadge("Set ${s['setRange']}", const Color(0xFFF5F3FF), const Color(0xFF7C3AED)),
+                            'RACK NAME': s['rackName'] ?? '-',
+                            'PALLET NO': s['palletNumber']?.toString() ?? '-',
+                            'TOTAL WEIGHT (kg)': _buildBadge("${_formatWeight(s['setWeight'])} kg", const Color(0xFFECFDF5), const Color(0xFF059669)),
+                            'DOZEN': isLast 
+                              ? Text((double.tryParse(_dozenCtrl.text) ?? 0).toStringAsFixed(0), 
+                                     style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)))
+                              : '',
+                          };
+                        }).toList(),
+                        emptyMessage: '',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
         ),
       ],
     );
@@ -1247,35 +1271,54 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
         Container(
           height: 600, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFF1F5F9))),
           clipBehavior: Clip.antiAlias,
-          child: _isLoadingReport ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 1400,
-              child: ModernDataTable(
-                columns: const ['DATE', 'ITEM', 'SIZE', 'DOZEN', 'NEED WT', 'LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK', 'PALLET', 'SET WEIGHT'],
-                onShare: _navigateToOutward,
-                onEdit: (row) => _showError('Edit operation initialized for ${row['ITEM']}'),
-                onDelete: (row) => _showError('Archive operation initialized for ${row['ITEM']}'),
-                rows: _reportRows.map((r) => {
-                  '__original__': r,
-                  'DATE': r['date'] ?? '-',
-                  'ITEM': r['itemName'] ?? '-',
-                  'SIZE': r['size'] ?? '-',
-                  'DOZEN': (r['dozen'] ?? 0).toString(),
-                  'NEED WT': _formatWeight(r['neededWeight']),
-                  'LOT NAME': r['lotName'] ?? '-',
-                  'LOT NO': r['lotNo'] ?? '-',
-                  'DIA': r['dia']?.toString() ?? '-',
-                  'SET REQUIRED': "${(r['sets'] as List?)?.length ?? 1}",
-                  'SET NO': r['setList'] ?? '-',
-                  'RACK': r['rackName'] ?? '-',
-                  'PALLET': r['palletNumber']?.toString() ?? '-',
-                  'SET WEIGHT': _formatWeight(r['setWeight']),
-                }).toList(),
-                emptyMessage: 'No activity logs found for this plan.',
+          child: _isLoadingReport ? const Center(child: CircularProgressIndicator()) : Scrollbar(
+            controller: _historyScrollCtrl,
+            thumbVisibility: true,
+            interactive: true,
+            thickness: 14,
+            trackVisibility: true,
+            radius: const Radius.circular(8),
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.mouse,
+                  PointerDeviceKind.trackpad,
+                },
               ),
-            ),
-          ),
+              child: SingleChildScrollView(
+                controller: _historyScrollCtrl,
+                physics: const AlwaysScrollableScrollPhysics(),
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: _reportRows.isEmpty ? MediaQuery.of(context).size.width - 100 : 2500,
+                  child: ModernDataTable(
+                  columns: const ['DATE', 'ITEM', 'SIZE', 'DOZEN', 'NEED WT', 'LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK', 'PALLET', 'SET WEIGHT'],
+                  onShare: _navigateToOutward,
+                  onEdit: (row) => _showError('Edit operation initialized for ${row['ITEM']}'),
+                  onDelete: (row) => _showError('Archive operation initialized for ${row['ITEM']}'),
+                  rows: _reportRows.map((r) => {
+                    '__original__': r,
+                    'DATE': r['date'] ?? '-',
+                    'ITEM': r['itemName'] ?? '-',
+                    'SIZE': r['size'] ?? '-',
+                    'DOZEN': (r['dozen'] ?? 0).toString(),
+                    'NEED WT': _formatWeight(r['neededWeight']),
+                    'LOT NAME': r['lotName'] ?? '-',
+                    'LOT NO': r['lotNo'] ?? '-',
+                    'DIA': r['dia']?.toString() ?? '-',
+                    'SET REQUIRED': "${(r['sets'] as List?)?.length ?? 1}",
+                    'SET NO': r['setList'] ?? '-',
+                    'RACK': r['rackName'] ?? '-',
+                    'PALLET': r['palletNumber']?.toString() ?? '-',
+                    'SET WEIGHT': _formatWeight(r['setWeight']),
+                  }).toList(),
+                  emptyMessage: 'No activity logs found for this plan.',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
         ),
       ],
     );
