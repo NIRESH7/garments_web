@@ -341,6 +341,44 @@ const getStockLimits = asyncHandler(async (req, res) => {
     res.json(limits);
 });
 
+// @desc    Update a stock limit
+// @route   PUT /api/master/stock-limits/:id
+// @access  Private
+const updateStockLimit = asyncHandler(async (req, res) => {
+    const { lotName, dia, minWeight, maxWeight, minRolls, maxRolls, manualAdjustment } = req.body;
+    const limit = await StockLimit.findById(req.params.id);
+
+    if (limit) {
+        limit.lotName = lotName || limit.lotName;
+        limit.dia = dia || limit.dia;
+        limit.minWeight = minWeight !== undefined ? minWeight : limit.minWeight;
+        limit.maxWeight = maxWeight !== undefined ? maxWeight : limit.maxWeight;
+        limit.minRolls = minRolls !== undefined ? minRolls : limit.minRolls;
+        limit.maxRolls = maxRolls !== undefined ? maxRolls : limit.maxRolls;
+        limit.manualAdjustment = manualAdjustment !== undefined ? manualAdjustment : limit.manualAdjustment;
+
+        const updatedLimit = await limit.save();
+        res.json(updatedLimit);
+    } else {
+        res.status(404);
+        throw new Error('Stock Limit not found');
+    }
+});
+
+// @desc    Delete a stock limit
+// @route   DELETE /api/master/stock-limits/:id
+// @access  Private
+const deleteStockLimit = asyncHandler(async (req, res) => {
+    const limit = await StockLimit.findById(req.params.id);
+    if (limit) {
+        await StockLimit.deleteOne({ _id: limit._id });
+        res.json({ message: 'Stock Limit removed' });
+    } else {
+        res.status(404);
+        throw new Error('Stock Limit not found');
+    }
+});
+
 export {
     createCategory,
     getCategories,
@@ -361,4 +399,6 @@ export {
     getLots,
     createStockLimit,
     getStockLimits,
+    updateStockLimit,
+    deleteStockLimit,
 };

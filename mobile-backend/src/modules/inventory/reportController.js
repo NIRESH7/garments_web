@@ -282,7 +282,7 @@ const getClientFormatReport = asyncHandler(async (req, res) => {
 // @desc    Get Godown Stock Report with Min/Max Indication
 // @route   GET /api/inventory/reports/godown-stock
 const getGodownStockReport = asyncHandler(async (req, res) => {
-    const { lotName, dia } = req.query;
+    const { lotName: filterLotName, dia: filterDia } = req.query;
 
     const inwards = await Inward.find({});
     const outwards = await Outward.find({});
@@ -290,13 +290,15 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
 
     let stockMap = {};
 
-    // 1. Process Inwards
+    // 1. Process Inwards - Use Case-Insensitive Keys
     inwards.forEach(i => {
         i.diaEntries.forEach(entry => {
-            const key = `${i.lotName}_${entry.dia}`;
+            const cleanName = (i.lotName || '').toString().trim().toUpperCase();
+            const key = `${cleanName}_${entry.dia}`;
+            
             if (!stockMap[key]) {
                 stockMap[key] = {
-                    lotName: i.lotName,
+                    lotName: cleanName, // Consistent UPPERCASE for report
                     dia: entry.dia,
                     currentWeight: 0,
                     currentRolls: 0
@@ -307,9 +309,11 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
         });
     });
 
-    // 2. Process Outwards
+    // 2. Process Outwards - Use Case-Insensitive Keys
     outwards.forEach(o => {
-        const key = `${o.lotName}_${o.dia}`;
+        const cleanName = (o.lotName || '').toString().trim().toUpperCase();
+        const key = `${cleanName}_${o.dia}`;
+        
         if (stockMap[key]) {
             o.items.forEach(item => {
                 stockMap[key].currentWeight -= (item.total_weight || 0);
@@ -322,12 +326,21 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
     const report = [];
 
     // We want to show all combinations that either have stock OR have a limit defined
-    const allKeys = new Set([...Object.keys(stockMap), ...baseStockLimits.map(l => `${l.lotName}_${l.dia}`)]);
+    // Ensure limit keys are also normalized
+    const allKeys = new Set([
+        ...Object.keys(stockMap), 
+        ...baseStockLimits.map(l => `${(l.lotName || '').toString().trim().toUpperCase()}_${l.dia}`)
+    ]);
 
     allKeys.forEach(key => {
-        const [lName, lDia] = key.split('_');
-        const stockInfo = stockMap[key] || { currentWeight: 0, currentRolls: 0 };
-        const limitInfo = baseStockLimits.find(l => l.lotName === lName && l.dia === lDia) || {
+        const [lNameUpper, lDia] = key.split('_');
+        const stockInfo = stockMap[key] || { lotName: lNameUpper, dia: lDia, currentWeight: 0, currentRolls: 0 };
+        
+        // Find limit info using case-insensitive lookup
+        const limitInfo = baseStockLimits.find(l => 
+            (l.lotName || '').toString().trim().toUpperCase() === lNameUpper && 
+            l.dia === lDia
+        ) || {
             minWeight: 0,
             maxWeight: 0,
             minRolls: 0,
@@ -348,7 +361,7 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
         const needRolls = needWeight / 20;
 
         report.push({
-            lotName: lName,
+            lotName: lNameUpper,
             dia: lDia,
             minWeight: limitInfo.minWeight,
             maxWeight: limitInfo.maxWeight,
@@ -363,11 +376,11 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
 
     // Filter by query params if provided
     let filteredReport = report;
-    if (lotName) {
-        filteredReport = filteredReport.filter(r => r.lotName.toLowerCase() === lotName.toLowerCase());
+    if (filterLotName) {
+        filteredReport = filteredReport.filter(r => r.lotName.toUpperCase() === filterLotName.toUpperCase());
     }
-    if (dia) {
-        filteredReport = filteredReport.filter(r => r.dia === dia);
+    if (filterDia) {
+        filteredReport = filteredReport.filter(r => r.dia === filterDia);
     }
 
     res.json(filteredReport);

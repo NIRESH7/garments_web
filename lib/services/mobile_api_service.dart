@@ -1984,6 +1984,15 @@ class MobileApiService {
     }
   }
 
+  Future<bool> updateStockLimit(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put('${ApiConstants.stockLimits}/$id', data: data);
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // --- Dashboard Dependencies ---
   Future<List<dynamic>> fetchCuttingPlanningDraftList() async {
     return getCuttingOrders();

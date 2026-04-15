@@ -19,6 +19,8 @@ import {
     getLots,
     createStockLimit,
     getStockLimits,
+    updateStockLimit,
+    deleteStockLimit,
 } from './controller.js';
 import { protect, admin } from '../../middleware/authMiddleware.js';
 
@@ -71,5 +73,9 @@ router.route('/lots')
 router.route('/stock-limits')
     .post(createStockLimit)
     .get(getStockLimits);
+
+router.route('/stock-limits/:id')
+    .put(updateStockLimit)
+    .delete(deleteStockLimit);
 
 export default router;

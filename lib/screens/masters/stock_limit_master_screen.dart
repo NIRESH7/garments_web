@@ -25,6 +25,7 @@ class _StockLimitMasterScreenState extends State<StockLimitMasterScreen> {
   final _minWeightController = TextEditingController();
   final _maxWeightController = TextEditingController();
   final _manualAdjustmentController = TextEditingController();
+  String? _editingId;
 
   List<String> _lotNames = [];
   List<String> _dias = [];
@@ -88,30 +89,53 @@ class _StockLimitMasterScreenState extends State<StockLimitMasterScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final success = await _api.saveStockLimit({
+      final data = {
         'lotName': _selectedLotName,
         'dia': _selectedDia,
         'minWeight': double.tryParse(_minWeightController.text) ?? 0,
         'maxWeight': double.tryParse(_maxWeightController.text) ?? 0,
         'manualAdjustment': double.tryParse(_manualAdjustmentController.text) ?? 0,
-      });
+      };
+
+      bool success;
+      if (_editingId != null) {
+        success = await _api.updateStockLimit(_editingId!, data);
+      } else {
+        success = await _api.saveStockLimit(data);
+      }
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Inventory thresholds finalized'), backgroundColor: ColorPalette.success),
+          SnackBar(content: Text(_editingId != null ? 'Thresholds updated successfully' : 'Inventory thresholds finalized'), backgroundColor: ColorPalette.success),
         );
         _minWeightController.clear(); _maxWeightController.clear(); _manualAdjustmentController.clear();
-        setState(() { _selectedLotName = null; _selectedDia = null; });
+        setState(() { _selectedLotName = null; _selectedDia = null; _editingId = null; });
         await _loadAllData();
       }
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registry Error: $e'), backgroundColor: ColorPalette.error)); }
     finally { if (mounted) setState(() => _isSaving = false); }
   }
 
+  void _onEdit(Map<String, dynamic> item) {
+    setState(() {
+      _editingId = item['_id']?.toString();
+      _selectedLotName = item['lotName']?.toString();
+      _selectedDia = item['dia']?.toString();
+      _minWeightController.text = (item['minWeight'] ?? '').toString();
+      _maxWeightController.text = (item['maxWeight'] ?? '').toString();
+      _manualAdjustmentController.text = (item['manualAdjustment'] ?? '').toString();
+    });
+  }
+
   Future<void> _delete(Map<String, dynamic> item) async {
-    // API might not have deleteStockLimit for specific ID, checking typical pattern
-    final success = await _api.deleteStockLimit(item['_id']);
-    if (success) await _loadAllData();
+    final id = item['_id']?.toString();
+    if (id == null) return;
+    
+    final success = await _api.deleteStockLimit(id);
+    if (success) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registry entry removed'), backgroundColor: ColorPalette.success));
+      await _loadAllData();
+    }
   }
 
   @override
@@ -215,14 +239,14 @@ class _StockLimitMasterScreenState extends State<StockLimitMasterScreen> {
                                       Gaps.w20,
                                       Expanded(child: _buildModernInput(_maxWeightController, 'CAPACITY MAXIMUM (KG)', LucideIcons.arrowUpToLine, 'Max')),
                                       Gaps.w20,
-                                      Expanded(child: _buildModernInput(_manualAdjustmentController, 'STOCK CALIBRATION', LucideIcons.plusCircle, '±Kg')),
+                                      Expanded(child: _buildModernInput(_manualAdjustmentController, 'OUTSIDE STOCK', LucideIcons.plusCircle, '±Kg')),
                                     ]),
                                   ] else ...[
                                     _buildLotDropdown(), Gaps.h24,
                                     _buildDiaDropdown(), Gaps.h24,
                                     _buildModernInput(_minWeightController, 'SAFETY MINIMUM (KG)', LucideIcons.arrowDownToLine, 'Min'), Gaps.h24,
                                     _buildModernInput(_maxWeightController, 'CAPACITY MAXIMUM (KG)', LucideIcons.arrowUpToLine, 'Max'), Gaps.h24,
-                                    _buildModernInput(_manualAdjustmentController, 'STOCK CALIBRATION', LucideIcons.plusCircle, '±Kg'),
+                                    _buildModernInput(_manualAdjustmentController, 'OUTSIDE STOCK', LucideIcons.plusCircle, '±Kg'),
                                   ],
                                   Gaps.h32,
                                   SizedBox(width: double.infinity, child: _buildSubmitButton()),
@@ -249,6 +273,7 @@ class _StockLimitMasterScreenState extends State<StockLimitMasterScreen> {
                         key: ValueKey(_filteredLimits.length),
                         columns: const ['lotName', 'dia', 'minWeight', 'maxWeight'],
                         rows: _filteredLimits,
+                        onEdit: _onEdit,
                         onDelete: _delete,
                         emptyMessage: 'No monitoring thresholds documented',
                       ),
@@ -315,7 +340,7 @@ class _StockLimitMasterScreenState extends State<StockLimitMasterScreen> {
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: ColorPalette.primary, width: 1)),
         ),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        validator: (v) => (label.contains('CALIBRATION')) ? null : (v == null || v.isEmpty ? 'Required' : null),
+        validator: (v) => (label.contains('OUTSIDE STOCK')) ? null : (v == null || v.isEmpty ? 'Required' : null),
       ),
     ]);
   }

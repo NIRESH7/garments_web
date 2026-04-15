@@ -102,43 +102,39 @@ class OutwardPrintService {
     }
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        header: (pw.Context context) => PrintUtils.buildCompanyHeader(boldFont, font),
+        footer: (pw.Context context) => _buildFooter(boldFont),
         build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              PrintUtils.buildCompanyHeader(boldFont, font),
-              _buildHeader(
-                outward,
-                boldFont,
-                setNo: setNos.join(', '),
-                rack: racks.join(', '),
-                pallet: pallets.join(', '),
-              ),
-              pw.SizedBox(height: 20),
-              _buildTable(
-                flatItems,
-                totalWeight,
-                totalRolls,
-                totalMeters,
-                font,
-                boldFont,
-              ),
-              pw.SizedBox(height: 30),
-              // Signatures Section
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-                children: [
-                  _buildSigBox('Lot Incharge', inchargeImg, boldFont),
-                  _buildSigBox('Authorized', authImg, boldFont),
-                ],
-              ),
-              pw.Spacer(),
-              _buildFooter(boldFont),
-            ],
-          );
+          return [
+            _buildHeader(
+              outward,
+              boldFont,
+              setNo: setNos.join(', '),
+              rack: racks.join(', '),
+              pallet: pallets.join(', '),
+            ),
+            pw.SizedBox(height: 20),
+            _buildTable(
+              flatItems,
+              totalWeight,
+              totalRolls,
+              totalMeters,
+              font,
+              boldFont,
+            ),
+            pw.SizedBox(height: 30),
+            // Signatures Section
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+              children: [
+                _buildSigBox('Lot Incharge', inchargeImg, boldFont),
+                _buildSigBox('Authorized', authImg, boldFont),
+              ],
+            ),
+          ];
         },
       ),
     );
@@ -203,10 +199,12 @@ class OutwardPrintService {
     pw.Font boldFont,
   ) {
     return pw.Table.fromTextArray(
-      headers: ['Colour', 'Total Rolls', 'Total Weight (Kg)', 'Total Meter'],
+      headers: ['Set#', 'Rack/Pallet', 'Colour', 'Rolls', 'Weight (Kg)', 'Meter'],
       data: [
         ...flatItems.map(
           (row) => [
+            row['setNo'],
+            '${row['rack']}/${row['pallet']}',
             row['colour'],
             row['rolls'].toString(),
             row['weight'].toStringAsFixed(2),
@@ -216,6 +214,8 @@ class OutwardPrintService {
         // Total Row
         [
           'TOTAL',
+          '',
+          '',
           totalRolls.toString(),
           totalWt.toStringAsFixed(2),
           totalMeters.toStringAsFixed(1)
@@ -225,11 +225,19 @@ class OutwardPrintService {
         font: boldFont,
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.white,
+        fontSize: 10,
       ),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.orange),
       cellStyle: pw.TextStyle(font: font, fontSize: 10),
-      cellAlignment: pw.Alignment.center,
-      border: pw.TableBorder.all(color: PdfColors.grey400),
+      cellAlignment: pw.Alignment.centerLeft,
+      cellAlignments: {
+        0: pw.Alignment.center,
+        1: pw.Alignment.center,
+        3: pw.Alignment.centerRight,
+        4: pw.Alignment.centerRight,
+        5: pw.Alignment.centerRight,
+      },
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
     );
   }
 

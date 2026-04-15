@@ -952,7 +952,20 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   Widget _buildSetSelectionSection() {
     if (_availableSets.isEmpty && _selectedLotNo != null) return Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4)), child: Row(children: [const Icon(LucideIcons.info, color: ColorPalette.primary, size: 16), const SizedBox(width: 12), Expanded(child: Text('NO SETS AVAILABLE FOR THIS LOT.', style: GoogleFonts.inter(color: ColorPalette.textPrimary, fontSize: 11, fontWeight: FontWeight.w700)))]));
     if (_availableSets.isEmpty) return const SizedBox.shrink();
-    final uniqueSetNos = _availableSets.map((s) => s['set_no']?.toString().trim() ?? '').where((s) => s.isNotEmpty).toSet().toList()..sort((a,b) => int.parse(a).compareTo(int.parse(b)));
+    final uniqueSetNos = _availableSets
+        .map((s) => s['set_no']?.toString().trim() ?? '')
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) {
+        String clean(String s) => s.toLowerCase().replaceAll('set', '').replaceAll('s-', '').replaceAll('-', '').trim();
+        final ca = clean(a);
+        final cb = clean(b);
+        final na = int.tryParse(ca);
+        final nb = int.tryParse(cb);
+        if (na != null && nb != null) return na.compareTo(nb);
+        return a.compareTo(b);
+      });
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _buildFormSectionHeader('AVAILABLE SETS'),
       const SizedBox(height: 24),
@@ -1064,9 +1077,9 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
     return Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), decoration: BoxDecoration(border: Border(top: BorderSide(color: ColorPalette.border.withOpacity(0.1)))), child: Row(children: [
       Expanded(flex: 3, child: Row(children: [Container(width: 6, height: 6, decoration: BoxDecoration(color: _getColourValue(col), shape: BoxShape.circle)), const SizedBox(width: 12), Text(col.toUpperCase(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: ColorPalette.textPrimary))])),
       ..._selectedSets.map((set) {
-        final entry = _findSetColourEntry(set, col);
-        final value = (entry?['roll_weight'] as num?)?.toDouble() ?? 0.0;
-        final controller = entry?['controller'] as TextEditingController?;
+        final entry = _ensureSetColourEntry(set, col);
+        final value = (entry['roll_weight'] as num?)?.toDouble() ?? 0.0;
+        final controller = entry['controller'] as TextEditingController?;
         return Expanded(flex: 2, child: Padding(padding: const EdgeInsets.only(left: 12), child: _buildCompactWeightInput(value, controller: controller, onChanged: (v) => setState(() {
           final p = double.tryParse(v) ?? 0.0;
           final t = _ensureSetColourEntry(set, col);
@@ -1189,9 +1202,23 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
 
   Map<String, dynamic> _ensureSetColourEntry(Map<String, dynamic> set, String colour) {
     final ent = _findSetColourEntry(set, colour);
-    if (ent != null) { ent['controller'] ??= TextEditingController(text: (ent['roll_weight'] as num?)?.toString() ?? ''); return ent; }
-    final newEntry = <String, dynamic>{'colour': colour, 'weight': 0.0, 'roll_weight': 0.0, 'no_of_rolls': 0, 'isChecked': false, 'controller': TextEditingController()};
-    (set['colours'] as List).add(newEntry); return newEntry;
+    if (ent != null) {
+      if (ent['controller'] == null) {
+        final weightVal = (ent['roll_weight'] as num?)?.toDouble() ?? 0.0;
+        ent['controller'] = TextEditingController(text: weightVal > 0 ? _formatGridNumber(weightVal) : '');
+      }
+      return ent;
+    }
+    final newEntry = <String, dynamic>{
+      'colour': colour,
+      'weight': 0.0,
+      'roll_weight': 0.0,
+      'no_of_rolls': 0,
+      'isChecked': false,
+      'controller': TextEditingController()
+    };
+    (set['colours'] as List).add(newEntry);
+    return newEntry;
   }
 
   List<String> _getSelectedSetColourOrder() {
