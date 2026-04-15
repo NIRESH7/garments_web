@@ -2237,7 +2237,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           _buildComplaintSection(),
           
           const SizedBox(height: 24),
-          _buildSectionHeader('DIA ENTRIES', LucideIcons.layers),
+          _buildGridHeader(),
           _buildDataTable(),
           
           const SizedBox(height: 32),
@@ -2976,6 +2976,16 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     });
   }
 
+  void _removeStickerRow(StickerDiaData diaData, StickerRow row) {
+    setState(() {
+      if (diaData.rows.length <= 1) return;
+      row.dispose();
+      diaData.rows.remove(row);
+      _listeningForStickerRowIdx = null;
+      _listeningForSetIdx = null;
+    });
+  }
+
   void _addSet(StickerDiaData diaData) {
     setState(() {
       int currentSets = diaData.setsOverride ?? _getSetsForDia(_selectedStickerDia!);
@@ -3215,13 +3225,37 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                                     _buildGridCell(
                                       "",
                                       cWidth,
-                                      child: _buildSmallDropdown(
-                                        r.colour,
-                                        _colours,
-                                        (v) => setState(() => r.colour = v),
-                                        hint: "COLOUR",
-                                        itemImages: _colourImages,
-                                        onDoubleTap: r.colour != null ? () => _showColorPreview(r.colour!, _colourImages[r.colour!]) : null,
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildSmallDropdown(
+                                              r.colour,
+                                              _colours,
+                                              (v) => setState(() => r.colour = v),
+                                              hint: "COLOUR",
+                                              itemImages: _colourImages,
+                                              onDoubleTap: r.colour != null
+                                                  ? () => _showColorPreview(r.colour!, _colourImages[r.colour!])
+                                                  : null,
+                                            ),
+                                          ),
+                                          if (rows.length > 1)
+                                            IconButton(
+                                              icon: const Icon(
+                                                LucideIcons.trash2,
+                                                size: 14,
+                                                color: ColorPalette.error,
+                                              ),
+                                              tooltip: "Delete row",
+                                              onPressed: () => _removeStickerRow(diaData, r),
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 18,
+                                                minHeight: 18,
+                                              ),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ],
