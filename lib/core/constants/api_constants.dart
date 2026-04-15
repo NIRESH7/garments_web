@@ -3,11 +3,11 @@ class ApiConstants {
   // flutter build apk --release --dart-define=API_BASE_URL=http://your-server:5001/api --dart-define=SERVER_URL=http://your-server:5001
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://34.229.76.36:5001/api',
+    defaultValue: '/api',
   );
   static const String serverUrl = String.fromEnvironment(
     'SERVER_URL',
-    defaultValue: 'http://34.229.76.36:5001',
+    defaultValue: '',
   );
   static const String s3BaseUrl =
       'https://garments-app-storage.s3.us-east-1.amazonaws.com';
