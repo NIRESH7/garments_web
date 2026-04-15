@@ -30,6 +30,15 @@ class ResponsiveLayoutShell extends ConsumerStatefulWidget {
 }
 
 class _ResponsiveLayoutShellState extends ConsumerState<ResponsiveLayoutShell> {
+  bool _isSidebarCollapsed = false;
+
+  void _toggleSidebar() {
+    setState(() {
+      _isSidebarCollapsed = !_isSidebarCollapsed;
+    });
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final bool isWeb = LayoutConstants.isWeb(context);
@@ -39,9 +48,18 @@ class _ResponsiveLayoutShellState extends ConsumerState<ResponsiveLayoutShell> {
         backgroundColor: ColorPalette.background,
         body: Row(
           children: [
-            WebSidebar(
-              selectedIndex: widget.selectedIndex,
-              onIndexChanged: widget.onIndexChanged,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              width: _isSidebarCollapsed 
+                ? LayoutConstants.collapsedSidebarWidth 
+                : LayoutConstants.sidebarWidth,
+              child: WebSidebar(
+                selectedIndex: widget.selectedIndex,
+                onIndexChanged: widget.onIndexChanged,
+                isCollapsed: _isSidebarCollapsed,
+                onToggle: _toggleSidebar,
+              ),
             ),
             Expanded(
               child: Column(

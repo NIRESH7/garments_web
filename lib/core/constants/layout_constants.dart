@@ -20,11 +20,12 @@ class LayoutConstants {
 
   // Responsive Breakpoints
   static const double mobile = 600.0;
-  static const double tablet = 1024.0;
+  static const double tablet = 800.0;
   
   // Content Constraints
   static const double maxContentWidth = 1200.0;
   static const double sidebarWidth = 240.0;
+  static const double collapsedSidebarWidth = 72.0;
 
   // Helpers
   static bool isMobile(BuildContext context) => MediaQuery.of(context).size.width < mobile;
