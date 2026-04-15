@@ -171,6 +171,7 @@ class _CuttingOrderPlanningScreenState
           );
           setState(() => _editingId = null);
         }
+        await _loadMasterData();
       } else {
         _showError('Failed to save planning sheet.');
       }
@@ -340,7 +341,7 @@ class _CuttingOrderPlanningScreenState
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const CuttingOrderListScreen()),
-                          );
+                          ).then((_) => _loadMasterData());
                         },
                         icon: const Icon(LucideIcons.list, size: 14),
                         label: Text('RECORDS', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),

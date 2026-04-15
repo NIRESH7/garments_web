@@ -7,8 +7,20 @@ import '../utils/print_utils.dart';
 class TaskPrintService {
   Future<void> printTaskDetails(dynamic task) async {
     final pdf = pw.Document();
-    final font = pw.Font.helvetica();
-    final boldFont = pw.Font.helveticaBold();
+    // Use Unicode-capable fonts so Tamil instructions render correctly in print/PDF.
+    final font = await PdfGoogleFonts.notoSansRegular();
+    final boldFont = await PdfGoogleFonts.notoSansBold();
+    final tamilFont = await PdfGoogleFonts.notoSansTamilRegular();
+    final tamilBoldFont = await PdfGoogleFonts.notoSansTamilBold();
+
+    final instructionText =
+        (task['description'] ?? 'No instructions provided.').toString();
+    final bool instructionHasTamil = _containsTamil(instructionText);
+    final pw.TextStyle instructionStyle = pw.TextStyle(
+      font: instructionHasTamil ? tamilFont : font,
+      fontSize: 11,
+      fontFallback: [tamilFont],
+    );
 
     pdf.addPage(
       pw.Page(
@@ -27,6 +39,7 @@ class TaskPrintService {
                     font: boldFont,
                     fontSize: 18,
                     decoration: pw.TextDecoration.underline,
+                    fontFallback: [tamilBoldFont, tamilFont],
                   ),
                 ),
               ),
@@ -36,36 +49,45 @@ class TaskPrintService {
                 task['title'] ?? 'N/A',
                 boldFont,
                 font,
+                fallbacks: [tamilFont],
               ),
               _buildInfoRow(
                 'Created on',
                 _formatDate(task['createdAt']),
                 boldFont,
                 font,
+                fallbacks: [tamilFont],
               ),
               _buildInfoRow(
                 'Priority',
                 task['priority'] ?? 'Medium',
                 boldFont,
                 font,
+                fallbacks: [tamilFont],
               ),
               _buildInfoRow(
                 'Assigned To',
                 task['assignedTo'] ?? 'All',
                 boldFont,
                 font,
+                fallbacks: [tamilFont],
               ),
               _buildInfoRow(
                 'Status',
                 task['status'] ?? 'To Do',
                 boldFont,
                 font,
+                fallbacks: [tamilFont],
               ),
 
               pw.SizedBox(height: 15),
               pw.Text(
                 'Instruction:',
-                style: pw.TextStyle(font: boldFont, fontSize: 12),
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 12,
+                  fontFallback: [tamilBoldFont, tamilFont],
+                ),
               ),
               pw.Container(
                 width: double.infinity,
@@ -77,8 +99,8 @@ class TaskPrintService {
                   ),
                 ),
                 child: pw.Text(
-                  task['description'] ?? 'No instructions provided.',
-                  style: pw.TextStyle(font: font, fontSize: 11),
+                  instructionText,
+                  style: instructionStyle,
                 ),
               ),
 
@@ -87,13 +109,25 @@ class TaskPrintService {
                 pw.SizedBox(height: 20),
                 pw.Text(
                   'Progress History:',
-                  style: pw.TextStyle(font: boldFont, fontSize: 12),
+                  style: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 12,
+                    fontFallback: [tamilBoldFont, tamilFont],
+                  ),
                 ),
                 pw.SizedBox(height: 10),
                 pw.Table.fromTextArray(
                   headers: ['Date', 'Worker', 'Status', 'Message'],
-                  headerStyle: pw.TextStyle(font: boldFont, fontSize: 10),
-                  cellStyle: pw.TextStyle(font: font, fontSize: 9),
+                  headerStyle: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 10,
+                    fontFallback: [tamilBoldFont, tamilFont],
+                  ),
+                  cellStyle: pw.TextStyle(
+                    font: font,
+                    fontSize: 9,
+                    fontFallback: [tamilFont],
+                  ),
                   data: (task['replies'] as List)
                       .map(
                         (r) => [
@@ -118,6 +152,7 @@ class TaskPrintService {
                       font: font,
                       fontSize: 8,
                       color: PdfColors.grey700,
+                      fontFallback: [tamilFont],
                     ),
                   ),
                   pw.Text(
@@ -126,6 +161,7 @@ class TaskPrintService {
                       font: font,
                       fontSize: 8,
                       color: PdfColors.grey700,
+                      fontFallback: [tamilFont],
                     ),
                   ),
                 ],
@@ -153,11 +189,16 @@ class TaskPrintService {
     }
   }
 
+  bool _containsTamil(String input) {
+    return RegExp(r'[\u0B80-\u0BFF]').hasMatch(input);
+  }
+
   pw.Widget _buildInfoRow(
     String label,
     String value,
     pw.Font bold,
     pw.Font normal,
+    {List<pw.Font> fallbacks = const []}
   ) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
@@ -167,13 +208,21 @@ class TaskPrintService {
             width: 100,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(font: bold, fontSize: 11),
+              style: pw.TextStyle(
+                font: bold,
+                fontSize: 11,
+                fontFallback: fallbacks,
+              ),
             ),
           ),
           pw.Expanded(
             child: pw.Text(
               value,
-              style: pw.TextStyle(font: normal, fontSize: 11),
+              style: pw.TextStyle(
+                font: normal,
+                fontSize: 11,
+                fontFallback: fallbacks,
+              ),
             ),
           ),
         ],

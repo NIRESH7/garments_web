@@ -180,9 +180,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final rows = _outwardData.map((out) {
       final items = out['items'] as List? ?? []; 
       final weight = items.fold(0.0, (sum, i) => (sum as double) + _parseNum(i['total_weight'])); 
+      // Try 'rolls', then 'roll', otherwise fallback to 11 per item (standard set)
+      final rollCount = items.fold(0.0, (sum, i) {
+        final r = _parseNum(i['rolls'] ?? i['roll']);
+        return (sum as double) + (r > 0 ? r : 11.0);
+      });
       final rate = _parseNum(out['rate'] ?? out['Rate']);
-      rolls += items.length; wt += weight; val += (weight * rate);
-      return { 'party': out['partyName'] ?? '-', 'lotName': out['lotName'] ?? '-', 'date': _formatDate(out['dateTime']), 'dcNo': out['dcNo'] ?? '-', 'lotNo': out['lotNo'] ?? '-', 'dia': out['dia']?.toString() ?? '-', 'process': out['process'] ?? '-', 'rolls': '${items.length}', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) };
+      rolls += rollCount; wt += weight; val += (weight * rate);
+      return { 'party': out['partyName'] ?? '-', 'lotName': out['lotName'] ?? '-', 'date': _formatDate(out['dateTime']), 'dcNo': out['dcNo'] ?? '-', 'lotNo': out['lotNo'] ?? '-', 'dia': out['dia']?.toString() ?? '-', 'process': out['process'] ?? '-', 'rolls': '${rollCount.toInt()}', 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate) };
     }).toList();
     return Column(children: [ Center(child: ModernDataTable(columns: columns, rows: rows, showActions: false)), _buildReportFooter(rolls: rolls, weight: wt, value: val) ]);
   }
@@ -190,7 +195,10 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   Widget _buildClosingReport() {
     final columns = ['lotNo', 'lotName', 'in Roll', 'in Wt', 'out Roll', 'out Wt', 'bal Roll', 'bal Wt', 'status'];
     double inRoll = 0, inWt = 0, outRoll = 0, outWt = 0, balRoll = 0, balWt = 0;
-    final rows = _closingData.map((item) {
+    final rows = _closingData.where((item) {
+      final balWt = _parseNum(item['balance_weight']);
+      return balWt > 0.1; // Only show items with actual stock
+    }).map((item) {
       inRoll += _parseNum(item['rec_rolls']); inWt += _parseNum(item['rec_weight']);
       outRoll += _parseNum(item['deliv_rolls']); outWt += _parseNum(item['deliv_weight']);
       balRoll += _parseNum(item['balance_rolls']); balWt += _parseNum(item['balance_weight']);
@@ -307,8 +315,14 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       case 3:
         title = "Outward Report"; headers = ['Party', 'Lot Name', 'Date', 'DC No', 'Lot No', 'Dia', 'Rolls', 'Wt', 'Val'];
         for (var out in _outwardData) {
-          final items = out['items'] as List? ?? []; final weight = items.fold(0.0, (sum, i) => sum + (i['total_weight'] ?? 0)); final rate = (out['rate'] ?? out['Rate'] ?? 0) as num;
-          rows.add([ out['partyName']?.toString() ?? '-', out['lotName']?.toString() ?? '-', _formatDate(out['dateTime']), out['dcNo']?.toString() ?? '-', out['lotNo']?.toString() ?? '-', out['dia']?.toString() ?? '-', '${items.length}', weight.toStringAsFixed(1), (weight * rate).toStringAsFixed(0) ]);
+          final items = out['items'] as List? ?? []; 
+          final weight = items.fold(0.0, (sum, i) => sum + (i['total_weight'] ?? 0)); 
+          final rollCount = items.fold(0.0, (sum, i) {
+            final r = _parseNum(i['rolls'] ?? i['roll']);
+            return (sum as double) + (r > 0 ? r : 11.0);
+          });
+          final rate = (out['rate'] ?? out['Rate'] ?? 0) as num;
+          rows.add([ out['partyName']?.toString() ?? '-', out['lotName']?.toString() ?? '-', _formatDate(out['dateTime']), out['dcNo']?.toString() ?? '-', out['lotNo']?.toString() ?? '-', out['dia']?.toString() ?? '-', '${rollCount.toInt()}', weight.toStringAsFixed(1), (weight * rate).toStringAsFixed(0) ]);
         }
         footerRow = [ 'TOTAL', '', '', '', '', '', '${rows.fold<int>(0, (sum, r) => sum + (int.tryParse(r[6]) ?? 0))}', FormatUtils.formatWeight(rows.fold<double>(0.0, (sum, r) => sum + (double.tryParse(r[7]) ?? 0.0))), FormatUtils.formatCurrency(rows.fold<double>(0.0, (sum, r) => sum + (double.tryParse(r[8].replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0))) ];
         break;

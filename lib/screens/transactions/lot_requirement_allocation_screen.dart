@@ -126,6 +126,63 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
 
   List<_DayEntry> get _currentDayEntries => _dayEntries[_selectedDay] ?? [];
 
+  Map<String, dynamic>? _selectedPlan() {
+    if (_selectedPlanId == null) return null;
+    final plan = _allPlans.firstWhere(
+      (p) => p['_id'] == _selectedPlanId,
+      orElse: () => null,
+    );
+    if (plan == null) return null;
+    return Map<String, dynamic>.from(plan as Map);
+  }
+
+  List<String> _planItems() {
+    final plan = _selectedPlan();
+    if (plan == null) return _masterItemNames;
+    final entries = List<dynamic>.from(plan['cuttingEntries'] ?? const []);
+    final items = <String>{};
+    for (final raw in entries) {
+      final e = Map<String, dynamic>.from(raw as Map);
+      final name = e['itemName']?.toString().trim() ?? '';
+      if (name.isEmpty) continue;
+      final qty = Map<String, dynamic>.from(e['sizeQuantities'] ?? const {});
+      final hasAnyQty = qty.values.any(
+        (v) => (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0) > 0,
+      );
+      if (hasAnyQty) items.add(name);
+    }
+    return items.isEmpty ? _masterItemNames : items.toList();
+  }
+
+  List<String> _planSizesForItem(String? itemName) {
+    if (itemName == null || itemName.isEmpty) return _masterSizes;
+    final plan = _selectedPlan();
+    if (plan == null) return _masterSizes;
+    final entries = List<dynamic>.from(plan['cuttingEntries'] ?? const []);
+    final e = entries
+        .map((x) => Map<String, dynamic>.from(x as Map))
+        .firstWhere(
+          (x) =>
+              (x['itemName']?.toString().trim().toLowerCase() ?? '') ==
+              itemName.trim().toLowerCase(),
+          orElse: () => <String, dynamic>{},
+        );
+    if (e.isEmpty) return _masterSizes;
+    final qty = Map<String, dynamic>.from(e['sizeQuantities'] ?? const {});
+    final sizes = <String>[];
+    for (final k in qty.keys) {
+      final v = qty[k];
+      final n = (v is num) ? v.toDouble() : double.tryParse(v.toString()) ?? 0;
+      if (n > 0) sizes.add(k.toString());
+    }
+    return sizes.isEmpty ? _masterSizes : sizes;
+  }
+
+  List<String> _planDiasForSelection(String? itemName, String? size) {
+    // User requested: always show full DIA master list.
+    return _dias;
+  }
+
   DateTime _dateForDayInSameWeek(String day, {DateTime? anchor}) {
     final base = DateTime(
       (anchor ?? _selectedDate).year,
@@ -332,8 +389,10 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     setState(() {
       _selectedItem = item;
       _selectedLotName = null;
-      _selectedSize = null;
-      _selectedDia = null;
+      final validSizes = _planSizesForItem(item);
+      _selectedSize = validSizes.contains(_selectedSize) ? _selectedSize : null;
+      final validDias = _planDiasForSelection(item, _selectedSize);
+      _selectedDia = validDias.contains(_selectedDia) ? _selectedDia : null;
       _currentSets = [];
     });
     _fillFromAssignments();
@@ -342,6 +401,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   void _onSizeSelected(String? size) {
     setState(() {
       _selectedSize = size;
+      final validDias = _planDiasForSelection(_selectedItem, size);
+      _selectedDia = validDias.contains(_selectedDia) ? _selectedDia : null;
       _currentSets = [];
     });
     _updateRemainingDozen();
@@ -484,10 +545,14 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
       );
       final List<Map<String, dynamic>> allocations = List<Map<String, dynamic>>.from(result?['allocations'] ?? []);
       final resolvedAllocations = await _fillRackPalletFromInward(allocations);
+      final int requiredSetCount = _setsRequired;
+      final List<Map<String, dynamic>> finalSets = (requiredSetCount > 0 && resolvedAllocations.length > requiredSetCount)
+          ? resolvedAllocations.take(requiredSetCount).toList()
+          : resolvedAllocations;
       setState(() {
         if (result != null) {
-          _currentSets = resolvedAllocations;
-          _totalSets = (result['totalSets'] as num?)?.toInt() ?? 0;
+          _currentSets = finalSets;
+          _totalSets = finalSets.length;
           if (result['success'] == false) {
             _showError(result['message'] ?? 'Insufficient stock');
           }
@@ -559,6 +624,15 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     );
   }
 
+  Future<void> _saveCurrentItemNow() async {
+    if (_currentSets.isEmpty) {
+      _showError('Run FIFO first before saving.');
+      return;
+    }
+    _addItemToDay();
+    await _saveDayAllocation(allWeek: false);
+  }
+
   void _nextDay() {
     if (_currentDayEntries.isEmpty && _currentSets.isEmpty) {
       _showError('No entries for $_selectedDay. Add at least one item.');
@@ -620,11 +694,21 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
         _dayEntries.clear();
         _currentSets = [];
       });
+      // Refresh plan data to update "Pending Plan" counts across the app
+      await _loadInitialData(); // This is safer as it refreshes _allPlans too
       _loadReport();
     } catch (e) {
       _showError('Save failed: $e');
     }
     setState(() => _isSaving = false);
+  }
+
+  String _planDisplayLabel(Map<String, dynamic> plan) {
+    final planName = plan['planName']?.toString() ?? 'Plan';
+    final planType = plan['planType']?.toString() ?? '';
+    final planPeriod = plan['planPeriod']?.toString() ?? '';
+    final planId = plan['planId']?.toString() ?? '';
+    return "$planName ($planType - $planPeriod) • $planId";
   }
 
   Future<void> _loadReport() async {
@@ -655,28 +739,199 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   }
 
   List<Map<String, dynamic>> _groupReportRows(List<Map<String, dynamic>> rows) {
-    if (rows.isEmpty) return [];
+    if (rows == null || rows.isEmpty) return [];
     final Map<String, Map<String, dynamic>> grouped = {};
     for (var r in rows) {
+      if (r == null) continue;
       final lotNo = r['lotNo']?.toString() ?? '-';
       final setNo = _toSetNo(r['setNo']);
-      final key = "${r['date']}_${r['itemName']}_${r['size']}_${r['dia']}";
+      final allocationId = r['_id']?.toString();
+      final key = "${r['date'] ?? 'no-date'}_${r['itemName'] ?? 'no-item'}_${r['size'] ?? 'no-size'}_${r['dia'] ?? 'no-dia'}";
+      
       if (!grouped.containsKey(key)) {
         grouped[key] = Map<String, dynamic>.from(r)
           ..['lotNos'] = [lotNo]
-          ..['sets'] = [setNo];
+          ..['sets'] = [setNo]
+          ..['allocationIds'] = allocationId != null ? [allocationId] : <String>[];
       } else {
         final existing = grouped[key]!;
-        if (!(existing['lotNos'] as List).contains(lotNo)) (existing['lotNos'] as List).add(lotNo);
-        if (setNo.isNotEmpty && !(existing['sets'] as List).contains(setNo)) (existing['sets'] as List).add(setNo);
-        existing['setWeight'] = (double.tryParse(existing['setWeight']?.toString() ?? '0') ?? 0) + (double.tryParse(r['setWeight']?.toString() ?? '0') ?? 0);
+        final existingLotNos = (existing['lotNos'] as List? ?? []);
+        if (!existingLotNos.contains(lotNo)) existingLotNos.add(lotNo);
+        
+        final existingSets = (existing['sets'] as List? ?? []);
+        if (setNo.isNotEmpty && !existingSets.contains(setNo)) existingSets.add(setNo);
+        
+        final existingIds = (existing['allocationIds'] as List? ?? []);
+        if (allocationId != null && !existingIds.contains(allocationId)) {
+          existingIds.add(allocationId);
+        }
+        
+        // Summing up values safely
+        existing['setWeight'] = (double.tryParse(existing['setWeight']?.toString() ?? '0') ?? 0) + 
+                               (double.tryParse(r['setWeight']?.toString() ?? '0') ?? 0);
+                               
+        // Also sum dozens and needed weight (added for accuracy)
+        existing['dozen'] = (double.tryParse(existing['dozen']?.toString() ?? '0') ?? 0) + 
+                            (double.tryParse(r['dozen']?.toString() ?? '0') ?? 0);
+                            
+        existing['neededWeight'] = (double.tryParse(existing['neededWeight']?.toString() ?? '0') ?? 0) + 
+                                  (double.tryParse(r['neededWeight']?.toString() ?? '0') ?? 0);
+
+        // Ensure rack/pallet info is preserved if missing from first row but present in others
+        if ((existing['rackName'] == null || existing['rackName'] == '-' || existing['rackName'] == '') && r['rackName'] != null) {
+          existing['rackName'] = r['rackName'];
+        }
+        if ((existing['palletNumber'] == null || existing['palletNumber'] == '-' || existing['palletNumber'] == '') && r['palletNumber'] != null) {
+          existing['palletNumber'] = r['palletNumber'];
+        }
       }
     }
     return grouped.values.map((v) => {
       ...v, 
-      'lotInfo': (v['lotNos'] as List).join(', '),
-      'setList': (v['sets'] as List).join(', ')
+      'lotInfo': (v['lotNos'] as List? ?? []).join(', '),
+      'setList': (v['sets'] as List? ?? []).join(', ')
     }).toList();
+  }
+
+  Future<void> _deleteReportRow(Map<String, dynamic> row) async {
+    if (_selectedPlanId == null) {
+      _showError('No plan selected');
+      return;
+    }
+    final original = row['__original__'] ?? row;
+    final ids = List<String>.from(
+      ((original['allocationIds'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .where((e) => e.isNotEmpty),
+    );
+    if (ids.isEmpty && original['_id'] != null) {
+      ids.add(original['_id'].toString());
+    }
+    if (ids.isEmpty) {
+      _showError('Allocation id not found');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Allocation'),
+        content: Text('Delete ${ids.length} allocation record(s)?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final success = await _api.deleteLotAllocation(_selectedPlanId!, ids.join(','));
+    if (success) {
+      _showSuccess('Allocation deleted');
+      await _loadReport();
+    } else {
+      _showError('Delete failed');
+    }
+  }
+
+  Future<void> _editReportRow(Map<String, dynamic> row) async {
+    if (_selectedPlanId == null) {
+      _showError('No plan selected');
+      return;
+    }
+    final original = row['__original__'] ?? row;
+    final ids = List<String>.from(
+      ((original['allocationIds'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .where((e) => e.isNotEmpty),
+    );
+    if (ids.isEmpty && original['_id'] != null) {
+      ids.add(original['_id'].toString());
+    }
+    if (ids.isEmpty) {
+      _showError('Allocation id not found');
+      return;
+    }
+
+    final rackCtrl = TextEditingController(text: original['rackName']?.toString() ?? '');
+    final palletCtrl = TextEditingController(text: original['palletNumber']?.toString() ?? '');
+    final canEditWeights = ids.length == 1;
+    final dozenCtrl = TextEditingController(
+      text: canEditWeights ? (original['dozen']?.toString() ?? '0') : '',
+    );
+    final setWeightCtrl = TextEditingController(
+      text: canEditWeights ? (original['setWeight']?.toString() ?? '0') : '',
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Allocation'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: rackCtrl,
+                decoration: const InputDecoration(labelText: 'Rack Name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: palletCtrl,
+                decoration: const InputDecoration(labelText: 'Pallet Number'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: dozenCtrl,
+                enabled: canEditWeights,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Dozen',
+                  helperText: canEditWeights ? null : 'Multiple sets selected: disabled',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: setWeightCtrl,
+                enabled: canEditWeights,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Set Weight'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    bool allOk = true;
+    for (var i = 0; i < ids.length; i++) {
+      final payload = <String, dynamic>{
+        'rackName': rackCtrl.text.trim(),
+        'palletNumber': palletCtrl.text.trim(),
+      };
+      if (canEditWeights && i == 0) {
+        payload['dozen'] = double.tryParse(dozenCtrl.text.trim()) ?? 0;
+        payload['setWeight'] = double.tryParse(setWeightCtrl.text.trim()) ?? 0;
+      }
+      final ok = await _api.updateLotAllocation(_selectedPlanId!, ids[i], payload);
+      if (!ok) {
+        allOk = false;
+        break;
+      }
+    }
+
+    if (allOk) {
+      _showSuccess('Allocation updated');
+      await _loadReport();
+    } else {
+      _showError('Update failed');
+    }
   }
 
   String _formatWeight(dynamic w) {
@@ -700,8 +955,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(20),
+        pageFormat: PdfPageFormat.letter.landscape,
+        margin: const pw.EdgeInsets.only(left: 20, top: 20, bottom: 20, right: 60),
         build: (pw.Context context) {
           return [
             pw.Column(
@@ -727,33 +982,29 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                  pw.Text('Date: ${DateFormat('dd-MM-yyyy').format(DateTime.now())}', style: pw.TextStyle(font: fontData, fontSize: 10)),
               ],
             ),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 15),
             pw.TableHelper.fromTextArray(
-              headers: ['DATE', 'ITEM', 'SIZE', 'DOZEN', 'LOT NAME', 'LOT NO', 'DIA', 'SET NO', 'WEIGHT'],
+              headers: ['DATE & ITEM', 'S/D (DZ)', 'LOT & STORAGE', 'SETS ALLOCATED', 'WEIGHT (KG)'],
               data: _reportRows.map((r) => [
-                r['date'] ?? '-',
-                r['itemName'] ?? '-',
-                r['size'] ?? '-',
-                (r['dozen'] ?? 0).toString(),
-                r['lotName'] ?? '-',
-                r['lotNo'] ?? '-',
-                r['dia']?.toString() ?? '-',
+                "${r['date'] ?? '-'} | ${r['itemName'] ?? '-'}",
+                "${r['size'] ?? '-'}/${r['dia'] ?? '-'} (${r['dozen'] ?? 0}Dz)",
+                "${r['lotName'] ?? '-'}\nNo: ${r['lotNo'] ?? '-'}\nLoc: ${r['rackName'] ?? '-'}/${r['palletNumber'] ?? '-'}",
                 r['setList'] ?? '-',
-                _formatWeight(r['setWeight']),
+                _formatWeight(r['setWeight'] ?? r['total_weight'] ?? r['neededWeight']),
               ]).toList(),
               headerStyle: pw.TextStyle(font: fontHeader, fontSize: 8, color: PdfColors.white),
               headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
               cellStyle: pw.TextStyle(font: fontData, fontSize: 8),
               columnWidths: {
-                0: const pw.FlexColumnWidth(1.2),
-                1: const pw.FlexColumnWidth(2),
-                2: const pw.FlexColumnWidth(1),
-                3: const pw.FlexColumnWidth(0.8),
-                4: const pw.FlexColumnWidth(2),
-                5: const pw.FlexColumnWidth(1.5),
-                6: const pw.FlexColumnWidth(0.8),
-                7: const pw.FlexColumnWidth(2.5),
-                8: const pw.FlexColumnWidth(1),
+                0: const pw.FlexColumnWidth(2.5), // Date & Item
+                1: const pw.FlexColumnWidth(1.8), // S/D (DZ)
+                2: const pw.FlexColumnWidth(2.5), // Lot & Storage
+                3: const pw.FlexColumnWidth(3.0), // Sets
+                4: const pw.FlexColumnWidth(1.8), // Weight
+              },
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                4: pw.Alignment.centerRight,
               },
             ),
           ];
@@ -829,7 +1080,10 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                 const SizedBox(height: 32),
                 _buildSessionQueue(isWeb),
               ] else ...[
-                _buildHistorySection(isWeb),
+                KeyedSubtree(
+                  key: const ValueKey('allocation_report_tab'),
+                  child: _buildHistorySection(isWeb),
+                ),
               ],
               const SizedBox(height: 64),
             ],
@@ -842,7 +1096,10 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   Widget _tabButton(int index, String label, IconData icon) {
     final active = _tabIndex == index;
     return InkWell(
-      onTap: () => setState(() => _tabIndex = index),
+      onTap: () {
+        setState(() => _tabIndex = index);
+        if (index == 1) _loadReport();
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -893,14 +1150,45 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                 flex: 3,
                 child: CustomDropdownField(
                   label: 'CURRENT MASTER PLAN',
-                  items: _allPlans.map((p) => "${p['planName'] ?? 'Plan'} (${p['planType'] ?? ''} - ${p['planPeriod'] ?? ''})").toList(),
+                  items: _allPlans
+                      .map<String>(
+                        (p) => _planDisplayLabel(
+                          Map<String, dynamic>.from(p as Map),
+                        ),
+                      )
+                      .toList(),
                   value: (() {
-                    final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId, orElse: () => null);
-                    return plan != null ? "${plan['planName']} (${plan['planType']} - ${plan['planPeriod']})" : null;
+                    final plan = _allPlans.firstWhere(
+                      (p) => p['_id'] == _selectedPlanId,
+                      orElse: () => null,
+                    );
+                    return plan != null
+                        ? _planDisplayLabel(
+                            Map<String, dynamic>.from(plan as Map),
+                          )
+                        : null;
                   })(),
                   onChanged: (v) {
-                    final plan = _allPlans.firstWhere((p) => "${p['planName']} (${p['planType']} - ${p['planPeriod']})" == v, orElse: () => null);
-                    if (plan != null) setState(() { _selectedPlanId = plan['_id']; _loadReport(); _updateRemainingDozen(); });
+                    final plan = _allPlans.firstWhere(
+                      (p) =>
+                          _planDisplayLabel(
+                            Map<String, dynamic>.from(p as Map),
+                          ) ==
+                          v,
+                      orElse: () => null,
+                    );
+                    if (plan != null) {
+                      setState(() {
+                        _selectedPlanId = plan['_id'];
+                        _selectedItem = null;
+                        _selectedSize = null;
+                        _selectedDia = null;
+                        _selectedLotName = null;
+                        _currentSets = [];
+                      });
+                      _loadReport();
+                      _updateRemainingDozen();
+                    }
                   },
                 ),
               ),
@@ -953,6 +1241,10 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
   }
 
   Widget _buildEntryForm(bool isWeb) {
+    final itemOptions = _planItems();
+    final sizeOptions = _planSizesForItem(_selectedItem);
+    final diaOptions = _planDiasForSelection(_selectedItem, _selectedSize);
+
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
@@ -967,8 +1259,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
           const SizedBox(height: 24),
           CustomDropdownField(
             label: 'ITEM NAME',
-            items: _masterItemNames,
-            value: _selectedItem,
+            items: itemOptions,
+            value: itemOptions.contains(_selectedItem) ? _selectedItem : null,
             onChanged: _onItemSelected,
           ),
           const SizedBox(height: 20),
@@ -977,8 +1269,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
               Expanded(
                 child: CustomDropdownField(
                   label: 'SIZE',
-                  items: _masterSizes,
-                  value: _selectedSize,
+                  items: sizeOptions,
+                  value: sizeOptions.contains(_selectedSize) ? _selectedSize : null,
                   onChanged: _onSizeSelected,
                 ),
               ),
@@ -986,8 +1278,8 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
               Expanded(
                 child: CustomDropdownField(
                   label: 'DIA',
-                  items: _dias,
-                  value: _selectedDia,
+                  items: diaOptions,
+                  value: diaOptions.contains(_selectedDia) ? _selectedDia : null,
                   onChanged: (v) => setState(() {
                     _selectedDia = v;
                     _currentSets = [];
@@ -1116,8 +1408,17 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
             Expanded(child: _buildDividerHeader('FIFO ALLOCATION PREVIEW — $_totalSets Sets Allocated')),
             if (_currentSets.isNotEmpty) 
               ActionChip(
-                label: Text('SAVE THIS ITEM TO ${_selectedDay.toUpperCase()}', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, color: Colors.white)), 
-                onPressed: _addItemToDay, 
+                label: Text(
+                  _isSaving
+                      ? 'SAVING...'
+                      : 'SAVE THIS ITEM TO ${_selectedDay.toUpperCase()}',
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    color: Colors.white,
+                  ),
+                ),
+                onPressed: _isSaving ? null : _saveCurrentItemNow,
                 backgroundColor: const Color(0xFF0D9488),
                 side: BorderSide.none,
                 shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -1237,11 +1538,22 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
               ],
             ),
           ),
-          ElevatedButton.icon(
-            onPressed: _isSaving ? null : () => _saveDayAllocation(allWeek: true),
-            icon: _isSaving ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F172A))) : const Icon(LucideIcons.save),
-            label: Text('FINALIZE WORK WEEK', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, letterSpacing: 1)),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+          Flexible(
+            flex: 0,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 300),
+              child: ElevatedButton.icon(
+                onPressed: _isSaving ? null : () => _saveDayAllocation(allWeek: true),
+                icon: _isSaving ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F172A))) : const Icon(LucideIcons.save),
+                label: Text('FINALIZE WORK WEEK', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, letterSpacing: 1), overflow: TextOverflow.ellipsis),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white, 
+                  foregroundColor: const Color(0xFF0F172A), 
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1291,12 +1603,12 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                 physics: const AlwaysScrollableScrollPhysics(),
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
-                  width: _reportRows.isEmpty ? MediaQuery.of(context).size.width - 100 : 2500,
+                  width: _reportRows.isEmpty ? 1000 : 2500,
                   child: ModernDataTable(
                   columns: const ['DATE', 'ITEM', 'SIZE', 'DOZEN', 'NEED WT', 'LOT NAME', 'LOT NO', 'DIA', 'SET REQUIRED', 'SET NO', 'RACK', 'PALLET', 'SET WEIGHT'],
                   onShare: _navigateToOutward,
-                  onEdit: (row) => _showError('Edit operation initialized for ${row['ITEM']}'),
-                  onDelete: (row) => _showError('Archive operation initialized for ${row['ITEM']}'),
+                  onEdit: _editReportRow,
+                  onDelete: _deleteReportRow,
                   rows: _reportRows.map((r) => {
                     '__original__': r,
                     'DATE': r['date'] ?? '-',
