@@ -439,25 +439,156 @@ class _InwardDetailScreenState extends State<InwardDetailScreen> {
   }
 
   void _viewFullImage(String image) {
-     showDialog(
+    showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
+      barrierColor: Colors.black.withOpacity(0.8),
+      builder: (context) {
+        final TransformationController transformationController = TransformationController();
+        
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
               backgroundColor: Colors.transparent,
               elevation: 0,
-              leading: IconButton(icon: const Icon(LucideIcons.x, color: Colors.white), onPressed: () => Navigator.pop(context)),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: InteractiveViewer(
-                child: Image.network(ApiConstants.getImageUrl(image), fit: BoxFit.contain),
+              insetPadding: const EdgeInsets.all(20),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  maxHeight: MediaQuery.of(context).size.height * 0.9,
+                ),
+                child: Stack(
+                  children: [
+                    // Main Image Area with rounded corners
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: Colors.white,
+                        child: InteractiveViewer(
+                          transformationController: transformationController,
+                          minScale: 0.5,
+                          maxScale: 5.0,
+                          child: Center(
+                            child: Image.network(
+                              ApiConstants.getImageUrl(image),
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                );
+                              },
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(LucideIcons.imageOff, size: 48, color: ColorPalette.border),
+                                    SizedBox(height: 16),
+                                    Text('Failed to load image', style: TextStyle(color: ColorPalette.textMuted)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    // Close Button
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.x, color: Colors.white, size: 20),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                    ),
+                    
+                    // Enhanced Zoom Controls
+                    Positioned(
+                      bottom: 24,
+                      right: 24,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildZoomButton(
+                            icon: LucideIcons.zoomIn,
+                            onTap: () {
+                              final currentScale = transformationController.value.getMaxScaleOnAxis();
+                              final newScale = currentScale * 1.4;
+                              if (newScale <= 5.0) {
+                                transformationController.value = Matrix4.identity()..scale(newScale);
+                                setDialogState(() {});
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildZoomButton(
+                            icon: LucideIcons.zoomOut,
+                            onTap: () {
+                              final currentScale = transformationController.value.getMaxScaleOnAxis();
+                              final newScale = currentScale / 1.4;
+                              if (newScale >= 0.5) {
+                                transformationController.value = Matrix4.identity()..scale(newScale);
+                                setDialogState(() {});
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildZoomButton(
+                            icon: LucideIcons.maximize,
+                            onTap: () {
+                              transformationController.value = Matrix4.identity();
+                              setDialogState(() {});
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildZoomButton({required IconData icon, required VoidCallback onTap}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, color: ColorPalette.primary, size: 20),
+          ),
         ),
       ),
     );

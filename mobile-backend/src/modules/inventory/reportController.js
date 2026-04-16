@@ -376,8 +376,9 @@ const getGodownStockReport = asyncHandler(async (req, res) => {
 
     // Filter by query params if provided
     let filteredReport = report;
-    if (filterLotName) {
-        filteredReport = filteredReport.filter(r => r.lotName.toUpperCase() === filterLotName.toUpperCase());
+    if (filterLotName && filterLotName !== 'All') {
+        const lotNames = filterLotName.split(',').map(n => n.trim().toUpperCase());
+        filteredReport = filteredReport.filter(r => lotNames.includes(r.lotName.toUpperCase()));
     }
     if (filterDia) {
         filteredReport = filteredReport.filter(r => r.dia === filterDia);

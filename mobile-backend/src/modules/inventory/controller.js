@@ -627,7 +627,7 @@ const upsertInwardEntry = async ({ userId, body, files }) => {
     }
 
     const cleanLotNo = lotNo?.toString().trim();
-    const cleanLotName = lotName?.toString().trim();
+    const cleanLotName = lotName?.toString().trim().toUpperCase();
     if (!cleanLotNo || !cleanLotName) {
         throw new Error('Lot No and Lot Name are required');
     }
@@ -753,8 +753,8 @@ const upsertInwardEntry = async ({ userId, body, files }) => {
         inwardDate,
         inTime,
         outTime,
-        lotName,
-        lotNo,
+        lotName: cleanLotName,
+        lotNo: cleanLotNo,
         fromParty,
         process,
         rate: Number(rate) || 0,
@@ -987,7 +987,7 @@ const getInwards = asyncHandler(async (req, res) => {
     if (lotName) query.lotName = { $regex: new RegExp('^' + lotName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
     if (lotNo) query.lotNo = { $regex: new RegExp('^' + lotNo.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
 
-    const inwards = await Inward.find(query).sort({ inwardDate: -1 });
+    const inwards = await Inward.find(query).sort({ inwardDate: -1, createdAt: -1 });
     res.json(inwards);
 });
 
@@ -1382,27 +1382,76 @@ const createOutward = asyncHandler(async (req, res) => {
         }
     }
 
-    // CHECK FOR DUPLICATE SET-COLOR COMBINATIONS
-    const existingOutwards = await Outward.find({ lotNo, dia });
-    const usedSetColours = new Set();
-    existingOutwards.forEach(out => {
-        out.items.forEach(item => {
-            if (item.colours) {
-                item.colours.forEach(c => {
-                    usedSetColours.add(`${normalizeText(item.set_no)}|${normalizeText(c.colour)}`);
+    // 1. Fetch Inwards and Outwards for balance check
+    const normalizedLotNo = normalizeText(lotNo);
+    const normalizedDia = normalizeText(dia);
+    const lotRegex = new RegExp(`^\\s*${escapeRegex(normalizedLotNo)}\\s*$`, 'i');
+    const diaRegex = new RegExp(`^\\s*${escapeRegex(normalizedDia)}\\s*$`, 'i');
+
+    const [inwards, existingOutwards] = await Promise.all([
+        Inward.find({ lotNo: lotRegex, 'diaEntries.dia': diaRegex }),
+        Outward.find({ lotNo: lotRegex, dia: diaRegex })
+    ]);
+
+    const balanceMap = {};
+
+    // Calculate Inward Totals per Set/Colour
+    inwards.forEach(inw => {
+        if (inw.storageDetails && Array.isArray(inw.storageDetails)) {
+            inw.storageDetails.forEach(sdOrRow => {
+                const rows = Array.isArray(sdOrRow.rows) ? sdOrRow.rows : [sdOrRow];
+                rows.forEach(row => {
+                    const rowDia = normalizeText(row.dia || sdOrRow.dia);
+                    if (rowDia && !new RegExp(`^\\s*${escapeRegex(normalizedDia)}\\s*$`, 'i').test(rowDia)) return;
+
+                    const rawColour = normalizeText(row.colour);
+                    const weightsArray = row.setWeights || row.stickerDetails;
+                    if (weightsArray && Array.isArray(weightsArray)) {
+                        weightsArray.forEach((weight, idx) => {
+                            const inWeight = parseFloat(weight) || 0;
+                            if (inWeight <= 0) return;
+                            const rawSetNo = getSetIdentifierFromRow(row, idx);
+                            const key = canonicalKey(rawSetNo, rawColour);
+                            if (!balanceMap[key]) balanceMap[key] = { weight: 0 };
+                            balanceMap[key].weight += inWeight;
+                        });
+                    }
                 });
-            }
-        });
+            });
+        }
     });
 
-    // Check if any requested color in a set is already used
+    // Subtract Existing Outward Totals per Set/Colour
+    existingOutwards.forEach(out => {
+        if (out.items && Array.isArray(out.items)) {
+            out.items.forEach(item => {
+                const rawSetNo = normalizeText(item.set_no);
+                if (item.colours && Array.isArray(item.colours)) {
+                    item.colours.forEach(c => {
+                        const rawColour = normalizeText(c.colour);
+                        const outWeight = parseFloat(c.weight) || 0;
+                        const key = canonicalKey(rawSetNo, rawColour);
+                        if (balanceMap[key]) {
+                            balanceMap[key].weight -= outWeight;
+                        }
+                    });
+                }
+            });
+        }
+    });
+
+    // Validate requested items against available balance
     for (const item of items) {
         if (item.colours) {
             for (const c of item.colours) {
-                const compositeKey = `${normalizeText(item.set_no)}|${normalizeText(c.colour)}`;
-                if (usedSetColours.has(compositeKey)) {
+                const key = canonicalKey(item.set_no, c.colour);
+                const available = balanceMap[key] ? balanceMap[key].weight : 0;
+                const requested = parseFloat(c.weight) || 0;
+                
+                // Allow a small tolerance for floating point precision (0.01 kg)
+                if (requested > available + 0.01) {
                     res.status(400);
-                    throw new Error(`Set Number ${item.set_no} with colour ${c.colour} is already delivered for Lot ${lotNo} and DIA ${dia}`);
+                    throw new Error(`Insufficient balance for Set ${item.set_no} with colour ${c.colour} for Lot ${lotNo}. Available: ${available.toFixed(3)}kg, Requested: ${requested.toFixed(3)}kg`);
                 }
             }
         }
@@ -1484,7 +1533,7 @@ const getOutwards = asyncHandler(async (req, res) => {
     if (lotNo) query.lotNo = { $regex: new RegExp('^' + lotNo.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
     if (dia) query.dia = { $regex: new RegExp('^' + dia.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') };
 
-    const outwards = await Outward.find(query).sort({ dateTime: -1 }).lean();
+    const outwards = await Outward.find(query).sort({ dateTime: -1, createdAt: -1 }).lean();
     
     // Enrich with rate from Inward
     for (let out of outwards) {

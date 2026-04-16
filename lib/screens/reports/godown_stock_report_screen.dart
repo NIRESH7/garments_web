@@ -24,11 +24,14 @@ class GodownStockReportScreen extends StatefulWidget {
 class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
   final _api = MobileApiService();
 
-  String? _selectedLotName;
+  List<String> _selectedLotNames = [];
   String? _selectedDia;
+  String? _statusFilter;
+  String _displayUnit = 'Weight'; // 'Weight' or 'Roll'
 
-  List<String> _lotNames = ['All'];
+  List<String> _lotNames = [];
   List<String> _dias = ['All'];
+  final List<String> _units = ['Weight', 'Roll'];
   List<dynamic> _reportData = [];
   bool _isLoading = true;
 
@@ -46,7 +49,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     try {
       final categories = await _api.getCategories();
       setState(() {
-        _lotNames = ['All', ..._getValues(categories, 'Lot Name')];
+        _lotNames = _getValues(categories, 'Lot Name');
         _dias = ['All', ..._getValues(categories, 'dia')];
       });
       _fetchReport();
@@ -73,13 +76,13 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     setState(() => _isLoading = true);
     try {
       final data = await _api.getGodownStockReport(
-        lotName: _selectedLotName == 'All' ? null : _selectedLotName,
+        lotName: _selectedLotNames.isEmpty ? null : _selectedLotNames,
         dia: _selectedDia == 'All' ? null : _selectedDia,
       );
       setState(() {
         _reportData = data;
         _isLoading = false;
-        _currentPage = 0; // Reset page on new data
+        _currentPage = 0; 
       });
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
@@ -280,12 +283,12 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
         children: [
           _buildCircularFilter(
             label: 'Lot Name',
-            value: _selectedLotName ?? 'All',
+            value: _selectedLotNames.isEmpty 
+                ? 'All' 
+                : (_selectedLotNames.length == 1 ? _selectedLotNames[0] : '${_selectedLotNames.length} Selected'),
             items: _lotNames,
-            onChanged: (v) {
-              setState(() => _selectedLotName = v);
-              _fetchReport();
-            },
+            onChanged: (v) => _showLotNameMultiSelect(),
+            isMulti: true,
           ),
           const SizedBox(width: 12),
           _buildCircularFilter(
@@ -295,6 +298,15 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
             onChanged: (v) {
               setState(() => _selectedDia = v);
               _fetchReport();
+            },
+          ),
+          const SizedBox(width: 12),
+          _buildCircularFilter(
+            label: 'Unit',
+            value: _displayUnit,
+            items: _units,
+            onChanged: (v) {
+              if (v != null) setState(() => _displayUnit = v);
             },
           ),
         ],
@@ -307,7 +319,36 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     required String value, 
     required List<String> items,
     required Function(String?) onChanged,
+    bool isMulti = false,
   }) {
+    if (isMulti) {
+      return InkWell(
+        onTap: () => onChanged(null),
+        child: Container(
+          width: 180,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  value, 
+                  style: const TextStyle(color: Color(0xFF1E293B), fontSize: 13, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(LucideIcons.chevronDown, size: 14, color: Color(0xFF94A3B8)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: 180,
       decoration: BoxDecoration(
@@ -318,13 +359,28 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
+          value: items.contains(value) ? value : null,
           isExpanded: true,
+          hint: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           icon: const Icon(LucideIcons.chevronDown, size: 14, color: Color(0xFF94A3B8)),
           style: const TextStyle(color: Color(0xFF1E293B), fontSize: 13, fontWeight: FontWeight.w600),
           items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
           onChanged: onChanged,
         ),
+      ),
+    );
+  }
+
+  void _showLotNameMultiSelect() {
+    showDialog(
+      context: context,
+      builder: (context) => _LotNameMultiSelectDialog(
+        allLots: _lotNames,
+        initialSelected: _selectedLotNames,
+        onApply: (selected) {
+          setState(() => _selectedLotNames = selected);
+          _fetchReport();
+        },
       ),
     );
   }
@@ -345,32 +401,31 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
   }
 
   Widget _buildWebReportTable() {
-    if (_reportData.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-              child: Icon(LucideIcons.package2, size: 48, color: Colors.blueGrey.shade200),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No stock movements captured yet',
-              style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      );
+    // Apply local filters (Status)
+    final filteredByStatus = _statusFilter == null 
+        ? _reportData 
+        : _reportData.where((d) => d['status'] == _statusFilter).toList();
+
+    if (filteredByStatus.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 100),
+              Icon(LucideIcons.filterX, size: 48, color: Colors.blueGrey.shade100),
+              const SizedBox(height: 16),
+              Text('No items with $_statusFilter status', style: GoogleFonts.inter(color: Colors.grey)),
+            ],
+          ),
+        );
     }
 
     // Logic for Pagination
     final int startIndex = _currentPage * _rowsPerPage;
-    final int endIndex = (startIndex + _rowsPerPage) > _reportData.length 
-        ? _reportData.length 
+    final int endIndex = (startIndex + _rowsPerPage) > filteredByStatus.length 
+        ? filteredByStatus.length 
         : (startIndex + _rowsPerPage);
-    final List<dynamic> paginatedData = _reportData.sublist(startIndex, endIndex);
+    final List<dynamic> paginatedData = filteredByStatus.sublist(startIndex, endIndex);
 
     return Container(
       decoration: BoxDecoration(
@@ -393,8 +448,10 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
             ),
             child: Row(
               children: [
-                _buildHeaderText('LOT / DIA', 3),
-                _buildHeaderText('CURRENT STOCK', 2),
+                _buildHeaderText('LOT / DIA', 2),
+                _buildHeaderText('IN STOCK', 1),
+                _buildHeaderText('OUT STOCK', 1),
+                _buildHeaderText('TOTAL STOCK', 1),
                 _buildHeaderText('MIN', 1),
                 _buildHeaderText('MAX', 1),
                 _buildHeaderText('NEED WEIGHT', 1),
@@ -519,65 +576,59 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
 
   Widget _buildWebReportRow(Map<String, dynamic> item) {
     final status = item['status'];
+    final bool isRoll = _displayUnit == 'Roll';
+    final String unitLabel = isRoll ? 'rolls' : 'kg';
     
+    double convert(dynamic val) {
+      final num v = (val as num?) ?? 0;
+      return isRoll ? v / 20.0 : v.toDouble();
+    }
+
+    final inStock = convert(item['currentWeight']);
+    final outStock = convert(item['outsideInput']);
+    final totalStock = inStock + outStock;
+    final minStock = convert(item['minWeight']);
+    final maxStock = convert(item['maxWeight']);
+    final needWeight = convert(item['needWeight']);
+    final estRolls = (item['needWeight'] as num? ?? 0) / 20.0; // Estimate always based on weight logic
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   item['lotName'],
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1E293B)),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1E293B)),
                 ),
                 Text(
                   'DIA ${item['dia']}',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ),
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                Text(
-                  '${item['currentWeight'].toStringAsFixed(1)}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1E293B)),
-                ),
-                const SizedBox(width: 4),
-                const Text('kg', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
-                if (item['outsideInput'] != 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(4)),
-                    child: Text(
-                      '+${item['outsideInput']}',
-                      style: const TextStyle(fontSize: 10, color: Color(0xFF2563EB), fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ]
-              ],
-            ),
-          ),
-          _buildCellText('${item['minWeight']}', 1),
-          _buildCellText('${item['maxWeight']}', 1),
+          _buildCellText('${inStock.toStringAsFixed(1)} $unitLabel', 1),
+          _buildCellText('${outStock.toStringAsFixed(1)} $unitLabel', 1, color: const Color(0xFF2563EB)),
+          _buildCellText('${totalStock.toStringAsFixed(1)} $unitLabel', 1, fontWeight: FontWeight.w800),
+          _buildCellText('${minStock.toStringAsFixed(1)}', 1),
+          _buildCellText('${maxStock.toStringAsFixed(1)}', 1),
           Expanded(
             flex: 1,
             child: Text(
-              '${item['needWeight'].toStringAsFixed(1)}',
+              needWeight.toStringAsFixed(1),
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF2563EB),
-                fontSize: 14,
+                fontSize: 13,
               ),
             ),
           ),
-          _buildCellText('${(item['needWeight'] / 20).toStringAsFixed(1)}', 1, color: const Color(0xFF94A3B8)),
+          _buildCellText(estRolls.toStringAsFixed(1), 1, color: const Color(0xFF94A3B8)),
           Expanded(
             flex: 1,
             child: _buildStatusBadge(status),
@@ -587,12 +638,12 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     );
   }
 
-  Widget _buildCellText(String text, int flex, {Color color = const Color(0xFF1E293B)}) {
+  Widget _buildCellText(String text, int flex, {Color color = const Color(0xFF1E293B), FontWeight fontWeight = FontWeight.w600}) {
     return Expanded(
       flex: flex,
       child: Text(
         text,
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color),
+        style: TextStyle(fontSize: 12, fontWeight: fontWeight, color: color),
       ),
     );
   }
@@ -640,11 +691,32 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
 
     return Row(
       children: [
-        _SummaryBox(label: 'LOW STOCK', count: lowCount, color: const Color(0xFFEF4444), bgColor: const Color(0xFFFEF2F2)),
+        _SummaryBox(
+          label: 'LOW STOCK', 
+          count: lowCount, 
+          color: const Color(0xFFEF4444), 
+          bgColor: const Color(0xFFFEF2F2),
+          isSelected: _statusFilter == 'LOW STOCK',
+          onTap: () => setState(() => _statusFilter = (_statusFilter == 'LOW STOCK' ? null : 'LOW STOCK')),
+        ),
         const SizedBox(width: 20),
-        _SummaryBox(label: 'HIGH STOCK', count: highCount, color: const Color(0xFFF59E0B), bgColor: const Color(0xFFFFFBEB)),
+        _SummaryBox(
+          label: 'HIGH STOCK', 
+          count: highCount, 
+          color: const Color(0xFFF59E0B), 
+          bgColor: const Color(0xFFFFFBEB),
+          isSelected: _statusFilter == 'HIGH STOCK',
+          onTap: () => setState(() => _statusFilter = (_statusFilter == 'HIGH STOCK' ? null : 'HIGH STOCK')),
+        ),
         const SizedBox(width: 20),
-        _SummaryBox(label: 'NORMAL RANGE', count: normalCount, color: const Color(0xFF10B981), bgColor: const Color(0xFFF0FDF4)),
+        _SummaryBox(
+          label: 'NORMAL RANGE', 
+          count: normalCount, 
+          color: const Color(0xFF10B981), 
+          bgColor: const Color(0xFFF0FDF4),
+          isSelected: _statusFilter == 'NORMAL',
+          onTap: () => setState(() => _statusFilter = (_statusFilter == 'NORMAL' ? null : 'NORMAL')),
+        ),
       ],
     );
   }
@@ -660,12 +732,11 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
             Expanded(
               child: CustomDropdownField(
                 label: 'Lot Name',
-                value: _selectedLotName ?? 'All',
+                value: _selectedLotNames.isEmpty 
+                    ? 'All' 
+                    : (_selectedLotNames.length == 1 ? _selectedLotNames[0] : '${_selectedLotNames.length} Selected'),
                 items: _lotNames,
-                onChanged: (v) {
-                  setState(() => _selectedLotName = v);
-                  _fetchReport();
-                },
+                onChanged: (v) => _showLotNameMultiSelect(),
               ),
             ),
             const SizedBox(width: 12),
@@ -782,6 +853,8 @@ class _SummaryBox extends StatelessWidget {
   final int count;
   final Color color;
   final Color bgColor;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   const _SummaryBox({
     Key? key,
@@ -789,54 +862,176 @@ class _SummaryBox extends StatelessWidget {
     required this.count,
     required this.color,
     required this.bgColor,
+    required this.isSelected,
+    required this.onTap,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10, offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12)),
-              child: Icon(LucideIcons.barChart, size: 20, color: color),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isSelected ? bgColor : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? color.withOpacity(0.5) : const Color(0xFFF1F5F9),
+              width: isSelected ? 2 : 1,
             ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            boxShadow: [
+              if (isSelected)
+                BoxShadow(color: color.withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(8)),
+                    child: Icon(
+                      label.contains('LOW') ? LucideIcons.trendingDown : 
+                      (label.contains('HIGH') ? LucideIcons.trendingUp : LucideIcons.checkCircle),
+                      size: 16, 
+                      color: color,
+                    ),
+                  ),
+                  if (isSelected)
+                    Icon(LucideIcons.filter, size: 14, color: color),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                count.toString(),
+                style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LotNameMultiSelectDialog extends StatefulWidget {
+  final List<String> allLots;
+  final List<String> initialSelected;
+  final Function(List<String>) onApply;
+
+  const _LotNameMultiSelectDialog({
+    required this.allLots,
+    required this.initialSelected,
+    required this.onApply,
+  });
+
+  @override
+  State<_LotNameMultiSelectDialog> createState() => _LotNameMultiSelectDialogState();
+}
+
+class _LotNameMultiSelectDialogState extends State<_LotNameMultiSelectDialog> {
+  late List<String> _selected;
+  String _search = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = List.from(widget.initialSelected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.allLots
+        .where((l) => l.toLowerCase().contains(_search.toLowerCase()))
+        .toList();
+
+    return AlertDialog(
+      title: Text('Select Lot Names', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Search lots...',
+                prefixIcon: const Icon(LucideIcons.search, size: 18),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (v) => setState(() => _search = v),
+            ),
+            const SizedBox(height: 16),
+            Row(
               children: [
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                  ),
+                TextButton(
+                  onPressed: () => setState(() => _selected = List.from(widget.allLots)),
+                  child: const Text('Select All'),
                 ),
-                Text(
-                  count.toString(),
-                  style: GoogleFonts.inter(
-                    fontSize: 24,
-                    color: const Color(0xFF1E293B),
-                    fontWeight: FontWeight.w800,
-                  ),
+                TextButton(
+                  onPressed: () => setState(() => _selected = []),
+                  child: const Text('Clear All'),
                 ),
               ],
+            ),
+            const Divider(),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final lot = filtered[index];
+                    final isSel = _selected.contains(lot);
+                    return CheckboxListTile(
+                      value: isSel,
+                      title: Text(lot, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      dense: true,
+                      onChanged: (val) {
+                        setState(() {
+                          if (val == true) {
+                            _selected.add(lot);
+                          } else {
+                            _selected.remove(lot);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
             ),
           ],
         ),
       ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () {
+            widget.onApply(_selected);
+            Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: const Text('Apply Filters'),
+        ),
+      ],
     );
   }
 }

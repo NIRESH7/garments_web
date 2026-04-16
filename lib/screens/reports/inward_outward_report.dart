@@ -79,7 +79,7 @@ class _InwardOutwardReportScreenState extends State<InwardOutwardReportScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Row(
+                      Row( 
                         children: [
                           Expanded(
                             child: _buildMovementBlock(
@@ -149,6 +149,7 @@ class _InwardOutwardReportScreenState extends State<InwardOutwardReportScreen> {
 
   Widget _buildDifferenceRow(dynamic item) {
     final diffWeight = (item['in_weight'] as num) - (item['out_weight'] as num);
+  
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

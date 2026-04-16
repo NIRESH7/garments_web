@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import '../utils/print_utils.dart';
 import '../core/constants/api_constants.dart';
 import 'package:http/http.dart' as http;
+import '../utils/pdf_font_helper.dart';
 
 class QualityAuditPrintService {
   static final QualityAuditPrintService _instance =
@@ -16,6 +17,8 @@ class QualityAuditPrintService {
     final pdf = pw.Document();
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy HH:mm').format(now);
+    final font = await PdfFontHelper.regular;
+    final boldFont = await PdfFontHelper.bold;
 
     // Fetch images helper - PDFs need actual bytes for images
     Future<pw.MemoryImage?> _getMemoryImage(String? path) async {
@@ -51,10 +54,7 @@ class QualityAuditPrintService {
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                PrintUtils.buildCompanyHeader(
-                  pw.Font.helveticaBold(),
-                  pw.Font.helvetica(),
-                ),
+                PrintUtils.buildCompanyHeader(boldFont, font),
                 pw.SizedBox(height: 10),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -69,7 +69,7 @@ class QualityAuditPrintService {
                     ),
                     pw.Text(
                       'Date: $dateStr',
-                      style: const pw.TextStyle(fontSize: 10),
+                      style: pw.TextStyle(font: font, fontSize: 10),
                     ),
                   ],
                 ),
@@ -101,7 +101,7 @@ class QualityAuditPrintService {
                           ),
                           pw.Text(
                             'Party: ${item['fromParty']}',
-                            style: const pw.TextStyle(fontSize: 12),
+                            style: pw.TextStyle(font: font, fontSize: 12),
                           ),
                         ],
                       ),
@@ -124,7 +124,7 @@ class QualityAuditPrintService {
                 ),
                 pw.Text(
                   item['complaintText'] ?? 'None',
-                  style: const pw.TextStyle(color: PdfColors.red),
+                  style: pw.TextStyle(font: font, color: PdfColors.red),
                 ),
                 pw.SizedBox(height: 10),
 
@@ -134,8 +134,8 @@ class QualityAuditPrintService {
                     'Resolution & Reply:',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
-                  pw.Text(item['complaintReply'] ?? 'No reply recorded.'),
-                  pw.Text('Action: ${item['complaintResolution']}'),
+                  pw.Text(item['complaintReply'] ?? 'No reply recorded.', style: pw.TextStyle(font: font)),
+                  pw.Text('Action: ${item['complaintResolution']}', style: pw.TextStyle(font: font)),
                   pw.SizedBox(height: 10),
                 ],
 
@@ -152,7 +152,7 @@ class QualityAuditPrintService {
                             pw.Image(qualityImg, fit: pw.BoxFit.cover),
                             pw.Text(
                               'Quality Image',
-                              style: const pw.TextStyle(fontSize: 8),
+                              style: pw.TextStyle(font: font, fontSize: 8),
                             ),
                           ],
                         ),
@@ -166,7 +166,7 @@ class QualityAuditPrintService {
                             pw.Image(complaintImg, fit: pw.BoxFit.cover),
                             pw.Text(
                               'Complaint Image',
-                              style: const pw.TextStyle(fontSize: 8),
+                              style: pw.TextStyle(font: font, fontSize: 8),
                             ),
                           ],
                         ),
@@ -179,9 +179,9 @@ class QualityAuditPrintService {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    _buildSigBox('Lot Incharge', inchargeSig),
-                    _buildSigBox('Authorized', authSig),
-                    _buildSigBox('MD', mdSig),
+                    _buildSigBox('Lot Incharge', inchargeSig, boldFont, font),
+                    _buildSigBox('Authorized', authSig, boldFont, font),
+                    _buildSigBox('MD', mdSig, boldFont, font),
                   ],
                 ),
               ],
@@ -197,7 +197,7 @@ class QualityAuditPrintService {
     );
   }
 
-  pw.Widget _buildSigBox(String label, pw.MemoryImage? sig) {
+  pw.Widget _buildSigBox(String label, pw.MemoryImage? sig, pw.Font boldFont, pw.Font font) {
     return pw.Column(
       children: [
         pw.Container(
@@ -209,7 +209,7 @@ class QualityAuditPrintService {
           child: sig != null ? pw.Image(sig, fit: pw.BoxFit.contain) : null,
         ),
         pw.SizedBox(height: 5),
-        pw.Text(label, style: const pw.TextStyle(fontSize: 10)),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 10)),
       ],
     );
   }

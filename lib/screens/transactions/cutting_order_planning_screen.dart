@@ -28,11 +28,12 @@ class _CuttingOrderPlanningScreenState
   // ── Edit mode ────────────────────────────────────────────────────────────
   String? _editingId;          // null = create mode, non-null = edit mode
 
+  final _planNameCtrl = TextEditingController();
   String _planType = 'Monthly';
   String _planPeriod = DateFormat('yyyy-MM').format(DateTime.now());
-  final _planNameCtrl = TextEditingController();
-  List<String> _savedPlanNames = [];
-  bool _isManualPlanEntry = false;
+  DateTime? _startDate;
+  DateTime? _endDate;
+  String _sizeType = 'Senior'; 
 
   List<String> _itemNames = [];
   Map<String, String?> _itemSizeTypeMap = {}; // Maps item name to its configured size type
@@ -95,21 +96,6 @@ class _CuttingOrderPlanningScreenState
         }
         _isLoading = false;
       });
-
-      // Load existing plans for the dropdown
-      final plans = await _api.getCuttingOrders();
-      if (plans != null && plans is List) {
-        final List<String> uniqueNames = [];
-        for (var p in plans) {
-          final name = p['planName']?.toString() ?? '';
-          if (name.isNotEmpty && !uniqueNames.contains(name)) {
-            uniqueNames.add(name);
-          }
-        }
-        setState(() {
-          _savedPlanNames = uniqueNames;
-        });
-      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -169,9 +155,8 @@ class _CuttingOrderPlanningScreenState
                 ? 'Planning Sheet Updated Successfully'
                 : 'Planning Sheet Saved Successfully')),
           );
-          setState(() => _editingId = null);
+          _resetScreen();
         }
-        await _loadMasterData();
       } else {
         _showError('Failed to save planning sheet.');
       }
@@ -299,9 +284,17 @@ class _CuttingOrderPlanningScreenState
     });
   }
 
-  DateTime? _startDate;
-  DateTime? _endDate;
-  String _sizeType = 'Senior'; 
+
+  void _resetScreen() {
+    setState(() {
+      _editingId = null;
+      _planNameCtrl.clear();
+      _startDate = null;
+      _endDate = null;
+      _cuttingEntries.clear();
+      _addInitialRow();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -333,6 +326,13 @@ class _CuttingOrderPlanningScreenState
                         onPressed: _printPlanningSheet,
                         icon: const Icon(LucideIcons.printer, size: 14),
                         label: Text('PRINT', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
+                        style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: _isLoading ? null : _loadMasterData,
+                        icon: const Icon(LucideIcons.refreshCw, size: 14),
+                        label: Text('REFRESH', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11)),
                         style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
                       ),
                       const SizedBox(width: 8),
@@ -402,49 +402,22 @@ class _CuttingOrderPlanningScreenState
               ),
             ],
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'PLAN NAME / REMARKS',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                  color: const Color(0xFF94A3B8),
-                  letterSpacing: 0.5,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () => setState(() => _isManualPlanEntry = !_isManualPlanEntry),
-                icon: Icon(_isManualPlanEntry ? LucideIcons.history : LucideIcons.type, size: 12),
-                label: Text(_isManualPlanEntry ? 'USE HISTORY' : 'TYPE NEW', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800)),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF2563EB),
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            'PLAN NAME / REMARKS',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              color: const Color(0xFF94A3B8),
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 8),
-          _isManualPlanEntry
-              ? TextFormField(
-                  controller: _planNameCtrl,
-                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
-                  decoration: _fieldDeco().copyWith(hintText: 'TYPE NEW PLAN NAME...'),
-                )
-              : CustomDropdownField(
-                  label: '',
-                  value: _savedPlanNames.contains(_planNameCtrl.text) ? _planNameCtrl.text : null,
-                  items: _savedPlanNames,
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _planNameCtrl.text = val);
-                    }
-                  },
-                  hint: 'SELECT PREVIOUS PLAN...',
-                ),
+          TextFormField(
+            controller: _planNameCtrl,
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+            decoration: _fieldDeco().copyWith(hintText: 'ENTER PLAN NAME...'),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [

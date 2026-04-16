@@ -326,10 +326,11 @@ const deleteItemGroup = asyncHandler(async (req, res) => {
 // --- STOCK LIMIT HANDLERS ---
 const createStockLimit = asyncHandler(async (req, res) => {
     const { lotName, dia, minWeight, maxWeight, minRolls, maxRolls, manualAdjustment } = req.body;
+    const normalizedLotName = lotName ? lotName.trim().toUpperCase() : lotName;
 
     const limit = await StockLimit.findOneAndUpdate(
-        { lotName, dia },
-        { minWeight, maxWeight, minRolls, maxRolls, manualAdjustment },
+        { lotName: normalizedLotName, dia },
+        { lotName: normalizedLotName, minWeight, maxWeight, minRolls, maxRolls, manualAdjustment },
         { new: true, upsert: true }
     );
 
@@ -349,7 +350,7 @@ const updateStockLimit = asyncHandler(async (req, res) => {
     const limit = await StockLimit.findById(req.params.id);
 
     if (limit) {
-        limit.lotName = lotName || limit.lotName;
+        limit.lotName = lotName ? lotName.trim().toUpperCase() : limit.lotName;
         limit.dia = dia || limit.dia;
         limit.minWeight = minWeight !== undefined ? minWeight : limit.minWeight;
         limit.maxWeight = maxWeight !== undefined ? maxWeight : limit.maxWeight;

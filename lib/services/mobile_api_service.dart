@@ -531,14 +531,21 @@ class MobileApiService {
   }
 
   Future<List<dynamic>> getGodownStockReport({
-    String? lotName,
+    dynamic lotName, // Can be String or List<String>
     String? dia,
   }) async {
     try {
+      String? filterLot;
+      if (lotName is List) {
+        filterLot = lotName.isNotEmpty ? lotName.join(',') : null;
+      } else {
+        filterLot = lotName;
+      }
+
       final response = await _client.get(
         ApiConstants.godownStockReport,
         queryParameters: {
-          if (lotName != null) 'lotName': lotName,
+          if (filterLot != null) 'lotName': filterLot,
           if (dia != null) 'dia': dia,
         },
       );

@@ -2438,7 +2438,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           const SizedBox(height: 16),
           _buildExecutiveGrid([
             _buildModernDropdown("Lot Name", _selectedLotName, _lotNames, _onLotNameChanged, icon: LucideIcons.package),
-             _buildExecutiveField("Lot No", _lotNumberController, icon: LucideIcons.hash, isNumeric: true, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+             _buildExecutiveField("Lot No", _lotNumberController, icon: LucideIcons.hash, isNumeric: false, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
           ], isWeb),
           const SizedBox(height: 16),
           _buildExecutiveGrid([
@@ -2699,7 +2699,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
           ),
           _buildTableCell(
             width: 120,
-            child: _buildSmallDropdown(row.dia, _dias, (v) => setState(() => row.dia = v), hint: "SELECT DIA"),
+            child: _buildSmallDropdown(row.dia, _dias, (v) => setState(() => row.dia = v), hint: "SELECT DIA", itemImages: _colourImages),
           ),
           _buildTableCell(
             width: 80,
@@ -2914,7 +2914,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
   }) {
     return Container(
       width: width,
-      height: 56,
+      height: 70,
       decoration: BoxDecoration(
         border: Border(right: isLast ? BorderSide.none : const BorderSide(color: ColorPalette.border)),
       ),
@@ -4038,11 +4038,11 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                     height: 150,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) =>
-                        _largeColorCircle(valueName),
+                        _largeColorBox(valueName),
                   ),
                 )
               else
-                _largeColorCircle(valueName),
+                _largeColorBox(valueName),
             ],
           ),
           actions: [
@@ -4056,14 +4056,14 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
     );
   }
 
-  Widget _largeColorCircle(String value) {
+  Widget _largeColorBox(String value) {
     final color = _resolveColor(value) ?? const Color(0xFFBDBDBD);
     return Container(
       width: 150,
       height: 150,
       decoration: BoxDecoration(
         color: color,
-        shape: BoxShape.circle,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade300, width: 2),
         boxShadow: [
           BoxShadow(
@@ -4187,6 +4187,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       hint: hint ?? '',
       itemImages: itemImages,
       onDoubleTap: onDoubleTap,
+      resolveColor: _resolveColor,
     );
   }
 
@@ -4199,6 +4200,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       prefixIcon: icon,
       itemImages: itemImages,
       onDoubleTap: onDoubleTap,
+      resolveColor: _resolveColor,
     );
   }
 

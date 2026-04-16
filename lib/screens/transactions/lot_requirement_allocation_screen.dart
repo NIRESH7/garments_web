@@ -12,6 +12,7 @@ import '../../core/constants/layout_constants.dart';
 import '../../core/theme/color_palette.dart';
 import '../../widgets/custom_dropdown_field.dart';
 import '../../widgets/modern_data_table.dart';
+import '../../utils/pdf_font_helper.dart';
 import '../../services/mobile_api_service.dart';
 import 'lot_outward_screen.dart';
 
@@ -349,22 +350,24 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
       final plans = await _api.getCuttingOrders();
       final categories = await _api.getCategories();
       final assignments = await _api.getAssignments();
-      setState(() {
-        _allPlans = plans;
-        _dias = _getValues(categories, ['Dia']);
-        _masterItemNames = _getValues(categories, ['Item Name', 'itemName', 'item']);
-        _masterSizes = _getValues(categories, ['Size', 'size']);
-        _lotNames = _getValues(categories, ['Lot Name', 'lotName', 'lot name']);
-        _assignments = assignments;
-        if (_allPlans.isNotEmpty) {
-          _selectedPlanId = _allPlans.first['_id'];
-          _loadReport();
-        }
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allPlans = plans;
+          _dias = _getValues(categories, ['Dia']);
+          _masterItemNames = _getValues(categories, ['Item Name', 'itemName', 'item']);
+          _masterSizes = _getValues(categories, ['Size', 'size']);
+          _lotNames = _getValues(categories, ['Lot Name', 'lotName', 'lot name']);
+          _assignments = assignments;
+          if (_allPlans.isNotEmpty) {
+            _selectedPlanId = _allPlans.first['_id'];
+            _loadReport();
+          }
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       _showError('Error loading data: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -939,16 +942,27 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
     try { return double.parse(w.toString()).toStringAsFixed(2); } catch (_) { return '0.00'; }
   }
 
-  void _showError(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.red));
-  void _showSuccess(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.green));
+  void _showError(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.red));
+  }
+  
+  void _showSuccess(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: Colors.green));
+  }
 
   Future<void> _printReport() async {
     if (_reportRows.isEmpty) { _showError('No report data to print'); return; }
     
-    final doc = pw.Document();
-    final fontTitle = await PdfGoogleFonts.outfitBold();
-    final fontHeader = await PdfGoogleFonts.interBold();
-    final fontData = await PdfGoogleFonts.interRegular();
+     final doc = pw.Document();
+     final fonts = await Future.wait([
+       PdfFontHelper.bold,
+       PdfFontHelper.regular,
+     ]);
+     final fontTitle = fonts[0];
+     final fontHeader = fonts[0];
+     final fontData = fonts[1];
 
     final plan = _allPlans.firstWhere((p) => p['_id'] == _selectedPlanId, orElse: () => null);
     final planTitle = plan != null ? "${plan['planName']} (${plan['planType']})" : 'Lot Allocation Report';
@@ -1140,6 +1154,16 @@ class _LotRequirementAllocationScreenState extends State<LotRequirementAllocatio
                  _headerStat('Session Status', _dayEntries.isEmpty ? 'Idle' : 'Active Queues', Colors.orange),
                  const SizedBox(width: 32),
                  _headerStat('Target Plan', _allPlans.length.toString(), Colors.blue),
+                 const SizedBox(width: 32),
+                 TextButton.icon(
+                   onPressed: _isLoading ? null : _loadInitialData,
+                   icon: const Icon(LucideIcons.refreshCw, size: 16, color: Color(0xFF2563EB)),
+                   label: Text('REFRESH', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, color: const Color(0xFF2563EB))),
+                   style: TextButton.styleFrom(
+                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: BorderSide(color: const Color(0xFF2563EB).withOpacity(0.2))),
+                   ),
+                 ),
               ]
             ],
           ),

@@ -47,6 +47,34 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
     super.dispose();
   }
 
+  Widget _buildThumbnail(String item) {
+    if (widget.itemImages == null && widget.resolveColor == null) return const SizedBox.shrink();
+
+    final imageUrl = widget.itemImages?[item];
+    final color = widget.resolveColor?.call(item);
+
+    return Container(
+      margin: const EdgeInsets.only(right: 10),
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: color ?? Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: ColorPalette.border, width: 0.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: (imageUrl != null && imageUrl.isNotEmpty)
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => color != null
+                  ? Container(color: color)
+                  : const Icon(LucideIcons.image, size: 12, color: ColorPalette.textMuted),
+            )
+          : (color != null ? Container(color: color) : null),
+    );
+  }
+
   List<String> get _filteredItems {
     if (_searchQuery.isEmpty) return widget.items;
     return widget.items
@@ -148,6 +176,7 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
                                   color: isSelected ? ColorPalette.primary.withOpacity(0.05) : null,
                                   child: Row(
                                     children: [
+                                      _buildThumbnail(item),
                                       Expanded(
                                         child: Text(
                                           item.contains(' (#') ? item.split(' (#')[0] : item,
@@ -206,6 +235,8 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
                               Icon(widget.prefixIcon, size: 16, color: ColorPalette.textMuted),
                               const SizedBox(width: 10),
                             ],
+                            if (widget.value != null)
+                              _buildThumbnail(widget.value!),
                             Expanded(
                               child: Text(
                                 (widget.value != null && widget.value!.contains(' (#'))

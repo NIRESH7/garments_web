@@ -2,6 +2,26 @@ import asyncHandler from 'express-async-handler';
 import Inward from '../inventory/inwardModel.js';
 import Outward from '../inventory/outwardModel.js';
 
+// --- HELPERS (Synced with inventory controller) ---
+const normalizeText = (value) => value?.toString().trim() ?? '';
+
+const canonicalSet = (s) => {
+    const normalized = normalizeText(s).toLowerCase().replace(/^set/i, '');
+    const numericPart = normalized.replace(/[^0-9]/g, '');
+    if (numericPart && !isNaN(numericPart)) {
+        return parseInt(numericPart, 10).toString();
+    }
+    return normalized.replace(/[^a-z0-9]/g, '');
+};
+
+const canonicalColour = (c) => {
+    return normalizeText(c).toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+const canonicalKey = (setNo, colour) => {
+    return `${canonicalSet(setNo)}|${canonicalColour(colour)}`;
+};
+
 // @desc    Get Detailed Drill-Down Summary for Dashboard
 // @route   GET /api/inventory/drill-down
 // @access  Private
@@ -64,9 +84,36 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
             inwardQuery.lotNo = regexLotNo;
             outwardQuery.lotNo = regexLotNo;
         }
+        if (dia) {
+            const escapedDia = dia.toString().trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const regexDia = new RegExp('^\\s*' + escapedDia + '\\s*$', 'i');
+            inwardQuery['diaEntries.dia'] = regexDia; // Force inward to match DIA if at set level
+            outwardQuery.dia = regexDia;
+        }
 
         const inwards = inwardQuery._id === null ? [] : await Inward.find(inwardQuery).lean();
         const outwards = outwardQuery._id === null ? [] : await Outward.find(outwardQuery).lean();
+
+        console.log(`[DrillDown] Found ${inwards.length} inwards and ${outwards.length} outwards`);
+
+        // HEURISTIC: Check if this LOT/DIA is "Set Wise"
+        // We look at all inwards for this DIA to see if any have more than 1 set
+        let globalMaxSets = 0;
+        if (lotName && lotNo && dia) {
+            inwards.forEach(inw => {
+                inw.storageDetails?.forEach(s => {
+                    if (s.dia?.toString().trim() === dia.toString().trim()) {
+                        const rows = Array.isArray(s.rows) ? s.rows : [];
+                        rows.forEach(r => {
+                            if (Array.isArray(r.setWeights)) {
+                                globalMaxSets = Math.max(globalMaxSets, r.setWeights.length);
+                            }
+                        });
+                    }
+                });
+            });
+        }
+        console.log(`[DrillDown] Global Max Sets for ${lotNo}/${dia}: ${globalMaxSets}`);
 
         // 2. Determine Next Level of Drill-Down
         // Level 1: Group by lotName (if lotName is not provided)
@@ -100,8 +147,11 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                 } else if (!dia) {
                     key = de.dia;
                 } else {
-                    key = 'DEEP_LEVEL'; // Handled separately below
+                    key = 'DEEP_LEVEL';
                 }
+                
+                // Extra safety for DIA level in Inward
+                if (dia && de.dia?.toString().trim() !== dia.toString().trim()) return;
 
                 if (key !== 'DEEP_LEVEL') {
                     const group = getGroup(key, inw.inwardDate || inw.dateTime);
@@ -126,12 +176,7 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                     if (s.dia !== dia) return;
                     const rows = Array.isArray(s.rows) ? s.rows : [];
                     
-                    // HEURISTIC: Check if this was a "Not Set Wise" entry or single set
-                    // We look at all rows to see if any have more than 1 set weight
-                    let maxSetsInStorage = 0;
-                    rows.forEach(r => {
-                      if (Array.isArray(r.setWeights)) maxSetsInStorage = Math.max(maxSetsInStorage, r.setWeights.length);
-                    });
+                    const maxSetsInStorage = globalMaxSets; // Use global heuristic
 
                     if (!setNo) {
                         // Level 4: Group by Set (UNLESS it's a single set entry)
@@ -140,7 +185,7 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                                 if (Array.isArray(row.setWeights)) {
                                     row.setWeights.forEach((weightStr, index) => {
                                         if (weightStr !== null && weightStr !== undefined && weightStr !== '') {
-                                            const setKey = `Set ${index + 1}`;
+                                            const setKey = `Set ${canonicalSet(index + 1)}`;
                                             const group = getGroup(setKey, inw.inwardDate || inw.dateTime);
                                             const weight = parseFloat(weightStr);
                                             
@@ -234,6 +279,9 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                 key = 'DEEP_LEVEL';
             }
 
+            // Extra safety for DIA level in Outward
+            if (dia && out.dia?.toString().trim() !== dia.toString().trim()) return;
+
             if (key !== 'DEEP_LEVEL') {
                 const group = getGroup(key);
                 const items = Array.isArray(out.items) ? out.items : [];
@@ -263,33 +311,58 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
                 const items = Array.isArray(out.items) ? out.items : [];
                 
                 if (!setNo) {
-                    // Level 4: Group by Set
-                    items.forEach(item => {
-                        const setKey = `Set ${item.set_no || 'Unknown'}`;
-                        const group = getGroup(setKey);
-                        const weight = parseFloat(item.total_weight || 0);
-                        let rolls = 0;
-                        if (Array.isArray(item.colours)) {
-                            item.colours.forEach(c => rolls += (parseInt(c.no_of_rolls) || 0));
-                        }
-                        
-                        group.totalWeight += (weight * multiplier);
-                        group.totalRolls += (rolls * multiplier);
-
-                        // FIXED: Added missing value calculation for Outward Sets (Level 4)
-                        const inwardForRate = inwards.find(inw => 
-                            inw.lotNo?.toUpperCase().trim() === out.lotNo?.toUpperCase().trim() &&
-                            inw.lotName?.toUpperCase().trim() === out.lotName?.toUpperCase().trim()
-                        );
-                        const diaEntry = inwardForRate?.diaEntries?.find(d => d.dia === out.dia);
-                        const rate = parseFloat(diaEntry?.rate || inwardForRate?.rate || 0);
-                        group.totalValue += (weight * multiplier * rate);
-                    });
+                    // Level 4: Group by Set (OR Color if not set-wise)
+                    if (globalMaxSets > 1) {
+                        items.forEach(item => {
+                            const setKey = `Set ${canonicalSet(item.set_no || 'Unknown')}`;
+                            const group = getGroup(setKey);
+                            const weight = parseFloat(item.total_weight || 0);
+                            let rolls = 0;
+                            if (Array.isArray(item.colours)) {
+                                item.colours.forEach(c => rolls += (parseInt(c.no_of_rolls) || 0));
+                            }
+                            
+                            group.totalWeight += (weight * multiplier);
+                            group.totalRolls += (rolls * multiplier);
+    
+                            const inwardForRate = inwards.find(inw => 
+                                inw.lotNo?.toUpperCase().trim() === out.lotNo?.toUpperCase().trim() &&
+                                inw.lotName?.toUpperCase().trim() === out.lotName?.toUpperCase().trim()
+                            );
+                            const diaEntry = inwardForRate?.diaEntries?.find(d => d.dia === out.dia);
+                            const rate = parseFloat(diaEntry?.rate || inwardForRate?.rate || 0);
+                            group.totalValue += (weight * multiplier * rate);
+                        });
+                    } else {
+                        // SKIP SET LEVEL: Group by Color directly for Outward
+                        items.forEach(item => {
+                            if (Array.isArray(item.colours)) {
+                                item.colours.forEach(c => {
+                                    const colorKey = c.colour || 'Unknown';
+                                    const group = getGroup(colorKey);
+                                    const weight = parseFloat(c.weight || 0);
+                                    const rolls = parseInt(c.no_of_rolls || 0);
+                                    
+                                    group.totalWeight += (weight * multiplier);
+                                    group.totalRolls += (rolls * multiplier);
+                                    
+                                    const inwardForRate = inwards.find(inw => 
+                                        inw.lotNo?.toUpperCase().trim() === out.lotNo?.toUpperCase().trim() &&
+                                        inw.lotName?.toUpperCase().trim() === out.lotName?.toUpperCase().trim()
+                                    );
+                                    const diaEntry = inwardForRate?.diaEntries?.find(d => d.dia === out.dia);
+                                    const rate = parseFloat(diaEntry?.rate || inwardForRate?.rate || 0);
+                                    group.totalValue += (weight * multiplier * rate);
+                                    group.isColorLevel = true;
+                                });
+                            }
+                        });
+                    }
                 } else {
                     // Level 5: Group by Colour inside the given Set
-                    const targetSetNo = setNo.replace(/Set /i, '').trim();
+                    const targetSetNo = canonicalSet(setNo);
                     items.forEach(item => {
-                        if (String(item.set_no).trim() === targetSetNo) {
+                        if (canonicalSet(item.set_no) === targetSetNo) {
                             if (Array.isArray(item.colours)) {
                                 item.colours.forEach(c => {
                                     const colorKey = c.colour || 'Unknown';

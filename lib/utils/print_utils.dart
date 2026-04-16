@@ -2,10 +2,16 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class PrintUtils {
-  static pw.Widget buildCompanyHeader(pw.Font boldFont, pw.Font font) {
+  static pw.Widget buildCompanyHeader(pw.Font boldFont, pw.Font font, {pw.ImageProvider? logo}) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
+        if (logo != null) ...[
+          pw.Center(
+            child: pw.Image(logo, height: 50, fit: pw.BoxFit.contain),
+          ),
+          pw.SizedBox(height: 4),
+        ],
         pw.Text(
           'Om Vinayaka Garments',
           style: pw.TextStyle(font: boldFont, fontSize: 18),

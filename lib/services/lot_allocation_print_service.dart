@@ -3,6 +3,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:garments/utils/print_utils.dart';
+import 'package:garments/utils/pdf_font_helper.dart';
 
 class LotAllocationPrintService {
   Future<void> printCuttingOrderPlanning(
@@ -15,8 +16,8 @@ class LotAllocationPrintService {
     List<int> sizes,
   ) async {
     final pdf = pw.Document();
-    final font = pw.Font.helvetica();
-    final boldFont = pw.Font.helveticaBold();
+    final font = await PdfFontHelper.regular;
+    final boldFont = await PdfFontHelper.bold;
 
     final validEntries = cuttingEntries
         .where((e) => e['itemName'].toString().isNotEmpty)
@@ -84,79 +85,123 @@ class LotAllocationPrintService {
             ),
             pw.SizedBox(height: 20),
             pw.Table(
-              border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
+              border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
               children: [
                 // Header row
                 pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                   children: [
                     pw.Padding(
-                      padding: const pw.EdgeInsets.all(5),
+                      padding: const pw.EdgeInsets.all(6),
                       child: pw.Text('ITEM NAME', style: pw.TextStyle(font: boldFont, fontSize: 9)),
                     ),
-                    ...sizes.map((s) => pw.Padding(
-                          padding: const pw.EdgeInsets.all(5),
-                          child: pw.Center(
-                            child: pw.Text(s.toString(), style: pw.TextStyle(font: boldFont, fontSize: 9)),
-                          ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('CAT', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                    ),
+                    ...sizes.map((s) => pw.Container(
+                          width: 45,
+                          padding: const pw.EdgeInsets.all(6),
+                          alignment: pw.Alignment.center,
+                          child: pw.Text(s.toString(), style: pw.TextStyle(font: boldFont, fontSize: 9)),
                         )),
                     pw.Padding(
-                      padding: const pw.EdgeInsets.all(5),
-                      child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Center(child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 9))),
                     ),
                   ],
                 ),
                 // Data rows
-                ...validEntries.map((e) {
+                ...validEntries.expand((e) {
                   final orderQty = e['sizeQuantities'] as Map<String, dynamic>? ?? {};
                   final cuttingQty = e['cuttingQuantities'] as Map<String, dynamic>? ?? {};
 
                   int rowOrderTotal = 0;
                   int rowCuttingTotal = 0;
+                  orderQty.forEach((_, v) => rowOrderTotal += (v as int));
+                  cuttingQty.forEach((_, v) => rowCuttingTotal += (v as int));
 
-                  return pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(5),
-                        child: pw.Text(e['itemName'] ?? '', style: pw.TextStyle(font: font, fontSize: 8)),
-                      ),
-                      ...sizes.map((s) {
-                        final sStr = s.toString();
-                        final order = (orderQty[sStr] ?? 0) as int;
-                        final cutting = (cuttingQty[sStr] ?? 0) as int;
-                        final pending = order - cutting;
-
-                        rowOrderTotal += order;
-                        rowCuttingTotal += cutting;
-
-                        return pw.Padding(
-                          padding: const pw.EdgeInsets.all(2),
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              if (order > 0 || cutting > 0) ...[
-                                pw.Text('ORDER-${order}', style: pw.TextStyle(color: PdfColors.green, font: font, fontSize: 7)),
-                                pw.Text('CUTTING-${cutting}', style: pw.TextStyle(color: PdfColors.blue, font: font, fontSize: 7)),
-                                pw.Text('PENDING-${pending}', style: pw.TextStyle(color: PdfColors.red, font: font, fontSize: 7)),
-                              ] else
-                                pw.Text('-', style: pw.TextStyle(font: font, fontSize: 7)),
-                            ],
-                          ),
-                        );
-                      }),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(2),
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('ORDER-${rowOrderTotal}', style: pw.TextStyle(color: PdfColors.green, font: boldFont, fontSize: 7)),
-                            pw.Text('CUTTING-${rowCuttingTotal}', style: pw.TextStyle(color: PdfColors.blue, font: boldFont, fontSize: 7)),
-                            pw.Text('PENDING-${rowOrderTotal - rowCuttingTotal}', style: pw.TextStyle(color: PdfColors.red, font: boldFont, fontSize: 7)),
-                          ],
+                  return [
+                    // ORDER ROW
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: pw.Text(e['itemName'] ?? '', style: pw.TextStyle(font: boldFont, fontSize: 8)),
                         ),
-                      ),
-                    ],
-                  );
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: pw.Text('ORDER', style: pw.TextStyle(font: boldFont, fontSize: 7, color: PdfColors.green)),
+                        ),
+                        ...sizes.map((s) {
+                          final val = (orderQty[s.toString()] ?? 0) as int;
+                          return pw.Container(
+                            alignment: pw.Alignment.center,
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(val > 0 ? val.toString() : '-', 
+                              style: pw.TextStyle(color: PdfColors.green, font: font, fontSize: 8)),
+                          );
+                        }),
+                        pw.Container(
+                          alignment: pw.Alignment.center,
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(rowOrderTotal.toString(), style: pw.TextStyle(color: PdfColors.green, font: boldFont, fontSize: 8)),
+                        ),
+                      ],
+                    ),
+                    // CUTTING ROW
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: pw.Text('CUTTING', style: pw.TextStyle(font: boldFont, fontSize: 7, color: PdfColors.blue)),
+                        ),
+                        ...sizes.map((s) {
+                          final val = (cuttingQty[s.toString()] ?? 0) as int;
+                          return pw.Container(
+                            alignment: pw.Alignment.center,
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(val > 0 ? val.toString() : '-', 
+                              style: pw.TextStyle(color: PdfColors.blue, font: font, fontSize: 8)),
+                          );
+                        }),
+                        pw.Container(
+                          alignment: pw.Alignment.center,
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text(rowCuttingTotal.toString(), style: pw.TextStyle(color: PdfColors.blue, font: boldFont, fontSize: 8)),
+                        ),
+                      ],
+                    ),
+                    // PENDING ROW
+                    pw.TableRow(
+                       decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5))),
+                      children: [
+                        pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('')),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: pw.Text('PENDING', style: pw.TextStyle(font: boldFont, fontSize: 7, color: PdfColors.red)),
+                        ),
+                        ...sizes.map((s) {
+                          final order = (orderQty[s.toString()] ?? 0) as int;
+                          final cutting = (cuttingQty[s.toString()] ?? 0) as int;
+                          final pending = order - cutting;
+                          return pw.Container(
+                            alignment: pw.Alignment.center,
+                            padding: const pw.EdgeInsets.all(4),
+                            child: pw.Text(pending > 0 ? pending.toString() : (order > 0 || cutting > 0 ? '0' : '-'), 
+                              style: pw.TextStyle(color: PdfColors.red, font: font, fontSize: 8)),
+                          );
+                        }),
+                        pw.Container(
+                          alignment: pw.Alignment.center,
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Text((rowOrderTotal - rowCuttingTotal).toString(), 
+                            style: pw.TextStyle(color: PdfColors.red, font: boldFont, fontSize: 8)),
+                        ),
+                      ],
+                    ),
+                  ];
                 }),
               ],
             ),
@@ -228,8 +273,8 @@ class LotAllocationPrintService {
     List<Map<String, dynamic>> allAllocations,
   ) async {
     final pdf = pw.Document();
-    final font = pw.Font.helvetica();
-    final boldFont = pw.Font.helveticaBold();
+    final font = await PdfFontHelper.regular;
+    final boldFont = await PdfFontHelper.bold;
 
     pdf.addPage(
       pw.MultiPage(
@@ -343,8 +388,8 @@ class LotAllocationPrintService {
     String? size,
   }) async {
     final pdf = pw.Document();
-    final font = pw.Font.helvetica();
-    final boldFont = pw.Font.helveticaBold();
+    final font = await PdfFontHelper.regular;
+    final boldFont = await PdfFontHelper.bold;
 
     pdf.addPage(
       pw.MultiPage(
@@ -486,8 +531,8 @@ class LotAllocationPrintService {
     List<Map<String, dynamic>> rows,
   ) async {
     final pdf = pw.Document();
-    final font = pw.Font.helvetica();
-    final boldFont = pw.Font.helveticaBold();
+    final font = await PdfFontHelper.regular;
+    final boldFont = await PdfFontHelper.bold;
 
     final totalWt = rows.fold<double>(
       0.0,
@@ -615,8 +660,8 @@ class LotAllocationPrintService {
 
   Future<void> printCuttingMasterDetail(Map<String, dynamic> entry) async {
     final pdf = pw.Document();
-    final font = pw.Font.helvetica();
-    final boldFont = pw.Font.helveticaBold();
+    final font = await PdfFontHelper.regular;
+    final boldFont = await PdfFontHelper.bold;
 
     pdf.addPage(
       pw.MultiPage(
