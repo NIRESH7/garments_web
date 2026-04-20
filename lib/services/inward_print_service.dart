@@ -77,18 +77,47 @@ class InwardPrintService {
     final mdImg = results[4] as pw.MemoryImage?;
     final logoImage = results[5] as pw.MemoryImage?;
 
+    // Pre-load colour visual assets
+    final Map<String, pw.MemoryImage?> colourImages = {};
+    final Map<String, String?> colourHexes = {};
+    
+    // Collect unique colours from rows
+    final List<String> uniqueColours = rows.map((r) => r['colour']?.toString() ?? '').where((c) => c.isNotEmpty).toSet().toList();
+    
+    // For Lot Inward, we might have colour definitions in inward['storageDetails']
+    if (inward['storageDetails'] != null) {
+      for (var sd in inward['storageDetails']) {
+        for (var row in sd['rows'] ?? []) {
+          final cName = row['colour']?.toString();
+          if (cName != null && uniqueColours.contains(cName)) {
+             if (row['colourImage'] != null) colourHexes[cName] = row['colourImage']; // could be hex or path
+          }
+        }
+      }
+    }
+
+    // Try to load images for anything that looks like a path
+    final List<Future<void>> imgFutures = [];
+    for (var c in uniqueColours) {
+      final val = colourHexes[c];
+      if (val != null && !val.startsWith('#') && val.length > 7) {
+        imgFutures.add(_loadNetImage(val).then((img) => colourImages[c] = img));
+      }
+    }
+    if (imgFutures.isNotEmpty) await Future.wait(imgFutures);
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.letter.landscape,
-        margin: const pw.EdgeInsets.only(top: 10, left: 20, right: 20, bottom: 20),
+        margin: const pw.EdgeInsets.only(top: 2, left: 20, right: 20, bottom: 20),
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               PrintUtils.buildCompanyHeader(boldFont, font, logo: logoImage),
               _buildHeader(inward, boldFont, font),
-              pw.SizedBox(height: 10),
-              _buildTable(dias, rows, totals, font, boldFont),
+              pw.SizedBox(height: 5),
+              _buildTable(dias, rows, totals, font, boldFont, colourImages, colourHexes),
               pw.SizedBox(height: 30),
               // Signatures Section
               pw.Row(
@@ -187,6 +216,8 @@ class InwardPrintService {
     Map<String, dynamic> totals,
     pw.Font font,
     pw.Font boldFont,
+    Map<String, pw.MemoryImage?> colourImages,
+    Map<String, String?> colourHexes,
   ) {
     final headers = [
       'Colour',
@@ -195,38 +226,83 @@ class InwardPrintService {
       'Total Wt',
     ];
 
-    return pw.Table.fromTextArray(
-      headers: headers,
-      data: [
+    return pw.Table(
+      border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2.5),
+        for (int i = 0; i < dias.length; i++) i + 1: const pw.FlexColumnWidth(1.5),
+        dias.length + 1: const pw.FlexColumnWidth(1.2),
+        dias.length + 2: const pw.FlexColumnWidth(1.2),
+      },
+      children: [
+        // Header Row
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          children: headers.map((h) => pw.Padding(
+            padding: const pw.EdgeInsets.all(6),
+            child: pw.Center(child: pw.Text(h, style: pw.TextStyle(font: boldFont, fontSize: 11, fontWeight: pw.FontWeight.bold))),
+          )).toList(),
+        ),
+        // Data Rows
         ...rows.map((row) {
-          return [
-            row['colour'],
-            ...dias.map((dia) {
-              final cell = row['data'][dia] ?? {'rolls': 0, 'weight': 0.0};
-              if (cell['rolls'] == 0 && cell['weight'] == 0) return '-';
-              return '${cell['rolls']} / ${cell['weight'].toStringAsFixed(2)}';
-            }),
-            row['totalRolls'].toString(),
-            row['totalWeight'].toStringAsFixed(2),
-          ];
+          final cName = row['colour']?.toString() ?? '-';
+          return pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: PrintUtils.buildColourCell(
+                  cName,
+                  font,
+                  image: colourImages[cName],
+                  hexColor: colourHexes[cName]?.startsWith('#') == true ? colourHexes[cName] : null,
+                ),
+              ),
+              ...dias.map((dia) {
+                final cell = row['data'][dia] ?? {'rolls': 0, 'weight': 0.0};
+                final txt = (cell['rolls'] == 0 && cell['weight'] == 0) ? '-' : '${cell['rolls']} / ${cell['weight'].toStringAsFixed(2)}';
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Center(child: pw.Text(txt, style: pw.TextStyle(font: font, fontSize: 10))),
+                );
+              }),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Center(child: pw.Text(row['totalRolls'].toString(), style: pw.TextStyle(font: font, fontSize: 10))),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Center(child: pw.Text(row['totalWeight'].toStringAsFixed(2), style: pw.TextStyle(font: boldFont, fontSize: 10))),
+              ),
+            ],
+          );
         }),
         // Grand Total Row
-        [
-          'TOTAL',
-          ...dias.map((dia) {
-            final t = totals[dia] ?? {'rolls': 0, 'weight': 0.0};
-            final rolls = (t['rolls'] as num?)?.toInt() ?? 0;
-            return '$rolls / ${t['weight'].toStringAsFixed(2)}';
-          }),
-          totals['grandTotalRolls'].toString(),
-          totals['grandTotalWeight'].toStringAsFixed(2),
-        ],
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+            ),
+            ...dias.map((dia) {
+              final t = totals[dia] ?? {'rolls': 0, 'weight': 0.0};
+              final rolls = (t['rolls'] as num?)?.toInt() ?? 0;
+              return pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Center(child: pw.Text('$rolls / ${t['weight'].toStringAsFixed(2)}', style: pw.TextStyle(font: boldFont, fontSize: 10))),
+              );
+            }),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Center(child: pw.Text(totals['grandTotalRolls'].toString(), style: pw.TextStyle(font: boldFont, fontSize: 11))),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Center(child: pw.Text(totals['grandTotalWeight'].toStringAsFixed(2), style: pw.TextStyle(font: boldFont, fontSize: 11))),
+            ),
+          ],
+        ),
       ],
-      headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 11),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-      cellStyle: pw.TextStyle(font: boldFont, fontSize: 10),
-      cellAlignment: pw.Alignment.center,
-      border: pw.TableBorder.all(),
     );
   }
 

@@ -95,13 +95,14 @@ class QualityAuditPrintService {
                           pw.Text(
                             'LOT: ${item['lotNo']} - ${item['lotName']}',
                             style: pw.TextStyle(
+                              font: boldFont,
                               fontWeight: pw.FontWeight.bold,
-                              fontSize: 14,
+                              fontSize: 16,
                             ),
                           ),
                           pw.Text(
                             'Party: ${item['fromParty']}',
-                            style: pw.TextStyle(font: font, fontSize: 12),
+                            style: pw.TextStyle(font: boldFont, fontSize: 14),
                           ),
                         ],
                       ),
@@ -120,11 +121,11 @@ class QualityAuditPrintService {
                 // Complaint Section
                 pw.Text(
                   'Complaint Details:',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 13),
                 ),
                 pw.Text(
                   item['complaintText'] ?? 'None',
-                  style: pw.TextStyle(font: font, color: PdfColors.red),
+                  style: pw.TextStyle(font: boldFont, fontSize: 13, color: PdfColors.red),
                 ),
                 pw.SizedBox(height: 10),
 
@@ -132,7 +133,7 @@ class QualityAuditPrintService {
                 if (item['complaintResolution'] != null) ...[
                   pw.Text(
                     'Resolution & Reply:',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 13),
                   ),
                   pw.Text(item['complaintReply'] ?? 'No reply recorded.', style: pw.TextStyle(font: font)),
                   pw.Text('Action: ${item['complaintResolution']}', style: pw.TextStyle(font: font)),

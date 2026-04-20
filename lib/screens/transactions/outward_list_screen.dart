@@ -90,9 +90,10 @@ class OutwardListScreenState extends State<OutwardListScreen> {
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: ModernDataTable(
-                        columns: const ['dcNo', 'lotName', 'partyName', 'process'],
+                        columns: const ['dcNo', 'lotNo', 'lotName', 'partyName', 'process'],
                         columnIcons: const {
                           'dcNo': LucideIcons.fileText,
+                          'lotNo': LucideIcons.hash,
                           'lotName': LucideIcons.package,
                           'partyName': LucideIcons.briefcase,
                           'process': LucideIcons.activity,
@@ -101,6 +102,7 @@ class OutwardListScreenState extends State<OutwardListScreen> {
                           return {
                             ...item,
                             'dcNo': item['dcNo'] ?? 'N/A',
+                            'lotNo': item['lotNo'] ?? 'N/A',
                             'lotName': item['lotName'] ?? 'No Lot',
                             'partyName': item['partyName'] ?? 'N/A',
                             'process': item['process'] ?? 'N/A',

@@ -2,9 +2,24 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../utils/print_utils.dart';
 
 class TaskPrintService {
+  static pw.MemoryImage? _cachedLogo;
+
+  Future<pw.MemoryImage?> _loadLogo() async {
+    if (_cachedLogo != null) return _cachedLogo;
+    try {
+      final logoData = await rootBundle.load('assets/images/app_logo.png');
+      _cachedLogo = pw.MemoryImage(logoData.buffer.asUint8List());
+      return _cachedLogo;
+    } catch (e) {
+      print('Error loading app logo for task: $e');
+      return null;
+    }
+  }
+
   Future<void> printTaskDetails(dynamic task) async {
     final pdf = pw.Document();
     // Use Unicode-capable fonts so Tamil instructions render correctly in print/PDF.
@@ -12,14 +27,15 @@ class TaskPrintService {
     final boldFont = await PdfGoogleFonts.notoSansBold();
     final tamilFont = await PdfGoogleFonts.notoSansTamilRegular();
     final tamilBoldFont = await PdfGoogleFonts.notoSansTamilBold();
+    final logoImage = await _loadLogo();
 
     final instructionText =
         (task['description'] ?? 'No instructions provided.').toString();
     final bool instructionHasTamil = _containsTamil(instructionText);
     final pw.TextStyle instructionStyle = pw.TextStyle(
-      font: instructionHasTamil ? tamilFont : font,
-      fontSize: 11,
-      fontFallback: [tamilFont],
+      font: instructionHasTamil ? tamilBoldFont : boldFont,
+      fontSize: 13,
+      fontFallback: [tamilBoldFont, tamilFont],
     );
 
     pdf.addPage(
@@ -30,7 +46,7 @@ class TaskPrintService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              PrintUtils.buildCompanyHeader(boldFont, font),
+              PrintUtils.buildCompanyHeader(boldFont, font, logo: logoImage),
               pw.SizedBox(height: 20),
               pw.Center(
                 child: pw.Text(
@@ -120,13 +136,13 @@ class TaskPrintService {
                   headers: ['Date', 'Worker', 'Status', 'Message'],
                   headerStyle: pw.TextStyle(
                     font: boldFont,
-                    fontSize: 10,
+                    fontSize: 13,
                     fontFallback: [tamilBoldFont, tamilFont],
                   ),
                   cellStyle: pw.TextStyle(
-                    font: font,
-                    fontSize: 9,
-                    fontFallback: [tamilFont],
+                    font: boldFont,
+                    fontSize: 12,
+                    fontFallback: [tamilBoldFont, tamilFont],
                   ),
                   data: (task['replies'] as List)
                       .map(

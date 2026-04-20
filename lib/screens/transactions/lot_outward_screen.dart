@@ -1165,32 +1165,87 @@ class _LotOutwardScreenState extends State<LotOutwardScreen> {
   }
 
   void _handleScannedCode(String code) {
+    debugPrint('QR Scanned: $code');
     String? getValue(String key) {
       final keyPattern = '$key:';
       if (!code.contains(keyPattern)) return null;
       final start = code.indexOf(keyPattern) + keyPattern.length;
-      final keys = ['LOT:', 'NAME:', 'DIA:', 'COL:', 'SET:', 'WT:', 'DT:'];
+      final keys = ['LOT:', 'NAME:', 'DIA:', 'COL:', 'SET:', 'WT:', 'DT:', 'L.NO:'];
       int end = code.length;
-      for (var k in keys) { if (k != keyPattern && code.contains(k, start)) { final pos = code.indexOf(k, start); if (pos < end) end = pos; } }
+      for (var k in keys) {
+        if (k != keyPattern && code.contains(k, start)) {
+          final pos = code.indexOf(k, start);
+          if (pos < end) end = pos;
+        }
+      }
       return code.substring(start, end).trim();
     }
-    String? scannedLotNo = getValue('LOT') ?? (code.contains(':') ? null : code.trim());
-    String? scannedLotName = getValue('NAME'), scannedDia = getValue('DIA'), scannedSetNo = getValue('SET') ?? getValue('Set No'), scannedColour = getValue('COL');
+
+    String? scannedLotNo = getValue('LOT') ?? getValue('L.NO') ?? (code.contains(':') ? null : code.trim());
+    String? scannedLotName = getValue('NAME');
+    String? scannedDia = getValue('DIA');
+    String? scannedSetNo = getValue('SET') ?? getValue('Set No');
+    String? scannedColour = getValue('COL');
+
     if (scannedSetNo != null && scannedSetNo.startsWith('#')) scannedSetNo = scannedSetNo.substring(1);
-    if (scannedLotNo == null || scannedLotNo.isEmpty) { _showError('Invalid QR Code'); return; }
-    setState(() { _isManual = true; if (scannedDia != null) _selectedDia = scannedDia; if (scannedLotName != null) _selectedLotName = scannedLotName; });
-    if (scannedDia != null && scannedDia != _selectedDia) { _onDiaChanged(scannedDia).then((_) => _processScannedLot(scannedLotNo, scannedSetNo, scannedColour, scannedLotName)); }
-    else { _processScannedLot(scannedLotNo, scannedSetNo, scannedColour, scannedLotName); }
+
+    if (scannedLotNo == null || scannedLotNo.isEmpty) {
+      _showError('Invalid QR Code: Lot ID missing');
+      return;
+    }
+
+    // Attempt to match Dia from system if scannedDia is provided
+    if (scannedDia != null) {
+      final matchedDia = _dias.firstWhere(
+        (d) => d.trim().toLowerCase() == scannedDia!.trim().toLowerCase(),
+        orElse: () => scannedDia!,
+      );
+      scannedDia = matchedDia;
+    }
+
+    setState(() {
+      _isManual = true;
+      if (scannedDia != null) _selectedDia = scannedDia;
+      if (scannedLotName != null && _lotNames.contains(scannedLotName)) _selectedLotName = scannedLotName;
+    });
+
+    if (scannedDia != null && scannedDia != _selectedDia) {
+      _onDiaChanged(scannedDia).then((_) => _processScannedLot(scannedLotNo!, scannedSetNo, scannedColour, scannedLotName));
+    } else {
+      _processScannedLot(scannedLotNo!, scannedSetNo, scannedColour, scannedLotName);
+    }
   }
 
   void _processScannedLot(String lotNo, String? setNo, String? col, String? name) {
-    if (!_lotNos.contains(lotNo)) { _showError('Lot No "$lotNo" not found'); return; }
-    setState(() => _selectedLotNo = lotNo);
-    _onLotNoChanged(lotNo).then((_) {
+    if (!_lotNos.any((l) => l.trim().toLowerCase() == lotNo.trim().toLowerCase())) {
+      _showError('Lot "$lotNo" not available for DIA ${_selectedDia ?? "N/A"}');
+      return;
+    }
+
+    // Find the exact lot number from the list to handle casing
+    final exactLotNo = _lotNos.firstWhere((l) => l.trim().toLowerCase() == lotNo.trim().toLowerCase());
+
+    setState(() => _selectedLotNo = exactLotNo);
+    _onLotNoChanged(exactLotNo).then((_) {
       if (!mounted) return;
-      if (setNo != null) { Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) { _toggleSetSelection(setNo, true); if (col != null) { setState(() { final activeSet = _selectedSets.firstWhere((s) => s['set_no'].toString() == setNo, orElse: () => {}); if (activeSet.isNotEmpty) { final colours = activeSet['colours'] as List; for (var c in colours) { if (c['colour'] == col) c['isChecked'] = true; } } }); } }
-      }); }
+      if (setNo != null) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _toggleSetSelection(setNo, true);
+            if (col != null) {
+              setState(() {
+                final activeSet = _selectedSets.firstWhere((s) => _isSetMatch(s['set_no'].toString(), setNo), orElse: () => {});
+                if (activeSet.isNotEmpty) {
+                  final colours = activeSet['colours'] as List;
+                  for (var c in colours) {
+                    if (c['colour']?.toString().toLowerCase() == col.toLowerCase()) c['isChecked'] = true;
+                  }
+                }
+              });
+            }
+          }
+        });
+      }
     });
   }
 

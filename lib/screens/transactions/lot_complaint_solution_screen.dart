@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LotComplaintSolutionScreen extends StatefulWidget {
   const LotComplaintSolutionScreen({super.key});
@@ -149,9 +150,11 @@ class _LotComplaintSolutionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Complaint Solution Module'),
-        backgroundColor: ColorPalette.primary,
+        title: Text('COMPLAINT RESOLUTION PROTOCOL', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1, color: Colors.white)),
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -181,215 +184,272 @@ class _LotComplaintSolutionScreenState
   }
 
   Widget _buildSearchCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            DropdownButtonFormField<String>(
-              value: _selectedLotNo,
-              decoration: const InputDecoration(
-                labelText: 'Select Lot Number',
-                prefixIcon: Icon(LucideIcons.search),
-                border: OutlineInputBorder(),
-              ),
-              items: _complaintLots.map((lot) {
-                return DropdownMenuItem<String>(
-                  value: lot['lotNo'].toString(),
-                  child: Text('LOT: ${lot['lotNo']} - ${lot['lotName']}'),
-                );
-              }).toList(),
-              onChanged: (val) {
-                setState(() => _selectedLotNo = val);
-                if (val != null) _searchLot(val);
-              },
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SELECT LOT FOR RESOLUTION', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: const Color(0xFF64748B), letterSpacing: 1)),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: _selectedLotNo,
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(LucideIcons.search, size: 14),
+              filled: true,
+              fillColor: const Color(0xFFF9FAFB),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
             ),
-          ],
-        ),
+            items: _complaintLots.map((lot) {
+              return DropdownMenuItem<String>(
+                value: lot['lotNo'].toString(),
+                child: Text('LOT: ${lot['lotNo']} - ${lot['lotName']}'),
+              );
+            }).toList(),
+            onChanged: (val) {
+              setState(() => _selectedLotNo = val);
+              if (val != null) _searchLot(val);
+            },
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLotInfoCard() {
-    return Card(
-      color: Colors.blue.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const Icon(LucideIcons.info, color: Colors.blue),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Lot: ${_foundInward!['lotNo']} - ${_foundInward!['lotName']}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text('Party: ${_foundInward!['fromParty']}'),
-                ],
-              ),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.info, color: Color(0xFF2563EB), size: 16),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'LOT: ${_foundInward!['lotNo']} — ${_foundInward!['lotName']}'.toUpperCase(),
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFF1E40AF), letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 4),
+                Text('SENDER GROUP: ${_foundInward!['fromParty']}'.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF60A5FA))),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildComplaintCard() {
-    final complaint =
-        _foundInward!['complaintText'] ??
-        'No original complaint text recorded.';
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'ORIGINAL COMPLAINT',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: Colors.red,
-              ),
-            ),
-            const Divider(),
-            Text(complaint),
-          ],
-        ),
+    final complaint = _foundInward!['complaintText'] ?? 'No original complaint text recorded.';
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ORIGINAL DISCREPANCY RECORD',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 10, color: const Color(0xFFEF4444), letterSpacing: 1),
+          ),
+          const SizedBox(height: 12),
+          Container(height: 1, color: const Color(0xFFF1F5F9)),
+          const SizedBox(height: 16),
+          Text(
+            complaint,
+            style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF475569), height: 1.6, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildSolutionForm() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'COMPLAINT RESOLUTION',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            _buildDatePicker(
-              'Complaint Find Date',
-              _findDate,
-              (d) => setState(() => _findDate = d),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _replyController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Result / Reply',
-                border: OutlineInputBorder(),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TECHNICAL RESOLUTION PROTOCOL',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 10, color: const Color(0xFF0F172A), letterSpacing: 1),
+          ),
+          const SizedBox(height: 24),
+          _buildIndustrialField('Identification Date', _findDate, (d) => setState(() => _findDate = d)),
+          const SizedBox(height: 20),
+          _buildIndustrialInput('Solution / Response Log', _replyController, maxLines: 3),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _buildIndustrialDropdown('Resolution Status', ['ACCEPT', 'RETURN'], _resolution, (v) => setState(() => _resolution = v)),
               ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildIndustrialField('Closure Date', _completionDate, (d) => setState(() => _completionDate = d)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildIndustrialInput('Quarantine / Arrest Lot ID', _arrestLotController),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _isCleared ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: _isCleared ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0)),
             ),
-            const SizedBox(height: 16),
-            Row(
+            child: Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _resolution,
-                    decoration: const InputDecoration(
-                      labelText: 'Accept / Return',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'ACCEPT', child: Text('ACCEPT')),
-                      DropdownMenuItem(value: 'RETURN', child: Text('RETURN')),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PROTOCOLE STATUS: ${_isCleared ? "RESOLVED" : "PENDING"}'.toUpperCase(), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: _isCleared ? const Color(0xFF16A34A) : const Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Text('Mark this complaint as legally cleared from the system.', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
                     ],
-                    onChanged: (v) => setState(() => _resolution = v),
                   ),
+                ),
+                Switch(
+                  value: _isCleared,
+                  onChanged: (v) => setState(() => _isCleared = v),
+                  activeColor: const Color(0xFF16A34A),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            _buildDatePicker(
-              'Completion Date',
-              _completionDate,
-              (d) => setState(() => _completionDate = d),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _arrestLotController,
-              decoration: const InputDecoration(
-                labelText: 'Complaint Arrest Lot No',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('Complaint Cleared?'),
-              subtitle: Text(_isCleared ? 'Yes - Resolved' : 'No - Pending'),
-              value: _isCleared,
-              onChanged: (v) => setState(() => _isCleared = v),
-              activeColor: ColorPalette.success,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildDatePicker(
-    String label,
-    DateTime? value,
-    Function(DateTime) onPicked,
-  ) {
-    return InkWell(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: value ?? DateTime.now(),
-          firstDate: DateTime(2000),
-          lastDate: DateTime(2100),
-        );
-        if (picked != null) onPicked(picked);
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          suffixIcon: const Icon(LucideIcons.calendar),
+  Widget _buildIndustrialInput(String label, TextEditingController ctrl, {int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: ctrl,
+          maxLines: maxLines,
+          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF9FAFB),
+            contentPadding: const EdgeInsets.all(16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+          ),
         ),
-        child: Text(
-          value != null
-              ? DateFormat('dd-MM-yyyy').format(value)
-              : 'Select Date',
+      ],
+    );
+  }
+
+  Widget _buildIndustrialField(String label, DateTime? value, Function(DateTime) onPicked) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: value ?? DateTime.now(),
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) onPicked(picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  value != null ? DateFormat('dd-MM-yyyy').format(value) : 'SELECT DATE',
+                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: value == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A)),
+                ),
+                const Spacer(),
+                const Icon(LucideIcons.calendar, size: 14, color: Color(0xFF64748B)),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildIndustrialDropdown(String label, List<String> items, String? value, Function(String?) onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+              icon: const Icon(LucideIcons.chevronDown, size: 14),
+              items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 56,
       child: ElevatedButton.icon(
         onPressed: _isSaving ? null : _save,
         icon: _isSaving
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : const Icon(LucideIcons.save),
-        label: const Text('Save Resolution'),
+            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(LucideIcons.checkCircle, size: 16),
+        label: Text('AUTHORIZE & CLOSE PROTOCOL', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.2)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: ColorPalette.success,
+          backgroundColor: const Color(0xFF0F172A),
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
       ),
     );

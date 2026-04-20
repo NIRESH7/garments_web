@@ -143,7 +143,7 @@ class OutwardPrintService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: pageFormat,
-        margin: const pw.EdgeInsets.only(top: 10, left: 20, right: 20, bottom: 20),
+        margin: const pw.EdgeInsets.only(top: 2, left: 20, right: 20, bottom: 20),
         header: (pw.Context context) => PrintUtils.buildCompanyHeader(boldFont, font, logo: logoImage),
         footer: (pw.Context context) => _buildFooter(boldFont, font),
         build: (pw.Context context) {
@@ -156,7 +156,7 @@ class OutwardPrintService {
               rack: racks.join(', '),
               pallet: pallets.join(', '),
             ),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 5),
             _buildMatrixTable(
               sortedSets: sortedSets,
               sortedColours: sortedColours,
@@ -169,7 +169,7 @@ class OutwardPrintService {
               font: font,
               boldFont: boldFont,
             ),
-            pw.SizedBox(height: 30),
+            pw.SizedBox(height: 10),
             // Signatures Section
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
@@ -255,12 +255,12 @@ class OutwardPrintService {
           pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.centerLeft,
-            child: pw.Text('Rack Name', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+            child: pw.Text('Rack Name', style: pw.TextStyle(font: boldFont, fontSize: 13)),
           ),
           ...sortedSets.map((s) => pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.center,
-            child: pw.Text(setRackMap[s] ?? '-', style: pw.TextStyle(font: boldFont, fontSize: 8)),
+            child: pw.Text(setRackMap[s] ?? '-', style: pw.TextStyle(font: boldFont, fontSize: 13)),
           )),
           pw.SizedBox(), // T.Roll
           pw.SizedBox(), // Total
@@ -277,12 +277,12 @@ class OutwardPrintService {
           pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.centerLeft,
-            child: pw.Text('Pallet', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+            child: pw.Text('Pallet', style: pw.TextStyle(font: boldFont, fontSize: 13)),
           ),
           ...sortedSets.map((s) => pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.center,
-            child: pw.Text(setPalletMap[s] ?? '-', style: pw.TextStyle(font: boldFont, fontSize: 8)),
+            child: pw.Text(setPalletMap[s] ?? '-', style: pw.TextStyle(font: boldFont, fontSize: 13)),
           )),
           pw.SizedBox(), // T.Roll
           pw.SizedBox(), // Total
@@ -310,7 +310,7 @@ class OutwardPrintService {
         children: headers.map((h) => pw.Container(
           padding: const pw.EdgeInsets.all(5),
           alignment: pw.Alignment.center,
-          child: pw.Text(h, style: pw.TextStyle(font: boldFont, color: PdfColors.white, fontSize: 10)),
+          child: pw.Text(h, style: pw.TextStyle(font: boldFont, color: PdfColors.white, fontSize: 14)),
         )).toList(),
       ),
     );
@@ -344,35 +344,35 @@ class OutwardPrintService {
               pw.Container(
                 padding: const pw.EdgeInsets.all(5),
                 alignment: pw.Alignment.center,
-                child: pw.Text((i + 1).toString(), style: pw.TextStyle(font: font, fontSize: 10)),
+                child: pw.Text((i + 1).toString(), style: pw.TextStyle(font: boldFont, fontSize: 14)),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.all(5),
                 alignment: pw.Alignment.centerLeft,
-                child: pw.Text(colour, style: pw.TextStyle(font: boldFont, fontSize: 10)),
+                child: pw.Text(colour, style: pw.TextStyle(font: boldFont, fontSize: 14)),
               ),
               ...sortedSets.map((s) => pw.Container(
                 padding: const pw.EdgeInsets.all(5),
                 alignment: pw.Alignment.centerRight,
                 child: pw.Text(
                   colorSetWeights[colour]?[s]?.toStringAsFixed(2) ?? '0.00',
-                  style: pw.TextStyle(font: boldFont, fontSize: 10, color: (colorSetWeights[colour]?[s] ?? 0) > 0 ? PdfColors.black : PdfColors.grey400),
+                  style: pw.TextStyle(font: boldFont, fontSize: 14, color: (colorSetWeights[colour]?[s] ?? 0) > 0 ? PdfColors.black : PdfColors.grey400),
                 ),
               )).toList(),
               pw.Container(
                 padding: const pw.EdgeInsets.all(5),
                 alignment: pw.Alignment.center,
-                child: pw.Text(totalR.toString(), style: pw.TextStyle(font: boldFont, fontSize: 10)),
+                child: pw.Text(totalR.toString(), style: pw.TextStyle(font: boldFont, fontSize: 14)),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.all(5),
                 alignment: pw.Alignment.centerRight,
-                child: pw.Text(totalWt.toStringAsFixed(2), style: pw.TextStyle(font: boldFont, fontSize: 10)),
+                child: pw.Text(totalWt.toStringAsFixed(2), style: pw.TextStyle(font: boldFont, fontSize: 14)),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.all(5),
                 alignment: pw.Alignment.centerRight,
-                child: pw.Text(meters.toStringAsFixed(1), style: pw.TextStyle(font: boldFont, fontSize: 10)),
+                child: pw.Text(meters.toStringAsFixed(1), style: pw.TextStyle(font: boldFont, fontSize: 14)),
               ),
             ],
           ),
@@ -387,23 +387,23 @@ class OutwardPrintService {
           pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.centerLeft,
-            child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 10)),
+            child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 14)),
           ),
           ...List.generate(sortedSets.length, (_) => pw.SizedBox()),
           pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.center,
-            child: pw.Text(grantTotalRolls.toString(), style: pw.TextStyle(font: boldFont, fontSize: 10)),
+            child: pw.Text(grantTotalRolls.toString(), style: pw.TextStyle(font: boldFont, fontSize: 14)),
           ),
           pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.centerRight,
-            child: pw.Text(grantTotalWeight.toStringAsFixed(2), style: pw.TextStyle(font: boldFont, fontSize: 10)),
+            child: pw.Text(grantTotalWeight.toStringAsFixed(2), style: pw.TextStyle(font: boldFont, fontSize: 14)),
           ),
           pw.Container(
             padding: const pw.EdgeInsets.all(5),
             alignment: pw.Alignment.centerRight,
-            child: pw.Text(grantTotalMeters.toStringAsFixed(1), style: pw.TextStyle(font: boldFont, fontSize: 10)),
+            child: pw.Text(grantTotalMeters.toStringAsFixed(1), style: pw.TextStyle(font: boldFont, fontSize: 14)),
           ),
         ],
       ),

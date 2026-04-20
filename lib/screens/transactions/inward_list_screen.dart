@@ -21,6 +21,7 @@ class InwardListScreen extends StatefulWidget {
 class InwardListScreenState extends State<InwardListScreen> {
   final _api = MobileApiService();
   List<dynamic> _inwards = [];
+  Map<String, String?> _colorPhotoMap = {};
   bool _isLoading = true;
   int _currentPage = 0;
   static const int _itemsPerPage = 10;
@@ -36,9 +37,27 @@ class InwardListScreenState extends State<InwardListScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await _api.getInwards();
+      final categories = await _api.getCategories();
+      
+      final Map<String, String?> photoMap = {};
+      try {
+        final colorCat = categories.firstWhere(
+          (c) => (c['name'] as String).toLowerCase() == 'colours',
+          orElse: () => null,
+        );
+        if (colorCat != null && colorCat['values'] != null) {
+          for (var v in colorCat['values']) {
+            if (v is Map) {
+              photoMap[v['name'].toString()] = v['photo']?.toString();
+            }
+          }
+        }
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _inwards = res;
+          _colorPhotoMap = photoMap;
           _isLoading = false;
           _currentPage = 0;
         });
@@ -90,6 +109,7 @@ class InwardListScreenState extends State<InwardListScreen> {
                               ),
                               child: Row(
                                 children: [
+                                  Expanded(flex: 1, child: _buildTableHeaderCell('COLOR')),
                                   Expanded(flex: 3, child: _buildTableHeaderCell('LOT DETAILS')),
                                   Expanded(flex: 2, child: _buildTableHeaderCell('SOURCE PARTY')),
                                   Expanded(flex: 1, child: _buildTableHeaderCell('DATE')),
@@ -262,12 +282,45 @@ class InwardListScreenState extends State<InwardListScreen> {
     final hasAuthorized = item['authorizedSignature'] != null;
     final hasMd = item['mdSignature'] != null;
     
+    // Extract colors from diaEntries
+    final List<dynamic> entries = item['diaEntries'] ?? [];
+    final Set<String> colorNames = entries.map((e) => e['color']?.toString() ?? e['colour']?.toString() ?? '').where((c) => c.isNotEmpty).toSet();
+    final firstColor = colorNames.isNotEmpty ? colorNames.first : null;
+    final photoUrl = firstColor != null ? _colorPhotoMap[firstColor] : null;
+
     return InkWell(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => InwardDetailScreen(inward: item))),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         child: Row(
           children: [
+            Expanded(
+              flex: 1,
+              child: GestureDetector(
+                onTap: () {
+                  if (photoUrl != null && photoUrl.isNotEmpty) {
+                    _showImagePreview(firstColor ?? 'Color', photoUrl);
+                  }
+                },
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: ColorPalette.background,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: ColorPalette.border),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: (photoUrl != null && photoUrl.isNotEmpty)
+                      ? Image.network(
+                          ApiConstants.getImageUrl(photoUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(LucideIcons.palette, size: 12, color: ColorPalette.textMuted),
+                        )
+                      : const Icon(LucideIcons.palette, size: 12, color: ColorPalette.textMuted),
+                ),
+              ),
+            ),
             Expanded(
               flex: 3,
               child: Column(
@@ -422,5 +475,67 @@ class InwardListScreenState extends State<InwardListScreen> {
       ),
       child: Icon(icon, size: 12, color: active ? ColorPalette.success : ColorPalette.textMuted.withOpacity(0.3)),
     );
+  }
+
+  void _showImagePreview(String valueName, String? photoUrl) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(valueName, textAlign: TextAlign.center, style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (photoUrl != null && photoUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16), 
+                  child: Image.network(
+                    ApiConstants.getImageUrl(photoUrl), 
+                    width: 200, 
+                    height: 200, 
+                    fit: BoxFit.cover, 
+                    errorBuilder: (context, error, stackTrace) => _largeColorCircle(valueName)
+                  )
+                )
+              else _largeColorCircle(valueName),
+            ],
+          ),
+          actions: [ TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')) ],
+        );
+      },
+    );
+  }
+
+  Widget _largeColorCircle(String value) {
+    final color = _resolveColor(value) ?? const Color(0xFFBDBDBD);
+    return Container(
+      width: 150, 
+      height: 150, 
+      decoration: BoxDecoration(
+        color: color, 
+        shape: BoxShape.circle, 
+        border: Border.all(color: Colors.grey.shade300, width: 2), 
+        boxShadow: [ 
+          BoxShadow(color: color.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4)) 
+        ]
+      )
+    );
+  }
+
+  Color? _resolveColor(String name) {
+    final lower = name.toLowerCase().trim();
+    const colorMap = <String, Color>{
+      'red': Color(0xFFE53935), 'blue': Color(0xFF1E88E5), 'green': Color(0xFF43A047),
+      'yellow': Color(0xFFFDD835), 'orange': Color(0xFFFB8C00), 'black': Color(0xFF212121),
+      'white': Color(0xFFFAFAFA), 'grey': Color(0xFF9E9E9E), 'pink': Color(0xFFEC407A),
+      'purple': Color(0xFF7B1FA2), 'brown': Color(0xFF6D4C41), 'maroon': Color(0xFF800000),
+      'teal': Color(0xFF008080), 'navy': Color(0xFF0A1747), 'gold': Color(0xFFFFD700),
+    };
+    final hexMatch = RegExp(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})').firstMatch(name);
+    if (hexMatch != null) { try { String hex = hexMatch.group(1)!; if (hex.length == 3) hex = hex[0] * 2 + hex[1] * 2 + hex[2] * 2; return Color(int.parse('0xFF$hex')); } catch (_) {} }
+    if (colorMap.containsKey(lower)) return colorMap[lower]!;
+    final sortedKeys = colorMap.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
+    for (final key in sortedKeys) { if (lower.contains(key)) return colorMap[key]; }
+    return null;
   }
 }

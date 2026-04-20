@@ -67,9 +67,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 10: return 'Stitching Delivery DC';
       case 11: return 'Iron & Packing DC';
       case 12: return 'Cut Stock Report';
-      case 13: return 'Cutting Entry Report';
-      default: return 'Executive Dashboard';
+      case 13: return 'Production Reports';
+      case 14: return 'Complaint Solution';
+      case 15: return 'Cutting Daily Plan';
+      default: return 'Modern Garments';
     }
+  }
+
+  void _onIndexChanged(int index) {
+    if (index >= 19) return;
+    setState(() => _pageIndex = index);
   }
 
   List<Widget>? _getHeaderActions() {
@@ -102,13 +109,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       selectedIndex: _pageIndex,
       onIndexChanged: (index) {
         if (LayoutConstants.isWeb(context)) {
-          if (index >= 14) {
+          if (index >= 16) {
             // Handle System/Settings as Navigation
             Widget target;
             switch (index) {
-              case 14: target = const ScaleSettingsScreen(); break;
-              case 15: target = const ThemeSettingsScreen(); break;
-              case 16: target = const ChatScreen(); break;
+              case 16: target = const ScaleSettingsScreen(); break;
+              case 17: target = const ThemeSettingsScreen(); break;
+              case 18: target = const ChatScreen(); break;
               default: return;
             }
             Navigator.push(context, MaterialPageRoute(builder: (context) => target));
@@ -144,7 +151,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const IronPackingDcScreen(),              // 11
             const CutStockReportScreen(),             // 12
             const CuttingEntryReportScreen(),         // 13
-            const _HistoryPlaceholder(),              // 14
+            const LotComplaintSolutionScreen(),      // 14
+            const CuttingDailyPlanScreen(),           // 15
           ],
         ),
         bottomNavigationBar: LayoutConstants.isMobile(context) 

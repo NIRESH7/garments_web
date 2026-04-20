@@ -1,8 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/color_palette.dart';
 import '../core/constants/layout_constants.dart';
+
+// Use locally-bundled Lucide font to bypass package font loading issues on Web
+class _L {
+  static IconData _i(int code) => IconData(code, fontFamily: 'Lucide');
+  static final layoutDashboard = _i(0xf389);
+  static final database        = _i(0xf26c);
+  static final arrowDownCircle = _i(0xf140);
+  static final arrowUpCircle   = _i(0xf15f);
+  static final clipboardList   = _i(0xf21c);
+  static final layoutGrid      = _i(0xf38a);
+  static final layers          = _i(0xf387);
+  static final calendar        = _i(0xf1d2);
+  static final scissors        = _i(0xf4a8);
+  static final truck           = _i(0xf54f);
+  static final box             = _i(0xf1c1);
+  static final barChart3       = _i(0xf187);
+  static final barChart2       = _i(0xf186);
+  static final fileText        = _i(0xf2d3);
+  static final scale           = _i(0xf49f);
+  static final palette         = _i(0xf41f);
+  static final bot             = _i(0xf1c0);
+  static final package         = _i(0xf414);
+  static final chevronLeft     = _i(0xf1f9);
+  static final chevronRight    = _i(0xf1fb);
+  static final logOut          = _i(0xf3b0);
+  static final shieldCheck     = _i(0xf49d);
+  static final calendarDays     = _i(0xf1d4);
+}
 
 class WebSidebar extends StatelessWidget {
   final int selectedIndex;
@@ -41,32 +68,34 @@ class WebSidebar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 12),
               children: [
                 if (!isCollapsed) _buildSectionHeader(context, 'CORE'),
-                _buildNavItem(context, 0, LucideIcons.layoutDashboard, 'Dashboard'),
-                _buildNavItem(context, 1, LucideIcons.database, 'Masters'),
+                _buildNavItem(context, 0, _L.layoutDashboard, 'Dashboard'),
+                _buildNavItem(context, 1, _L.database, 'Masters'),
                 
                 const SizedBox(height: 16),
                 if (!isCollapsed) _buildSectionHeader(context, 'OPERATIONS'),
-                _buildNavItem(context, 2, LucideIcons.arrowDownCircle, 'Inward Stock'),
-                _buildNavItem(context, 3, LucideIcons.arrowUpCircle, 'Outward Stock'),
-                _buildNavItem(context, 4, LucideIcons.clipboardList, 'Production Tasks'),
-                _buildNavItem(context, 5, LucideIcons.layoutGrid, 'Lot Assignment'),
-                _buildNavItem(context, 8, LucideIcons.layers, 'Item Assignment'),
-                _buildNavItem(context, 6, LucideIcons.calendar, 'Cutting Planning'),
-                _buildNavItem(context, 9, LucideIcons.scissors, 'Cutting Entry'),
-                _buildNavItem(context, 10, LucideIcons.truck, 'Stitching Delivery DC'),
-                _buildNavItem(context, 11, LucideIcons.box, 'Iron & Packing DC'),
+                _buildNavItem(context, 2, _L.arrowDownCircle, 'Inward Stock'),
+                _buildNavItem(context, 3, _L.arrowUpCircle, 'Outward Stock'),
+                _buildNavItem(context, 4, _L.clipboardList, 'Production Tasks'),
+                _buildNavItem(context, 5, _L.layoutGrid, 'Lot Assignment'),
+                _buildNavItem(context, 8, _L.layers, 'Item Assignment'),
+                _buildNavItem(context, 6, _L.calendar, 'Cutting Planning'),
+                _buildNavItem(context, 15, _L.calendarDays, 'Cutting Daily Plan'),
+                _buildNavItem(context, 14, _L.shieldCheck, 'Complaints'),
+                _buildNavItem(context, 9, _L.scissors, 'Cutting Entry'),
+                _buildNavItem(context, 10, _L.truck, 'Stitching Delivery DC'),
+                _buildNavItem(context, 11, _L.box, 'Iron & Packing DC'),
                 
                 const SizedBox(height: 16),
                 if (!isCollapsed) _buildSectionHeader(context, 'ANALYTICS & REPORTS'),
-                _buildNavItem(context, 7, LucideIcons.barChart3, 'Master Reports'),
-                _buildNavItem(context, 12, LucideIcons.barChart2, 'Cut Stock Report'),
-                _buildNavItem(context, 13, LucideIcons.fileText, 'Cutting Entry Report'),
+                _buildNavItem(context, 7, _L.barChart3, 'Master Reports'),
+                _buildNavItem(context, 12, _L.barChart2, 'Cut Stock Report'),
+                _buildNavItem(context, 13, _L.fileText, 'Cutting Entry Report'),
 
                 const SizedBox(height: 16),
                 if (!isCollapsed) _buildSectionHeader(context, 'SYSTEM'),
-                _buildNavItem(context, 14, LucideIcons.scale, 'Scale Settings'),
-                _buildNavItem(context, 15, LucideIcons.palette, 'App Theme'),
-                _buildNavItem(context, 16, LucideIcons.bot, 'AI Chatbot'),
+                _buildNavItem(context, 16, _L.scale, 'Scale Settings'),
+                _buildNavItem(context, 17, _L.palette, 'App Theme'),
+                _buildNavItem(context, 18, _L.bot, 'AI Chatbot'),
               ],
             ),
           ),
@@ -86,7 +115,7 @@ class WebSidebar extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 0 : 20),
       alignment: isCollapsed ? Alignment.center : Alignment.centerLeft,
       child: isCollapsed 
-        ? Icon(LucideIcons.package, color: Theme.of(context).primaryColor, size: 24)
+        ? Icon(_L.package, color: Theme.of(context).primaryColor, size: 24)
         : Row(
             children: [
               Container(
@@ -95,7 +124,7 @@ class WebSidebar extends StatelessWidget {
                   color: Theme.of(context).primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(LucideIcons.package, color: Theme.of(context).primaryColor, size: 18),
+                child: Icon(_L.package, color: Theme.of(context).primaryColor, size: 18),
               ),
               const SizedBox(width: 12),
               Column(
@@ -208,14 +237,14 @@ class WebSidebar extends StatelessWidget {
         children: [
           _buildActionItem(
              context, 
-             icon: isCollapsed ? LucideIcons.chevronRight : LucideIcons.chevronLeft,
+             icon: isCollapsed ? _L.chevronRight : _L.chevronLeft,
              label: 'Collapse Sidebar',
              onTap: onToggle,
           ),
           const SizedBox(height: 4),
           _buildActionItem(
              context, 
-             icon: LucideIcons.logOut,
+             icon: _L.logOut,
              label: 'Logout Session',
              onTap: () {
                // Navigation logic handled by parent (DashboardScreen)

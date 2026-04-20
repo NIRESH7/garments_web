@@ -2,12 +2,16 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:http/http.dart' as http;
+import '../../core/constants/api_constants.dart';
 import '../../services/mobile_api_service.dart';
 import '../../core/utils/format_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/report_print_service.dart';
+import '../../core/theme/color_palette.dart';
 
 import '../../widgets/custom_dropdown_field.dart';
 import '../dashboard/inventory_drill_down_screen.dart';
@@ -101,27 +105,77 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   }
 
   Map<int, Map<String, dynamic>> _filters = {};
-  void _showFilterDialog() { final index = _tabController.index; final currentFilters = _filters[index] ?? {}; showDialog(context: context, builder: (ctx) => _FilterDialog(tabIndex: index, initialFilters: currentFilters, lotNames: _masterLotNames, lotNos: _masterLotNos, parties: _masterParties, dias: _masterDias, colours: _masterColours, onApply: (newFilters) { setState(() => _filters[index] = newFilters); _loadDataForTab(index); })); }
+  void _showFilterDialog() { 
+    final index = _tabController.index; 
+    final currentFilters = _filters[index] ?? {}; 
+    showDialog(
+      context: context, 
+      builder: (ctx) => _FilterDialog(
+        tabIndex: index, 
+        initialFilters: currentFilters, 
+        lotNames: _masterLotNames, 
+        lotNos: _masterLotNos, 
+        parties: _masterParties, 
+        dias: _masterDias, 
+        colours: _masterColours, 
+        onApply: (newFilters) { 
+          setState(() => _filters[index] = newFilters); 
+          _loadDataForTab(index); 
+        }
+      )
+    ); 
+  }
 
   Future<void> _loadDataForTab(int index) async {
     setState(() => _isLoading = true);
     final filters = _filters[index] ?? {};
     try {
       if (index == 0) {
-        final data = await _apiService.getLotAgingReport(colour: filters['colour'], dia: filters['dia'], startDate: filters['startDate'], endDate: filters['endDate']);
-        _agingData = data.where((item) { final selLotNames = filters['lotName'] as List<String>? ?? []; final selLotNos = filters['lotNo'] as List<String>? ?? []; if (selLotNames.isNotEmpty && !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase())) return false; if (selLotNos.isNotEmpty && !selLotNos.contains(item['lot_number']?.toString().trim())) return false; return true; }).toList();
+        final data = await _apiService.getLotAgingReport(
+          colour: filters['colour'], 
+          dia: filters['dia'], 
+          startDate: filters['startDate'], 
+          endDate: filters['endDate'],
+          lotName: (filters['lotName'] as List<String>?)?.join(','),
+          lotNo: (filters['lotNo'] as List<String>?)?.join(','),
+        );
+        _agingData = data;
       } else if (index == 1) {
         final data = await _apiService.getLotAgingReport();
-        _agingData = data.where((item) { final selLotNames = filters['lotName'] as List<String>? ?? []; final selLotNos = filters['lotNo'] as List<String>? ?? []; if (selLotNames.isNotEmpty && !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase())) return false; if (selLotNos.isNotEmpty && !selLotNos.contains(item['lot_number']?.toString().trim())) return false; return true; }).toList();
+        _agingData = data.where((item) { 
+          final selLotNames = filters['lotName'] as List<String>? ?? []; 
+          final selLotNos = filters['lotNo'] as List<String>? ?? []; 
+          if (selLotNames.isNotEmpty && !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase())) return false; 
+          if (selLotNos.isNotEmpty && !selLotNos.contains(item['lot_number']?.toString().trim())) return false; 
+          return true; 
+        }).toList();
       } else if (index == 2) {
-        final data = await _apiService.getInwards(startDate: filters['startDate'], endDate: filters['endDate'], fromParty: filters['party']);
-        _inwardData = data.where((item) { final selLotNames = filters['lotName'] as List<String>? ?? []; final selLotNos = filters['lotNo'] as List<String>? ?? []; if (selLotNames.isNotEmpty && !selLotNames.contains(item['lotName']?.toString().trim().toUpperCase())) return false; if (selLotNos.isNotEmpty && !selLotNos.contains(item['lotNo']?.toString().trim())) return false; return true; }).toList();
+        final data = await _apiService.getInwards(
+          startDate: filters['startDate'], 
+          endDate: filters['endDate'], 
+          fromParty: filters['party'],
+          lotName: (filters['lotName'] as List<String>?)?.join(','),
+          lotNo: (filters['lotNo'] as List<String>?)?.join(','),
+        );
+        _inwardData = data;
       } else if (index == 3) {
-        final data = await _apiService.getOutwards(startDate: filters['startDate'], endDate: filters['endDate'], dia: filters['dia']);
-        _outwardData = data.where((item) { final selLotNames = filters['lotName'] as List<String>? ?? []; final selLotNos = filters['lotNo'] as List<String>? ?? []; if (selLotNames.isNotEmpty && !selLotNames.contains(item['lotName']?.toString().trim().toUpperCase())) return false; if (selLotNos.isNotEmpty && !selLotNos.contains(item['lotNo']?.toString().trim())) return false; return true; }).toList();
+        final data = await _apiService.getOutwards(
+          startDate: filters['startDate'], 
+          endDate: filters['endDate'], 
+          dia: filters['dia'],
+          lotName: (filters['lotName'] as List<String>?)?.join(','),
+          lotNo: (filters['lotNo'] as List<String>?)?.join(','),
+        );
+        _outwardData = data;
       } else if (index == 4) {
-        final data = await _apiService.getOverviewReport(startDate: filters['startDate'], endDate: filters['endDate'], status: filters['status']);
-        _closingData = data.where((item) { final selLotNames = filters['lotName'] as List<String>? ?? []; final selLotNos = filters['lotNo'] as List<String>? ?? []; if (selLotNames.isNotEmpty && !selLotNames.contains(item['lot_name']?.toString().trim().toUpperCase())) return false; if (selLotNos.isNotEmpty && !selLotNos.contains(item['lot_number']?.toString().trim())) return false; return true; }).toList();
+        final data = await _apiService.getOverviewReport(
+          startDate: filters['startDate'], 
+          endDate: filters['endDate'], 
+          status: filters['status'],
+          lotName: (filters['lotName'] as List<String>?)?.join(','),
+          lotNo: (filters['lotNo'] as List<String>?)?.join(','),
+        );
+        _closingData = data;
       }
       setState(() => _isLoading = false);
     } catch (e) { setState(() => _isLoading = false); }
@@ -134,7 +188,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
       final aging = _calculateAging(item['inward_date']); 
       final weight = _parseNum(item['weight']); 
       final rate = _parseNum(item['rate'] ?? item['Rate']);
-      final rCount = _parseNum(item['rolls'] ?? 1); // Default to 1 if missing for aging roll details
+      final rCount = _parseNum(item['rolls'] ?? 1); 
       rolls += rCount; wt += weight; val += (weight * rate);
       return { 'date': _formatDate(item['inward_date']), 'lot No': item['lot_number'] ?? '-', 'name': item['lot_name'] ?? '-', 'dia': item['dia']?.toString() ?? '-', 'colour': item['colour']?.toString() ?? '-', 'rolls': rCount.toInt().toString(), 'wt': FormatUtils.formatWeight(weight), 'val': FormatUtils.formatCurrency(weight * rate), 'days': '$aging' };
     }).toList();
@@ -144,15 +198,15 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   Widget _buildAgingSummaryReport() {
     final Map<String, dynamic> summary = {};
     double rolls = 0, wt = 0, val = 0;
-    for (var item in _closingData) {
-      final balRolls = _parseNum(item['balance_rolls']).toInt(); 
-      final balWeight = _parseNum(item['balance_weight']); 
-      final balValue = _parseNum(item['balance_value']);
-      if (balWeight <= 0.05 && balRolls <= 0) continue;
+    for (var item in _agingData) {
+      final balRolls = _parseNum(item['rolls']).toInt(); 
+      final balWeight = _parseNum(item['weight']); 
+      final rate = _parseNum(item['rate'] ?? item['Rate']);
+      if (balWeight <= 0.1 && balRolls <= 0) continue;
       final rawLotName = item['lot_name']?.toString().trim() ?? 'N/A'; final groupingKey = rawLotName.toUpperCase();
       if (!summary.containsKey(groupingKey)) { summary[groupingKey] = { 'lotName': groupingKey, 'rolls': 0, 'weight': 0.0, 'value': 0.0 }; }
-      summary[groupingKey]['rolls'] += balRolls; summary[groupingKey]['weight'] += balWeight; summary[groupingKey]['value'] += balValue;
-      rolls += balRolls; wt += balWeight; val += balValue;
+      summary[groupingKey]['rolls'] += balRolls; summary[groupingKey]['weight'] += balWeight; summary[groupingKey]['value'] += (balWeight * rate);
+      rolls += balRolls; wt += balWeight; val += (balWeight * rate);
     }
     final columns = ['lotName', 'rolls', 'weight', 'value', 'status'];
     final rows = summary.values.map((v) => { 'lotName': v['lotName'], 'rolls': '${v['rolls']}', 'weight': '${FormatUtils.formatWeight(v['weight'])} Kg', 'value': FormatUtils.formatCurrency(v['value']), 'status': 'In Stock' }).toList();
@@ -180,7 +234,6 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
     final rows = _outwardData.map((out) {
       final items = out['items'] as List? ?? []; 
       final weight = items.fold(0.0, (sum, i) => (sum as double) + _parseNum(i['total_weight'])); 
-      // Try 'rolls', then 'roll', otherwise fallback to 11 per item (standard set)
       final rollCount = items.fold(0.0, (sum, i) {
         final r = _parseNum(i['rolls'] ?? i['roll']);
         return (sum as double) + (r > 0 ? r : 11.0);
@@ -195,10 +248,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
   Widget _buildClosingReport() {
     final columns = ['lotNo', 'lotName', 'in Roll', 'in Wt', 'out Roll', 'out Wt', 'bal Roll', 'bal Wt', 'status'];
     double inRoll = 0, inWt = 0, outRoll = 0, outWt = 0, balRoll = 0, balWt = 0;
-    final rows = _closingData.where((item) {
-      final balWt = _parseNum(item['balance_weight']);
-      return balWt > 0.1; // Only show items with actual stock
-    }).map((item) {
+    final rows = _closingData.map((item) {
       inRoll += _parseNum(item['rec_rolls']); inWt += _parseNum(item['rec_weight']);
       outRoll += _parseNum(item['deliv_rolls']); outWt += _parseNum(item['deliv_weight']);
       balRoll += _parseNum(item['balance_rolls']); balWt += _parseNum(item['balance_weight']);
@@ -260,16 +310,75 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
 
   Widget _buildShareMenu() { return PopupMenuButton<String>( icon: const Icon(LucideIcons.share2, size: 20), onSelected: _handleShare, itemBuilder: (context) => [ const PopupMenuItem(value: 'PDF', child: Row(children: [Icon(LucideIcons.fileText, size: 18), SizedBox(width: 8), Text("Share PDF")])), const PopupMenuItem(value: 'WhatsApp', child: Row(children: [Icon(Icons.message_outlined, size: 18), SizedBox(width: 8), Text("Share WhatsApp")])) ] ); }
 
+  Future<Map<String, pw.MemoryImage>> _prepareColorImages(List<dynamic> rows) async {
+    final Map<String, pw.MemoryImage> visualMap = {};
+    final Set<String> uniqueColours = {};
+    try {
+      for (var r in rows) {
+        if (r is List && r.length > 4) {
+          final c = r[4]?.toString().trim().toUpperCase();
+          if (c != null && c.isNotEmpty) uniqueColours.add(c);
+        }
+      }
+
+      if (uniqueColours.isEmpty) return visualMap;
+
+      // Load master color metadata
+      final categories = await _apiService.getCategories();
+      final List<dynamic> colorValues = categories
+          .firstWhere((c) => (c['name']?.toString().toLowerCase().contains('colour') ?? false), orElse: () => {'values': []})['values'] as List? ?? [];
+
+      final List<Future<void>> loaders = [];
+      for (var cName in uniqueColours) {
+        final meta = colorValues.firstWhere((v) => v['name']?.toString().toUpperCase() == cName, orElse: () => null);
+        if (meta != null && meta['image'] != null) {
+          loaders.add(_fetchColorImage(meta['image'].toString()).then((img) {
+            if (img != null) visualMap[cName] = img;
+          }));
+        }
+      }
+      if (loaders.isNotEmpty) await Future.wait(loaders);
+    } catch (e) {
+      print('Prepare colour images error: $e');
+    }
+    return visualMap;
+  }
+
+  Future<pw.MemoryImage?> _fetchColorImage(String path) async {
+    try {
+      final url = ApiConstants.getImageUrl(path);
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _handlePrint() async {
     final data = _getReportDataForCurrentTab();
-    final pdfBytes = await _printService.generateReportPdf( title: data['title'] as String, headers: List<String>.from(data['headers'] as List), rows: (data['rows'] as List).map((e) => List<String>.from(e as List)).toList(), footerRow: data['footerRow'] != null ? List<String>.from(data['footerRow'] as List) : null );
+    final colorImages = await _prepareColorImages(data['rows'] as List);
+    final pdfBytes = await _printService.generateReportPdf(
+      title: data['title'] as String,
+      headers: List<String>.from(data['headers'] as List),
+      rows: (data['rows'] as List).map((e) => List<String>.from(e as List)).toList(),
+      footerRow: data['footerRow'] != null ? List<String>.from(data['footerRow'] as List) : null,
+      colorImages: colorImages,
+    );
     if (mounted) Navigator.push(context, MaterialPageRoute(builder: (context) => _ReportPdfPreviewScreen(pdfBytes: pdfBytes, title: '${data['title']} Preview')));
   }
 
   Future<void> _handleShare(String format) async {
     final data = _getReportDataForCurrentTab();
     if (format == 'PDF') {
-      final pdfBytes = await _printService.generateReportPdf( title: data['title'] as String, headers: List<String>.from(data['headers'] as List), rows: (data['rows'] as List).map((e) => List<String>.from(e as List)).toList(), footerRow: data['footerRow'] != null ? List<String>.from(data['footerRow'] as List) : null );
+      final colorImages = await _prepareColorImages(data['rows'] as List);
+      final pdfBytes = await _printService.generateReportPdf(
+        title: data['title'] as String,
+        headers: List<String>.from(data['headers'] as List),
+        rows: (data['rows'] as List).map((e) => List<String>.from(e as List)).toList(),
+        footerRow: data['footerRow'] != null ? List<String>.from(data['footerRow'] as List) : null,
+        colorImages: colorImages,
+      );
       await Share.shareXFiles([XFile.fromData(pdfBytes, name: 'Report.pdf', mimeType: 'application/pdf')]);
     } else {
       final buffer = StringBuffer(); buffer.writeln("*${data['title'].toString().toUpperCase()}*"); buffer.writeln("Date: ${DateFormat('dd-MM-yy').format(DateTime.now())}"); buffer.writeln("---------------------------------");
@@ -296,7 +405,7 @@ class _FormatReportsScreenState extends State<FormatReportsScreen>
           final groupingKey = (item['lot_name']?.toString().trim().toUpperCase() ?? 'N/A');
           if (!summary.containsKey(groupingKey)) { summary[groupingKey] = { 'lotName': groupingKey, 'rolls': 0, 'weight': 0.0, 'value': 0.0 }; }
           summary[groupingKey]['rolls'] += (item['rolls'] ?? 0) as int; summary[groupingKey]['weight'] += (item['weight'] ?? 0.0) as num;
-          final w = (item['weight'] ?? 0.0) as num; final r = (item['rate'] ?? 0.0) as num;
+          final w = (item['weight'] ?? 0.0) as num; final r = (item['rate'] ?? item['Rate'] ?? 0.0) as num;
           summary[groupingKey]['value'] += w * r;
         }
         rows = summary.values.map((v) => [ v['lotName'].toString(), v['rolls'].toString(), (v['weight'] as num).toStringAsFixed(1), (v['value'] as num).toStringAsFixed(0), 'Pending' ]).toList();
@@ -352,13 +461,118 @@ class _FilterDialog extends StatefulWidget {
 }
 
 class _FilterDialogState extends State<_FilterDialog> {
-  late Map<String, dynamic> _filters; final controllerStart = TextEditingController();
-  @override void initState() { super.initState(); _filters = Map.from(widget.initialFilters); controllerStart.text = _filters['startDate'] ?? ''; }
+  late Map<String, dynamic> _filters; 
+  final controllerStart = TextEditingController();
+  final controllerEnd = TextEditingController();
+
+  @override void initState() { 
+    super.initState(); 
+    _filters = Map.from(widget.initialFilters); 
+    controllerStart.text = _filters['startDate'] ?? ''; 
+    controllerEnd.text = _filters['endDate'] ?? '';
+  }
+
+  @override void dispose() {
+    controllerStart.dispose();
+    controllerEnd.dispose();
+    super.dispose();
+  }
+
   @override Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Filter Registry', style: TextStyle(fontWeight: FontWeight.bold)),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [ TextField(controller: controllerStart, readOnly: true, decoration: const InputDecoration(labelText: 'Start Date', border: OutlineInputBorder(), suffixIcon: Icon(LucideIcons.calendar)), onTap: () async { final d = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030)); if (d != null) setState(() { _filters['startDate'] = DateFormat('yyyy-MM-dd').format(d); controllerStart.text = _filters['startDate']; }); }), const SizedBox(height: 16), CustomMultiSelectField(label: 'Lot Name', items: widget.lotNames, selectedValues: List<String>.from(_filters['lotName'] ?? []), onChanged: (v) => setState(() => _filters['lotName'] = v)), ]),
-      actions: [ TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), ElevatedButton(onPressed: () { widget.onApply(_filters); Navigator.pop(context); }, child: const Text('Apply')), ],
+      title: Text('FILTER REPORTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min, 
+          children: [ 
+            Row(
+              children: [
+                Expanded(child: _buildDatePicker('startDate', 'START DATE', controllerStart)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildDatePicker('endDate', 'END DATE', controllerEnd)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            CustomMultiSelectField(
+              label: 'LOT NAME', 
+              items: widget.lotNames, 
+              selectedValues: List<String>.from(_filters['lotName'] ?? []), 
+              onChanged: (v) => setState(() => _filters['lotName'] = v)
+            ),
+            const SizedBox(height: 16),
+            CustomMultiSelectField(
+              label: 'LOT NO', 
+              items: widget.lotNos, 
+              selectedValues: List<String>.from(_filters['lotNo'] ?? []), 
+              onChanged: (v) => setState(() => _filters['lotNo'] = v)
+            ),
+            if (widget.tabIndex == 2) ...[
+              const SizedBox(height: 16),
+              _buildDropdown('party', 'PARTY NAME', widget.parties),
+            ],
+            if ([0, 3].contains(widget.tabIndex)) ...[
+              const SizedBox(height: 16),
+              _buildDropdown('dia', 'DIA', widget.dias),
+            ],
+            if (widget.tabIndex == 0) ...[
+              const SizedBox(height: 16),
+              _buildDropdown('colour', 'COLOUR', widget.colours),
+            ],
+            if (widget.tabIndex == 4) ...[
+              const SizedBox(height: 16),
+              _buildDropdown('status', 'STATUS', ['All', 'Fresh', 'Pending', 'Completed']),
+            ],
+          ]
+        ),
+      ),
+      actions: [ 
+        TextButton(onPressed: () => Navigator.pop(context), child: Text('CANCEL', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: ColorPalette.textMuted))), 
+        ElevatedButton(
+          onPressed: () { widget.onApply(_filters); Navigator.pop(context); }, 
+          child: Text('APPLY FILTERS', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 12)),
+          style: ElevatedButton.styleFrom(backgroundColor: ColorPalette.primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))),
+        ), 
+      ],
+    );
+  }
+
+  Widget _buildDatePicker(String key, String label, TextEditingController controller) {
+    return TextField(
+      controller: controller, 
+      readOnly: true, 
+      decoration: InputDecoration(
+        labelText: label, 
+        labelStyle: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: ColorPalette.textMuted),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: ColorPalette.border.withOpacity(0.5))), 
+        suffixIcon: const Icon(LucideIcons.calendar, size: 16)
+      ), 
+      onTap: () async { 
+        final d = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030)); 
+        if (d != null) setState(() { 
+          _filters[key] = DateFormat('yyyy-MM-dd').format(d); 
+          controller.text = _filters[key]; 
+        }); 
+      }
+    );
+  }
+
+  Widget _buildDropdown(String key, String label, List<String> items) {
+    final options = ['All', ...items.where((i) => i.toUpperCase() != 'ALL')];
+    return CustomDropdownField(
+      label: label,
+      value: (options.contains(_filters[key])) ? _filters[key] : 'All',
+      items: options,
+      onChanged: (val) {
+        if (val != null) {
+          setState(() {
+            if (val == 'All') {
+              _filters.remove(key);
+            } else {
+              _filters[key] = val;
+            }
+          });
+        }
+      },
     );
   }
 }
@@ -366,5 +580,11 @@ class _FilterDialogState extends State<_FilterDialog> {
 class _ReportPdfPreviewScreen extends StatelessWidget {
   final Uint8List pdfBytes; final String title;
   const _ReportPdfPreviewScreen({required this.pdfBytes, required this.title});
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: Text(title)), body: PdfPreview(build: (format) => pdfBytes));
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16)),
+      backgroundColor: Colors.white, elevation: 0, leading: IconButton(icon: const Icon(LucideIcons.chevronLeft, color: ColorPalette.textPrimary), onPressed: () => Navigator.pop(context)),
+    ), 
+    body: PdfPreview(build: (format) => pdfBytes, allowPrinting: true, allowSharing: true, canChangeOrientation: false, canChangePageFormat: false)
+  );
 }

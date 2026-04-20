@@ -336,11 +336,42 @@ class _DropdownSetupScreenState extends State<DropdownSetupScreen> {
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: ModernDataTable(
-                        columns: _isItemNameCategory ? const ['name', 'sizeType'] : const ['name'],
+                        columns: [
+                          if (_isColoursCategory || _isAccessoriesCategory) 'photo',
+                          'name',
+                          if (_isItemNameCategory) 'sizeType',
+                        ],
                         rows: _filteredValues.map((v) {
-                          if (v is String) return {'name': v};
-                          if (v is Map) return Map<String, dynamic>.from(v);
-                          return {'name': v.toString()};
+                          final map = (v is Map) ? Map<String, dynamic>.from(v) : {'name': v.toString()};
+                          
+                          if (_isColoursCategory || _isAccessoriesCategory) {
+                            final photoUrl = map['photo']?.toString();
+                            map['photo'] = GestureDetector(
+                              onTap: () {
+                                if (photoUrl != null && photoUrl.isNotEmpty) {
+                                  _showColorPreview(map['name'].toString(), photoUrl);
+                                }
+                              },
+                              child: Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: ColorPalette.background,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: ColorPalette.border),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: (photoUrl != null && photoUrl.isNotEmpty)
+                                  ? Image.network(
+                                      ApiConstants.getImageUrl(photoUrl),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (c, e, s) => const Icon(LucideIcons.image, size: 12, color: ColorPalette.textMuted),
+                                    )
+                                  : const Icon(LucideIcons.image, size: 12, color: ColorPalette.textMuted),
+                              ),
+                            );
+                          }
+                          return map;
                         }).toList(),
                         onDelete: _delete,
                         onEdit: _startEdit,

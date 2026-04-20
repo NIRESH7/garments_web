@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/theme/color_palette.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/layout_constants.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminTaskManagementScreen extends StatefulWidget {
   const AdminTaskManagementScreen({super.key});
@@ -36,6 +37,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   bool _isSaving = false;
   String? _recordedPath;
   String _voiceLocale = 'en_US'; 
+  String _transcriptionLanguage = 'en-US';
   bool _speechReady = false;
 
   final _titleController = TextEditingController();
@@ -129,7 +131,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     try {
       final result = await _api.createTask(data);
       if (result != null) {
-        _showMsg('Task Created & Assigned Successfully');
+        _showSuccessDialog();
         _titleController.clear();
         _descController.clear();
         setState(() => _recordedPath = null);
@@ -140,6 +142,66 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 40, offset: const Offset(0, 20)),
+            ],
+          ),
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: const BoxDecoration(color: Color(0xFFF0FDF4), shape: BoxShape.circle),
+                child: const Icon(LucideIcons.checkCircle2, size: 40, color: Color(0xFF16A34A)),
+              ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack).shake(hz: 4),
+              const SizedBox(height: 32),
+              Text(
+                'WORKFLOW DISPATCHED',
+                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: 2),
+              ).animate().fadeIn(delay: 200.ms).moveY(begin: 10, end: 0),
+              const SizedBox(height: 16),
+              Text(
+                'Operational command successfully registered in the central registry. Assignment group has been notified of the new technical specifications.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B), height: 1.6, fontWeight: FontWeight.w500),
+              ).animate().fadeIn(delay: 400.ms),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  child: Text('ACKNOWLEDGE LOG', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
+                ),
+              ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.95, 0.95)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showMsg(String msg, {bool error = false}) {
@@ -215,7 +277,21 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
       children: [
         _buildIndustrialInput('TASK IDENTIFIER / TITLE', _titleController, LucideIcons.type),
         const SizedBox(height: 24),
-        _buildIndustrialInput('DESCRIPTION & TECHNICAL SPECS', _descController, LucideIcons.alignLeft, maxLines: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('DESCRIPTION & TECHNICAL SPECS', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+            Row(
+              children: [
+                _languageOption('en-US', 'ENGLISH'),
+                const SizedBox(width: 8),
+                _languageOption('ta-IN', 'தமிழ்'),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _buildIndustrialInput('', _descController, LucideIcons.alignLeft, maxLines: 4, hideLabel: true),
         const SizedBox(height: 24),
         Row(
           children: [
@@ -283,6 +359,22 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     );
   }
 
+  Widget _languageOption(String locale, String label) {
+    bool isSelected = _transcriptionLanguage == locale;
+    return InkWell(
+      onTap: () => setState(() => _transcriptionLanguage = locale),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F172A) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0)),
+        ),
+        child: Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: isSelected ? Colors.white : const Color(0xFF64748B))),
+      ),
+    );
+  }
+
   Widget _formContainer({required String title, required List<Widget> children}) {
     return Container(
       padding: const EdgeInsets.all(32),
@@ -308,12 +400,14 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
     );
   }
 
-  Widget _buildIndustrialInput(String label, TextEditingController ctrl, IconData icon, {int maxLines = 1}) {
+  Widget _buildIndustrialInput(String label, TextEditingController ctrl, IconData icon, {int maxLines = 1, bool hideLabel = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-        const SizedBox(height: 8),
+        if (!hideLabel) ...[
+          Text(label, style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+        ],
         TextFormField(
           controller: ctrl,
           maxLines: maxLines,
@@ -513,7 +607,7 @@ class _AdminTaskManagementScreenState extends State<AdminTaskManagementScreen> {
   Future<void> _transcribe(String path) async {
     setState(() => _isTranscribing = true);
     try {
-      final result = await _api.transcribeAudioFile(path);
+      final result = await _api.transcribeAudioFile(path, language: _transcriptionLanguage);
       if (mounted && result != null && result.trim().isNotEmpty) {
         setState(() => _descController.text = result);
       }

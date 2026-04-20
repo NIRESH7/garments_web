@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -93,6 +94,26 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     final pdf = pw.Document();
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy HH:mm').format(now);
+    final bool isRoll = _displayUnit == 'Roll';
+
+    // Apply exact same filter as displayed on screen
+    final List<dynamic> dataToPrint = _statusFilter == null
+        ? _reportData
+        : _reportData.where((d) => d['status'] == _statusFilter).toList();
+
+    // Load logo
+    pw.MemoryImage? logo;
+    try {
+      final logoData = await rootBundle.load('assets/images/app_logo.png');
+      logo = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (e) {
+      // No logo is fine
+    }
+
+    double convert(dynamic val) {
+      final num v = (val as num?) ?? 0;
+      return isRoll ? v / 20.0 : v.toDouble();
+    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -100,18 +121,32 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
         margin: const pw.EdgeInsets.all(24),
         header: (pw.Context context) => pw.Column(
           children: [
-            PrintUtils.buildCompanyHeader(pw.Font.helveticaBold(), pw.Font.helvetica()),
+            PrintUtils.buildCompanyHeader(
+              pw.Font.helveticaBold(),
+              pw.Font.helvetica(),
+              logo: logo,
+            ),
             pw.SizedBox(height: 10),
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(
-                  'STOCK STATUS REPORT',
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue900,
-                  ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'STOCK STATUS REPORT',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900,
+                      ),
+                    ),
+                    if (_statusFilter != null)
+                      pw.Text(
+                        'Filter: $_statusFilter',
+                        style: pw.TextStyle(fontSize: 10, color: PdfColors.red),
+                      ),
+                  ],
                 ),
                 pw.Text(
                   'Generated on: $dateStr',
@@ -140,22 +175,29 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
               headers: [
                 'LOT',
                 'DIA',
-                'STOCK (Kg)',
-                'MIN',
-                'MAX',
-                'NEED WT',
+                isRoll ? 'STOCK (Rolls)' : 'STOCK (Kg)',
+                isRoll ? 'MIN (Rolls)' : 'MIN',
+                isRoll ? 'MAX (Rolls)' : 'MAX',
+                'NEED WT (Kg)',
                 'NEED ROLL',
                 'STATUS',
               ],
-              data: _reportData.map((item) {
+              data: dataToPrint.map((item) {
+                final stock = convert(item['currentWeight']);
+                final outside = convert(item['outsideInput']);
+                final minVal = convert(item['minWeight']);
+                final maxVal = convert(item['maxWeight']);
+                // NEED WT is always in kg regardless of Roll mode
+                final needWt = ((item['needWeight'] as num?) ?? 0).toDouble();
+                final needRolls = needWt / 20.0;
                 return [
                   item['lotName'],
                   item['dia'],
-                  '${item['currentWeight'].toStringAsFixed(1)}${item['outsideInput'] != 0 ? ' (+${item['outsideInput']})' : ''}',
-                  '${item['minWeight']}',
-                  '${item['maxWeight']}',
-                  '${item['needWeight'].toStringAsFixed(1)}',
-                  '${(item['needWeight'] / 20).toStringAsFixed(1)}',
+                  '${stock.toStringAsFixed(1)}${!isRoll && (item['outsideInput'] ?? 0) != 0 ? ' (+${outside.toStringAsFixed(1)})' : ''}',
+                  minVal.toStringAsFixed(1),
+                  maxVal.toStringAsFixed(1),
+                  needWt.toStringAsFixed(1),
+                  needRolls.toStringAsFixed(1),
                   item['status'],
                 ];
               }).toList(),
@@ -420,8 +462,13 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
         );
     }
 
+    // Clamp current page to valid range
+    final int safeCurrentPage = _currentPage < ((filteredByStatus.length / _rowsPerPage).ceil())
+        ? _currentPage
+        : 0;
+
     // Logic for Pagination
-    final int startIndex = _currentPage * _rowsPerPage;
+    final int startIndex = safeCurrentPage * _rowsPerPage;
     final int endIndex = (startIndex + _rowsPerPage) > filteredByStatus.length 
         ? filteredByStatus.length 
         : (startIndex + _rowsPerPage);
@@ -469,19 +516,19 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
             ),
           ),
           
-          // Pagination Footer
-          _buildPaginationFooter(),
+          // Pagination Footer — pass filtered data so counts are accurate
+          _buildPaginationFooter(filteredByStatus, safeCurrentPage),
         ],
       ),
     );
   }
 
-  Widget _buildPaginationFooter() {
-    final int totalPages = (_reportData.length / _rowsPerPage).ceil();
-    final int start = _currentPage * _rowsPerPage + 1;
-    final int end = (_currentPage + 1) * _rowsPerPage > _reportData.length 
-        ? _reportData.length 
-        : (_currentPage + 1) * _rowsPerPage;
+  Widget _buildPaginationFooter(List<dynamic> filteredData, int currentPage) {
+    final int totalPages = (filteredData.length / _rowsPerPage).ceil().clamp(1, 9999);
+    final int start = filteredData.isEmpty ? 0 : currentPage * _rowsPerPage + 1;
+    final int end = ((currentPage + 1) * _rowsPerPage > filteredData.length 
+        ? filteredData.length 
+        : (currentPage + 1) * _rowsPerPage);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -493,7 +540,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'Showing $start to $end of ${_reportData.length} entries',
+            'Showing $start to $end of ${filteredData.length} entries',
             style: GoogleFonts.inter(
               fontSize: 13,
               color: const Color(0xFF64748B),
@@ -504,7 +551,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
             children: [
               _buildPaginationButton(
                 icon: LucideIcons.chevronLeft,
-                onPressed: _currentPage > 0 
+                onPressed: currentPage > 0 
                   ? () => setState(() => _currentPage--) 
                   : null,
               ),
@@ -516,7 +563,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'Page ${_currentPage + 1} of $totalPages',
+                  'Page ${currentPage + 1} of $totalPages',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -527,7 +574,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
               const SizedBox(width: 12),
               _buildPaginationButton(
                 icon: LucideIcons.chevronRight,
-                onPressed: (_currentPage + 1) < totalPages 
+                onPressed: (currentPage + 1) < totalPages 
                   ? () => setState(() => _currentPage++) 
                   : null,
               ),
@@ -589,8 +636,9 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     final totalStock = inStock + outStock;
     final minStock = convert(item['minWeight']);
     final maxStock = convert(item['maxWeight']);
-    final needWeight = convert(item['needWeight']);
-    final estRolls = (item['needWeight'] as num? ?? 0) / 20.0; // Estimate always based on weight logic
+    // NEED WEIGHT is always in kg (weight), regardless of Roll/Weight mode
+    final needWeight = (item['needWeight'] as num? ?? 0).toDouble();
+    final estRolls = needWeight / 20.0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -697,7 +745,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
           color: const Color(0xFFEF4444), 
           bgColor: const Color(0xFFFEF2F2),
           isSelected: _statusFilter == 'LOW STOCK',
-          onTap: () => setState(() => _statusFilter = (_statusFilter == 'LOW STOCK' ? null : 'LOW STOCK')),
+          onTap: () => setState(() { _currentPage = 0; _statusFilter = (_statusFilter == 'LOW STOCK' ? null : 'LOW STOCK'); }),
         ),
         const SizedBox(width: 20),
         _SummaryBox(
@@ -706,7 +754,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
           color: const Color(0xFFF59E0B), 
           bgColor: const Color(0xFFFFFBEB),
           isSelected: _statusFilter == 'HIGH STOCK',
-          onTap: () => setState(() => _statusFilter = (_statusFilter == 'HIGH STOCK' ? null : 'HIGH STOCK')),
+          onTap: () => setState(() { _currentPage = 0; _statusFilter = (_statusFilter == 'HIGH STOCK' ? null : 'HIGH STOCK'); }),
         ),
         const SizedBox(width: 20),
         _SummaryBox(
@@ -715,7 +763,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
           color: const Color(0xFF10B981), 
           bgColor: const Color(0xFFF0FDF4),
           isSelected: _statusFilter == 'NORMAL',
-          onTap: () => setState(() => _statusFilter = (_statusFilter == 'NORMAL' ? null : 'NORMAL')),
+          onTap: () => setState(() { _currentPage = 0; _statusFilter = (_statusFilter == 'NORMAL' ? null : 'NORMAL'); }),
         ),
       ],
     );

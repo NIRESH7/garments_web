@@ -93,21 +93,21 @@ class LotAllocationPrintService {
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text('ITEM NAME', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                      child: pw.Text('ITEM NAME', style: pw.TextStyle(font: boldFont, fontSize: 13)),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text('CAT', style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                      child: pw.Text('CAT', style: pw.TextStyle(font: boldFont, fontSize: 13)),
                     ),
                     ...sizes.map((s) => pw.Container(
                           width: 45,
                           padding: const pw.EdgeInsets.all(6),
                           alignment: pw.Alignment.center,
-                          child: pw.Text(s.toString(), style: pw.TextStyle(font: boldFont, fontSize: 9)),
+                          child: pw.Text(s.toString(), style: pw.TextStyle(font: boldFont, fontSize: 13)),
                         )),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(6),
-                      child: pw.Center(child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 9))),
+                      child: pw.Center(child: pw.Text('TOTAL', style: pw.TextStyle(font: boldFont, fontSize: 13))),
                     ),
                   ],
                 ),
@@ -127,7 +127,7 @@ class LotAllocationPrintService {
                       children: [
                         pw.Padding(
                           padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          child: pw.Text(e['itemName'] ?? '', style: pw.TextStyle(font: boldFont, fontSize: 8)),
+                          child: pw.Text(e['itemName'] ?? '', style: pw.TextStyle(font: boldFont, fontSize: 12)),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -319,8 +319,8 @@ class LotAllocationPrintService {
                 'Rack',
                 'Dozen',
               ],
-              headerStyle: pw.TextStyle(font: boldFont, fontSize: 9),
-              cellStyle: pw.TextStyle(font: font, fontSize: 8),
+              headerStyle: pw.TextStyle(font: boldFont, fontSize: 13),
+              cellStyle: pw.TextStyle(font: boldFont, fontSize: 12),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.grey200,
               ),
@@ -458,8 +458,8 @@ class LotAllocationPrintService {
                 'Dia',
                 'Dozen',
               ],
-              headerStyle: pw.TextStyle(font: boldFont, fontSize: 8),
-              cellStyle: pw.TextStyle(font: font, fontSize: 7),
+              headerStyle: pw.TextStyle(font: boldFont, fontSize: 13),
+              cellStyle: pw.TextStyle(font: boldFont, fontSize: 12),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.grey200,
               ),
@@ -586,8 +586,8 @@ class LotAllocationPrintService {
               'Pallet',
               'Set Wt (kg)',
             ],
-            headerStyle: pw.TextStyle(font: boldFont, fontSize: 7),
-            cellStyle: pw.TextStyle(font: font, fontSize: 7),
+            headerStyle: pw.TextStyle(font: boldFont, fontSize: 13),
+            cellStyle: pw.TextStyle(font: boldFont, fontSize: 12),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
             cellDecoration: (idx, data, rowNum) => pw.BoxDecoration(
               color: rowNum % 2 == 0 ? PdfColors.white : PdfColors.grey50,

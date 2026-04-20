@@ -3,6 +3,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import '../../services/mobile_api_service.dart';
 import '../../core/theme/color_palette.dart';
@@ -25,6 +28,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final _workerNameController = TextEditingController();
   final _replyController = TextEditingController();
   late String _status;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -51,6 +57,21 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageName = image.name;
+        });
+      }
+    } catch (e) {
+      _showMsg('IMAGE PICK FAILED', error: true);
+    }
+  }
+
   Future<void> _submitReply() async {
     final worker = _workerNameController.text.trim();
     if (worker.isEmpty) {
@@ -63,6 +84,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       'workerName': worker,
       'replyText': _replyController.text.trim(),
       'status': _status,
+      if (_selectedImageBytes != null) 'imageBase64': base64Encode(_selectedImageBytes!),
     };
 
     try {
@@ -296,9 +318,25 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          const SizedBox(height: 8),
           Row(children: [_buildStatusToken(l['status'] ?? 'UPDATE')]),
           const SizedBox(height: 8),
-          Text(l['replyText'] ?? 'Status updated.', style: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textSecondary)),
+          if (l['replyText'] != null && l['replyText'].toString().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(l['replyText'], style: GoogleFonts.inter(fontSize: 12, color: ColorPalette.textSecondary)),
+            ),
+          if (l['imageUrl'] != null || l['imageBase64'] != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 200),
+                decoration: BoxDecoration(border: Border.all(color: ColorPalette.border)),
+                child: l['imageUrl'] != null 
+                  ? Image.network('${ApiConstants.baseUrl}${l['imageUrl']}', fit: BoxFit.contain)
+                  : Image.memory(base64Decode(l['imageBase64']), fit: BoxFit.contain),
+              ),
+            ),
         ],
       ),
     );
@@ -318,6 +356,41 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           _inputPanel('STATUS', 'Select...', null, LucideIcons.activity, isDropdown: true),
           const SizedBox(height: 16),
           _inputPanel('COMMENT', 'Add...', _replyController, LucideIcons.edit3, lines: 3),
+          const SizedBox(height: 24),
+          
+          // Image Attachment Row
+          Text('PROGRESS PROOF', style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: ColorPalette.textMuted)),
+          const SizedBox(height: 8),
+          if (_selectedImageBytes != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: ColorPalette.border), borderRadius: BorderRadius.circular(4)),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: Image.memory(_selectedImageBytes!, width: 40, height: 40, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(_selectedImageName ?? 'Proof Image', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: ColorPalette.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  IconButton(onPressed: () => setState(() { _selectedImageBytes = null; _selectedImageName = null; }), icon: const Icon(LucideIcons.x, size: 14, color: ColorPalette.error)),
+                ],
+              ),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(LucideIcons.camera, size: 14),
+              label: Text('ATTACH IMAGE', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+                foregroundColor: ColorPalette.textSecondary,
+                side: BorderSide(color: ColorPalette.border),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          const SizedBox(height: 24),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,

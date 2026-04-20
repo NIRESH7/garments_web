@@ -21,6 +21,7 @@ import 'package:garments/dialogs/signature_pad_dialog.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:garments/widgets/responsive_wrapper.dart';
 
 import 'package:garments/widgets/app_drawer.dart';
@@ -4033,7 +4034,7 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
-                    ApiConstants.getImageUrl(photoUrl),
+                    photoUrl.startsWith('http') ? photoUrl : ApiConstants.getImageUrl(photoUrl),
                     width: 150,
                     height: 150,
                     fit: BoxFit.cover,
@@ -4186,6 +4187,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       onChanged: chg,
       hint: hint ?? '',
       itemImages: itemImages,
+      onImageTap: (val != null && itemImages != null && itemImages.containsKey(val))
+          ? () => _showColorPreview(val, itemImages[val])
+          : null,
       onDoubleTap: onDoubleTap,
       resolveColor: _resolveColor,
     );
@@ -4199,6 +4203,9 @@ class _LotInwardScreenState extends State<LotInwardScreen> {
       onChanged: chg,
       prefixIcon: icon,
       itemImages: itemImages,
+      onImageTap: (val != null && itemImages != null && itemImages.containsKey(val))
+          ? () => _showColorPreview(val, itemImages[val])
+          : null,
       onDoubleTap: onDoubleTap,
       resolveColor: _resolveColor,
     );
@@ -4441,7 +4448,7 @@ class _StickerHeaderDelegate extends SliverPersistentHeaderDelegate {
                       _buildCell("S.NO", sWidth, isHeader: true),
                       _buildCell("GSM", gWidth, isHeader: true),
                       ...List.generate(sets, (i) => _buildCell(setHeaders[i], cellWidth, isHeader: true)),
-                      _buildCell("ROLL NO", rollWidth, isHeader: true),
+                      _buildCell("WEIGHT", rollWidth, isHeader: true),
                       _buildCell("TOTAL", totWidth, isHeader: true),
                     ],
                   ),

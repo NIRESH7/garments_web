@@ -16,6 +16,7 @@ class CustomDropdownField extends StatefulWidget {
   final VoidCallback? onDoubleTap;
   final Color? Function(String)? resolveColor;
   final bool isDense;
+  final VoidCallback? onImageTap;
 
   const CustomDropdownField({
     super.key,
@@ -30,6 +31,7 @@ class CustomDropdownField extends StatefulWidget {
     this.onDoubleTap,
     this.resolveColor,
     this.isDense = false,
+    this.onImageTap,
   });
 
   @override
@@ -72,6 +74,16 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
                   : const Icon(LucideIcons.image, size: 12, color: ColorPalette.textMuted),
             )
           : (color != null ? Container(color: color) : null),
+    );
+  }
+
+  Widget _buildClickableThumbnail(String item) {
+    final thumb = _buildThumbnail(item);
+    if (thumb is SizedBox) return thumb;
+    
+    return GestureDetector(
+      onTap: widget.onImageTap,
+      child: thumb,
     );
   }
 
@@ -236,7 +248,7 @@ class _CustomDropdownFieldState extends State<CustomDropdownField> {
                               const SizedBox(width: 10),
                             ],
                             if (widget.value != null)
-                              _buildThumbnail(widget.value!),
+                              _buildClickableThumbnail(widget.value!),
                             Expanded(
                               child: Text(
                                 (widget.value != null && widget.value!.contains(' (#'))

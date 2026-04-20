@@ -89,7 +89,7 @@ class ShadeCardPrintService {
                         textAlign: pw.TextAlign.center,
                         style: pw.TextStyle(
                           font: boldFont,
-                          fontSize: 10,
+                          fontSize: 13,
                           color: PdfColors.black,
                         ),
                       ),
@@ -108,8 +108,8 @@ class ShadeCardPrintService {
                         child: pw.Text(
                           'GSM: ${color['gsm'] ?? group['gsm'] ?? 'N/A'}',
                           style: pw.TextStyle(
-                            font: font,
-                            fontSize: 9,
+                            font: boldFont,
+                            fontSize: 12,
                             color: PdfColors.indigo,
                           ),
                         ),
@@ -219,7 +219,7 @@ class ShadeCardPrintService {
                         ),
                         pw.Text(
                           items.isNotEmpty ? items.join(', ') : 'None',
-                          style: pw.TextStyle(font: font, fontSize: 12),
+                          style: pw.TextStyle(font: boldFont, fontSize: 14),
                         ),
                       ],
                     ),

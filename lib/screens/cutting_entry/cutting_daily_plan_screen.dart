@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mobile_api_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../../core/theme/color_palette.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../core/constants/layout_constants.dart';
 
 class CuttingDailyPlanScreen extends StatefulWidget {
   const CuttingDailyPlanScreen({super.key});
@@ -170,21 +174,21 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
       height: _headerH,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFD9E1F2), // light blue-grey like Excel header
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9),
         border: Border(
-          right: BorderSide(color: Colors.blueGrey.shade200),
-          bottom: BorderSide(color: Colors.blueGrey.shade300, width: 1.5),
+          right: BorderSide(color: Color(0xFFE2E8F0)),
+          bottom: BorderSide(color: Color(0xFFE2E8F0)),
         ),
       ),
       child: Text(
-        text,
+        text.toUpperCase(),
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF1F3864),
-          height: 1.2,
+        style: GoogleFonts.inter(
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF64748B),
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -202,9 +206,9 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
       height: _rowH,
       decoration: BoxDecoration(
         color: bg ?? Colors.white,
-        border: Border(
-          right: BorderSide(color: Colors.blueGrey.shade100),
-          bottom: BorderSide(color: Colors.blueGrey.shade100),
+        border: const Border(
+          right: BorderSide(color: Color(0xFFF1F5F9)),
+          bottom: BorderSide(color: Color(0xFFF1F5F9)),
         ),
       ),
       child: TextFormField(
@@ -213,7 +217,7 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11.5, color: Colors.black87),
+        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
         decoration: const InputDecoration(
           border: InputBorder.none,
           isDense: true,
@@ -235,11 +239,11 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
       width: width,
       height: _rowH,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          right: BorderSide(color: Colors.blueGrey.shade100),
-          bottom: BorderSide(color: Colors.blueGrey.shade100),
+          right: BorderSide(color: Color(0xFFF1F5F9)),
+          bottom: BorderSide(color: Color(0xFFF1F5F9)),
         ),
       ),
       child: Checkbox(
@@ -247,7 +251,8 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
         onChanged: (v) => onChange(v ?? false),
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.compact,
-        activeColor: Colors.indigo,
+        activeColor: const Color(0xFF0F172A),
+        checkColor: Colors.white,
       ),
     );
   }
@@ -256,11 +261,11 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     return Container(
       width: width,
       height: _rowH,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          right: BorderSide(color: Colors.blueGrey.shade100),
-          bottom: BorderSide(color: Colors.blueGrey.shade100),
+          right: BorderSide(color: Color(0xFFF1F5F9)),
+          bottom: BorderSide(color: Color(0xFFF1F5F9)),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -268,12 +273,12 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
           value: _statusOptions.contains(value) ? value : 'Pending',
           isDense: true,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 14),
+          icon: const Icon(LucideIcons.chevronDown, size: 14, color: Color(0xFF64748B)),
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          style: const TextStyle(fontSize: 10.5, color: Colors.black87),
+          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
           items: _statusOptions
               .map((s) => DropdownMenuItem(
-                  value: s, child: Text(s, style: const TextStyle(fontSize: 10.5))))
+                  value: s, child: Text(s.toUpperCase(), style: const TextStyle(fontSize: 9, letterSpacing: 0.5))))
               .toList(),
           onChanged: onChange,
         ),
@@ -286,13 +291,15 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
       width: _wDelete,
       height: _rowH,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.blueGrey.shade100)),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF1F2),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFF1F5F9)),
+        ),
       ),
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: Icon(Icons.close, color: Colors.red.shade400, size: 16),
+        icon: const Icon(LucideIcons.trash2, color: Color(0xFFE11D48), size: 14),
         onPressed: () => setState(() => _planRows.removeAt(index)),
       ),
     );
@@ -391,23 +398,31 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     final dateStr = DateFormat('dd/MM/yyyy').format(_selectedDate);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Cutting Daily Plan',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('PRODUCTION DAILY PLAN',
+            style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                letterSpacing: 1.2,
+                color: const Color(0xFF0F172A))),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0.5,
+        elevation: 0,
+        centerTitle: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+        ),
       ),
       body: Column(
         children: [
-          // ── Date / Day header bar (matches reference image)
+          // ── Operational Control Header
           Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                // Date picker chip
+                // Execution Date
                 InkWell(
                   onTap: () async {
                     final d = await showDatePicker(
@@ -421,67 +436,44 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
                       _loadForDate();
                     }
                   },
-                  borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD9E1F2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blueGrey.shade200),
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.calendar_today,
-                            size: 14, color: Color(0xFF1F3864)),
-                        const SizedBox(width: 6),
+                        const Icon(LucideIcons.calendar, size: 14, color: Color(0xFF64748B)),
+                        const SizedBox(width: 8),
                         RichText(
                           text: TextSpan(
-                            style: const TextStyle(
-                                fontSize: 13, color: Color(0xFF1F3864)),
+                            style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF1E293B)),
                             children: [
-                              const TextSpan(
-                                  text: 'Date  ',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.w500)),
-                              TextSpan(
-                                  text: dateStr,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
-                              const TextSpan(
-                                  text: '    Day  ',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.w500)),
-                              TextSpan(
-                                  text: dayName,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
+                              TextSpan(text: '$dayName, ', style: const TextStyle(fontWeight: FontWeight.w400)),
+                              TextSpan(text: dateStr, style: const TextStyle(fontWeight: FontWeight.w700)),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.arrow_drop_down,
-                            size: 18, color: Color(0xFF1F3864)),
+                        const SizedBox(width: 8),
+                        const Icon(LucideIcons.chevronDown, size: 14, color: Color(0xFF64748B)),
                       ],
                     ),
                   ),
                 ),
                 const Spacer(),
-                // Fetch button
+                // Sync Requirements
                 TextButton.icon(
                   onPressed: _loading ? null : _fetchFromRequirements,
-                  icon: const Icon(Icons.sync, size: 16),
-                  label: const Text('Fetch from Lot Requirements',
-                      style:
-                          TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  icon: const Icon(LucideIcons.refreshCw, size: 14),
+                  label: Text('SYNC REQUIREMENTS', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5)),
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF1F3864),
-                    backgroundColor: const Color(0xFFD9E1F2),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    foregroundColor: const Color(0xFF0F172A),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: const BorderSide(color: Color(0xFFE2E8F0))),
                   ),
                 ),
               ],
@@ -500,43 +492,49 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
                         _buildTable(),
                         const SizedBox(height: 12),
 
-                        // Add Row button
+                        // Entry Controls
                         OutlinedButton.icon(
                           onPressed: _addRow,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Cutting Row'),
+                          icon: const Icon(LucideIcons.plus, size: 14),
+                          label: Text('APPEND ENTRY LINE',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11,
+                                  letterSpacing: 1)),
                           style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 44),
-                            side: BorderSide(color: Colors.indigo.shade300),
-                            foregroundColor: Colors.indigo.shade700,
+                            minimumSize: const Size(double.infinity, 48),
+                            side: const BorderSide(color: const Color(0xFFE2E8F0)),
+                            foregroundColor: const Color(0xFF64748B),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(4)),
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 24),
 
-                        // Save button
+                        // Action Persistence
                         ElevatedButton(
                           onPressed: _saving ? null : _save,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1F3864),
+                            backgroundColor: const Color(0xFF0F172A),
                             foregroundColor: Colors.white,
-                            minimumSize: const Size(double.infinity, 50),
+                            minimumSize: const Size(double.infinity, 56),
+                            elevation: 0,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                                borderRadius: BorderRadius.circular(4)),
                           ),
                           child: _saving
                               ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
+                                  width: 20,
+                                  height: 20,
                                   child: CircularProgressIndicator(
                                       color: Colors.white, strokeWidth: 2))
-                              : const Text('Save Plan',
-                                  style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold)),
+                              : Text('COMMIT PRODUCTION PLAN',
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      letterSpacing: 1.5)),
                         ),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 48),
                       ],
                     ),
                   ),
