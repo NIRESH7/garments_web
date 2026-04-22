@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+// Conditional import for web only
 import 'dart:ui_web' as ui_web;
 import 'dart:html' as html;
+
 import '../../services/mobile_api_service.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/storage/storage_service.dart';
@@ -13,9 +16,10 @@ class RackPallet3DDetailsScreen extends StatefulWidget {
   @override
   State<RackPallet3DDetailsScreen> createState() => _RackPallet3DDetailsScreenState();
 }
+
 class _RackPallet3DDetailsScreenState extends State<RackPallet3DDetailsScreen> {
   final String _viewID = 'warehouse-3d-view';
-  late html.IFrameElement _iframeElement;
+  dynamic _iframeElement; // Use dynamic to avoid compile error on mobile
   String _selectedRack = 'SELECT A RACK';
   String _selectedSlot = '---';
   List<String> _allRacks = [];
@@ -23,8 +27,16 @@ class _RackPallet3DDetailsScreenState extends State<RackPallet3DDetailsScreen> {
   bool _isLoadingMasters = true;
   String? _token;
 
-  _RackPallet3DDetailsScreenState() {
-    // 1. MUST register factory synchronously so HtmlElementView finds it immediately
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _initWebIframe();
+    }
+    _loadInitialData();
+  }
+
+  void _initWebIframe() {
     _iframeElement = html.IFrameElement()
       ..style.border = 'none'
       ..style.width = '100%'
@@ -34,13 +46,7 @@ class _RackPallet3DDetailsScreenState extends State<RackPallet3DDetailsScreen> {
       _viewID,
       (int viewId) => _iframeElement,
     );
-  }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadInitialData();
-    
     // Listen for messages from the 3D component
     html.window.onMessage.listen((event) {
       if (event.data is Map && event.data['type'] == 'slot_selected') {
@@ -58,10 +64,11 @@ class _RackPallet3DDetailsScreenState extends State<RackPallet3DDetailsScreen> {
     _token = await StorageService().getToken();
     await _loadMasters();
     
-    // 2. Update SRC after token is ready
-    final String baseAppUrl = html.window.location.href.split('#').first;
-    final String iframeUrl = '${baseAppUrl}3d/index.html?server=${Uri.encodeComponent(ApiConstants.serverUrl)}&token=${Uri.encodeComponent(_token ?? "")}';
-    _iframeElement.src = iframeUrl;
+    if (kIsWeb && _iframeElement != null) {
+      final String baseAppUrl = html.window.location.href.split('#').first;
+      final String iframeUrl = '${baseAppUrl}3d/index.html?server=${Uri.encodeComponent(ApiConstants.serverUrl)}&token=${Uri.encodeComponent(_token ?? "")}';
+      (_iframeElement as html.IFrameElement).src = iframeUrl;
+    }
   }
 
   Future<void> _loadMasters() async {
@@ -129,7 +136,14 @@ class _RackPallet3DDetailsScreenState extends State<RackPallet3DDetailsScreen> {
                 ],
               ),
               clipBehavior: Clip.antiAlias,
-              child: const HtmlElementView(viewType: 'warehouse-3d-view'),
+              child: kIsWeb 
+                ? const HtmlElementView(viewType: 'warehouse-3d-view')
+                : Center(
+                    child: Text(
+                      '3D View is only available on Web',
+                      style: GoogleFonts.inter(color: Colors.white70),
+                    ),
+                  ),
             ),
           ),
           
@@ -174,10 +188,12 @@ class _RackPallet3DDetailsScreenState extends State<RackPallet3DDetailsScreen> {
           
           _buildDropdownInfo('RACK ID', _selectedRack, _allRacks, (val) {
             setState(() => _selectedRack = val!);
-            _iframeElement.contentWindow?.postMessage({
-              'type': 'move_to_slot',
-              'rackId': val,
-            }, '*');
+            if (kIsWeb && _iframeElement != null) {
+              (_iframeElement as html.IFrameElement).contentWindow?.postMessage({
+                'type': 'move_to_slot',
+                'rackId': val,
+              }, '*');
+            }
           }),
           const SizedBox(height: 12),
           _buildDropdownInfo('PALLET ID', _selectedSlot, _allPallets, (val) => setState(() => _selectedSlot = val!)),
