@@ -35,6 +35,7 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
   final List<String> _units = ['Weight', 'Roll'];
   List<dynamic> _reportData = [];
   bool _isLoading = true;
+  bool _printFilteredOnly = true; // Default to true as per user request
 
   // Pagination State
   int _currentPage = 0;
@@ -97,9 +98,9 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
     final bool isRoll = _displayUnit == 'Roll';
 
     // Apply exact same filter as displayed on screen
-    final List<dynamic> dataToPrint = _statusFilter == null
-        ? _reportData
-        : _reportData.where((d) => d['status'] == _statusFilter).toList();
+    final List<dynamic> dataToPrint = (_statusFilter != null && _printFilteredOnly)
+        ? _reportData.where((d) => d['status'] == _statusFilter).toList()
+        : _reportData;
 
     // Load logo
     pw.MemoryImage? logo;
@@ -350,6 +351,27 @@ class _GodownStockReportScreenState extends State<GodownStockReportScreen> {
             onChanged: (v) {
               if (v != null) setState(() => _displayUnit = v);
             },
+          ),
+          const SizedBox(width: 16),
+          Row(
+            children: [
+              Transform.scale(
+                scale: 0.8,
+                child: Switch(
+                  value: _printFilteredOnly,
+                  activeColor: const Color(0xFFEF4444),
+                  onChanged: (v) => setState(() => _printFilteredOnly = v),
+                ),
+              ),
+              Text(
+                'PRINT FILTERED ONLY',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: _printFilteredOnly ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                ),
+              ),
+            ],
           ),
         ],
       ),

@@ -632,6 +632,11 @@ const upsertInwardEntry = async ({ userId, body, files }) => {
         throw new Error('Lot No and Lot Name are required');
     }
 
+    /* 
+    The user requested: "Inward Entry-la Merge aaga koodathu." 
+    So we disable the auto-merge logic and always create a new record.
+    */
+    /*
     const escapedLotNo = cleanLotNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedLotName = cleanLotName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -643,96 +648,13 @@ const upsertInwardEntry = async ({ userId, body, files }) => {
     });
 
     if (inward) {
-        console.log(`SUCCESS: Found existing Inward: ${inward.inwardNo} (ID: ${inward._id})`);
-
-        if (processedDiaEntries && Array.isArray(processedDiaEntries)) {
-            console.log(`Merging ${processedDiaEntries.length} new DIA entries...`);
-            processedDiaEntries.forEach((newEntry) => {
-                const existingEntry = inward.diaEntries.find(
-                    (entry) => entry.dia?.toString().trim() === newEntry.dia?.toString().trim()
-                );
-                if (existingEntry) {
-                    existingEntry.roll = (Number(existingEntry.roll) || 0) + (Number(newEntry.roll) || 0);
-                    existingEntry.sets = (Number(existingEntry.sets) || 0) + (Number(newEntry.sets) || 0);
-                    existingEntry.delivWt = Number(((Number(existingEntry.delivWt) || 0) + (Number(newEntry.delivWt) || 0)).toFixed(2));
-                    existingEntry.recRoll = (Number(existingEntry.recRoll) || 0) + (Number(newEntry.recRoll) || 0);
-                    existingEntry.recWt = Number(((Number(existingEntry.recWt) || 0) + (Number(newEntry.recWt) || 0)).toFixed(2));
-                    existingEntry.rate = Number(newEntry.rate) || existingEntry.rate;
-                } else {
-                    console.log(`  Adding new DIA: ${newEntry.dia}`);
-                    inward.diaEntries.push(newEntry);
-                }
-            });
-        }
-
-        let currentStorage = Array.isArray(inward.storageDetails) ? inward.storageDetails : [];
-        if (processedStorageDetails && Array.isArray(processedStorageDetails)) {
-            console.log(`Merging ${processedStorageDetails.length} storage detail blocks...`);
-            processedStorageDetails.forEach((newStorage) => {
-                const existingStorage = currentStorage.find(
-                    (storage) => storage.dia?.toString().trim() === newStorage.dia?.toString().trim()
-                );
-                if (existingStorage) {
-                    console.log(`  Updating storage for DIA: ${newStorage.dia}`);
-                    existingStorage.racks = [...(existingStorage.racks || []), ...(newStorage.racks || [])];
-                    existingStorage.pallets = [...(existingStorage.pallets || []), ...(newStorage.pallets || [])];
-
-                    if (!existingStorage.rows) existingStorage.rows = [];
-                    newStorage.rows.forEach((newRow) => {
-                        const existingRow = existingStorage.rows.find(
-                            (row) => 
-                                row.colour?.toString().trim().toLowerCase() === newRow.colour?.toString().trim().toLowerCase() &&
-                                (newRow.rollNo ? row.rollNo?.toString().trim() === newRow.rollNo?.toString().trim() : true)
-                        );
-                        if (existingRow) {
-                            console.log(`    Appending to existing colour: ${newRow.colour}`);
-                            existingRow.setWeights = [...(existingRow.setWeights || []), ...(newRow.setWeights || [])];
-                            existingRow.setLabels = [...(existingRow.setLabels || []), ...(newRow.setLabels || [])];
-                            existingRow.totalWeight = Number(((Number(existingRow.totalWeight) || 0) + (Number(newRow.totalWeight) || 0)).toFixed(2));
-                        } else {
-                            console.log(`    Adding new colour: ${newRow.colour}`);
-                            existingStorage.rows.push(newRow);
-                        }
-                    });
-                } else {
-                    console.log(`  Adding new storage DIA: ${newStorage.dia}`);
-                    currentStorage.push(newStorage);
-                }
-            });
-        }
-
-        inward.storageDetails = currentStorage;
-        inward.markModified('storageDetails');
-        inward.markModified('diaEntries');
-        await syncColoursCategory(inward.storageDetails);
-
-        if (process) inward.process = process;
-        if (fromParty) inward.fromParty = fromParty;
-        if (rate) inward.rate = Number(rate);
-        if (gsm) inward.gsm = gsm;
-        if (vehicleNo) inward.vehicleNo = vehicleNo;
-        if (partyDcNo) inward.partyDcNo = partyDcNo;
-        if (outTime) inward.outTime = outTime;
-
-        if (qualityStatus) inward.qualityStatus = qualityStatus;
-        if (qualityImage) inward.qualityImage = qualityImage;
-        if (gsmStatus) inward.gsmStatus = gsmStatus;
-        if (gsmImage) inward.gsmImage = gsmImage;
-        if (shadeStatus) inward.shadeStatus = shadeStatus;
-        if (shadeImage) inward.shadeImage = shadeImage;
-        if (washingStatus) inward.washingStatus = washingStatus;
-        if (washingImage) inward.washingImage = washingImage;
-        if (complaintText) inward.complaintText = complaintText;
-        if (complaintImage) inward.complaintImage = complaintImage;
-        if (balanceImage) inward.balanceImage = balanceImage;
-
-        if (finalLotInchargeSignature) inward.lotInchargeSignature = finalLotInchargeSignature;
-        if (finalAuthorizedSignature) inward.authorizedSignature = finalAuthorizedSignature;
-        if (finalMdSignature) inward.mdSignature = finalMdSignature;
-
-        await inward.save();
-        return { inward, mode: 'updated', cleanLotNo, cleanLotName };
+        // ... update logic ...
     }
+    */
+    
+    // Always treat as new entry for Inward List purposes
+    let inward = null; 
+
 
     let finalInwardNo = inwardNo;
     if (!finalInwardNo) {
@@ -2114,6 +2036,67 @@ const updateInward = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Update stock in a specific rack/pallet slot from 3D interface
+// @route   PUT /api/inventory/update-rack-stock
+// @access  Private
+const updateRackPalletStock = asyncHandler(async (req, res) => {
+    const { lotNo, dia, setNo, colour, weightAction, weightValue } = req.body;
+    
+    const inward = await Inward.findOne({ 
+        lotNo: { $regex: new RegExp(`^${lotNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+    });
+
+    if (!inward) {
+        res.status(404);
+        throw new Error('Inward not found');
+    }
+
+    let storage = inward.storageDetails;
+    if (!Array.isArray(storage)) {
+        res.status(400);
+        throw new Error('Invalid storage structure in inward record');
+    }
+
+    let updated = false;
+    let newWeight = 0;
+
+    storage.forEach(block => {
+        if (block.dia === dia) {
+            block.rows.forEach(row => {
+                if (row.colour.toLowerCase() === colour.toLowerCase()) {
+                    const setIndex = findSetIndexInRow(row, setNo);
+                    if (setIndex >= 0) {
+                        let currentWeight = parseFloat(row.setWeights[setIndex]) || 0;
+                        const val = parseFloat(weightValue) || 0;
+
+                        if (weightAction === 'add') {
+                            currentWeight += val;
+                        } else if (weightAction === 'minus') {
+                            currentWeight = Math.max(0, currentWeight - val);
+                        } else if (weightAction === 'remove') {
+                            currentWeight = 0;
+                        }
+                        
+                        newWeight = currentWeight;
+                        row.setWeights[setIndex] = currentWeight > 0.001 ? currentWeight.toFixed(2) : "";
+                        updated = true;
+                    }
+                }
+            });
+        }
+    });
+
+    if (!updated) {
+        res.status(404);
+        throw new Error('Specific set/colour not found in storage details');
+    }
+
+    inward.markModified('storageDetails');
+    await inward.save();
+
+    res.json({ message: 'Stock updated successfully', currentWeight: newWeight });
+});
+
 export {
     createInward,
     importInwardWorkbook,
@@ -2135,5 +2118,6 @@ export {
     getQualityAuditReport,
     getLotDetails,
     getDistinctLots,
+    updateRackPalletStock,
     checkFifoViolation,
 };

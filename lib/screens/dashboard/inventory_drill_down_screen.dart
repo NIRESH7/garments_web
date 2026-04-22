@@ -52,7 +52,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
       _currentPage = 0;
     });
     try {
-      final res = await _api.getInventoryDrillDown(
+      List<dynamic> res = await _api.getInventoryDrillDown(
         type: widget.type,
         lotName: widget.lotName,
         lotNo: widget.lotNo,
@@ -61,12 +61,43 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
         startDate: widget.startDate,
         endDate: widget.endDate,
       );
+
+      // Task 4: Conditional set-to-colour expansion for outward dispatches
+      // If there's only ONE set (likely a dummy or single entry), we show colours directly.
+      // If there are MULTIPLE sets, we respect the set-wise structure and show the list.
+      if (widget.type == 'outward' && widget.dia != null && widget.setNo == null && res.length == 1) {
+        final singleSet = res.first;
+        try {
+          final setColours = await _api.getInventoryDrillDown(
+            type: widget.type,
+            lotName: widget.lotName,
+            lotNo: widget.lotNo,
+            dia: widget.dia,
+            setNo: singleSet['name'],
+            startDate: widget.startDate,
+            endDate: widget.endDate,
+          );
+          res = setColours.map((c) {
+            final map = Map<String, dynamic>.from(c);
+            map['isColorLevel'] = true;
+            return map;
+          }).toList();
+        } catch (e) {
+          debugPrint('Error expanding single set: $e');
+        }
+      }
+
       setState(() {
-        // Filter out negative values as requested by user
         _data = res.where((item) {
           final rolls = (item['totalRolls'] ?? 0) as num;
           final weight = (item['totalWeight'] ?? 0) as num;
-          return rolls >= 0 && weight >= 0;
+          
+          if (widget.type == 'closing') {
+            // Strictly hide zero or negative values as requested
+            return weight > 0.01 && rolls > 0;
+          }
+          
+          return weight >= 0;
         }).toList();
         _isLoading = false;
       });
@@ -103,10 +134,12 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
     if (widget.lotNo == null) return 'LOT NUMBER';
     if (widget.dia == null) return 'DIA';
     
-    final bool isColorLevelFromSkip = _data.isNotEmpty && _data.any((item) => item['isColorLevel'] == true);
-    if (widget.setNo == null && !isColorLevelFromSkip) return 'SET';
-    
-    return 'COLOR';
+    // Task 4: Dynamic label based on whether we are showing sets or colours
+    final bool isColorLevel = _data.isNotEmpty && _data.any((item) => item['isColorLevel'] == true);
+    if (widget.setNo == null) {
+      return isColorLevel ? 'COLOUR' : 'SET';
+    }
+    return 'COLOUR';
   }
 
   Color get _themeColor {
@@ -508,6 +541,9 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
   }
 
   void _navigateToNextLevel(dynamic item) {
+    // Task 4: If type is outward and we are at DIA level, skip SET and go to COLOR
+    String? nextSetNo = (widget.lotName != null && widget.lotNo != null && widget.dia != null) ? (widget.setNo ?? item['name']) : null;
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -518,7 +554,7 @@ class _InventoryDrillDownScreenState extends State<InventoryDrillDownScreen> {
           lotName: widget.lotName ?? item['name'],
           lotNo: widget.lotName != null ? (widget.lotNo ?? item['name']) : null,
           dia: (widget.lotName != null && widget.lotNo != null) ? (widget.dia ?? item['name']) : null,
-          setNo: (widget.lotName != null && widget.lotNo != null && widget.dia != null) ? (widget.setNo ?? item['name']) : null,
+          setNo: nextSetNo,
         ),
       ),
     );

@@ -413,12 +413,12 @@ const getDrillDownSummary = asyncHandler(async (req, res) => {
             }
             return {
                 ...g,
-                totalRolls: Math.round(g.totalRolls),
-                totalWeight: parseFloat(g.totalWeight.toFixed(3)),
-                totalValue: parseFloat(g.totalValue.toFixed(2)),
+                totalRolls: Math.max(0, Math.round(g.totalRolls)),
+                totalWeight: Math.max(0, parseFloat(g.totalWeight.toFixed(3))),
+                totalValue: Math.max(0, parseFloat(g.totalValue.toFixed(2))),
                 days: agingDays
             };
-        }).filter(g => Math.abs(g.totalWeight) > 0.001); // Filter out zero balance
+        }).filter(g => g.totalWeight > 0.01 && g.totalRolls > 0); // Only show positive stock
 
         res.json(results);
     } catch (error) {

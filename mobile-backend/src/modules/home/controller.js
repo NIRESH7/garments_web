@@ -93,9 +93,9 @@ const getHomeData = asyncHandler(async (req, res) => {
         const periodOutwards = allOutwards.filter(o => o.dateTime && new Date(o.dateTime) >= start && new Date(o.dateTime) <= end);
         const outwardTotals = getOutwardTotals(periodOutwards);
 
-        // 4. Closing Stock
-        const closingWeight = parseFloat(openingStock.weight) + inwardTotals.weight - outwardTotals.weight;
-        const closingRolls = openingStock.rolls + inwardTotals.rolls - outwardTotals.rolls;
+        // 4. Closing Stock (Prevent negative values)
+        const closingWeight = Math.max(0, parseFloat(openingStock.weight) + inwardTotals.weight - outwardTotals.weight);
+        const closingRolls = Math.max(0, openingStock.rolls + inwardTotals.rolls - outwardTotals.rolls);
 
         // 5. Recent Inwards (Global or filtered)
         const recentDisplayQuery = {};

@@ -21,6 +21,7 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
   bool _saving = false;
 
   final List<String> _statusOptions = ['Pending', 'In Progress', 'Completed'];
+  List<String> _machines = [];
 
   // Column widths (pixels) — matches the reference spreadsheet proportions
   static const double _wLotName     = 90.0;
@@ -45,7 +46,91 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
   @override
   void initState() {
     super.initState();
+    _loadMasterData();
     _loadForDate();
+  }
+
+  Future<void> _loadMasterData() async {
+    try {
+      final cats = await _api.getCategories();
+      // More robust search for "Machine Number" or "Machine No"
+      final machCat = cats.firstWhere((c) {
+        final n = c['name'].toString().toLowerCase();
+        return n.contains('machine') && (n.contains('number') || n.contains('no'));
+      }, orElse: () => null);
+
+      if (machCat != null) {
+        setState(() {
+          _machines = (machCat['values'] as List).map((v) => v['name'].toString()).toList();
+        });
+      }
+    } catch (e) {}
+  }
+
+  Future<void> _autoEnrichRow(int i) async {
+    if (i < 0 || i >= _planRows.length) return;
+    
+    final row = _planRows[i];
+    final ln = (row['lotName'] ?? '').toString().trim().toUpperCase();
+    final dia = (row['dia'] ?? '').toString().trim().toUpperCase();
+    final size = (row['size'] ?? '').toString().trim().toUpperCase();
+    final item = (row['itemName'] ?? '').toString().trim().toUpperCase();
+
+    // Lot Name is the minimum required field to start enrichment
+    if (ln.isEmpty) return;
+
+    try {
+      // 1. Primary Source: Cutting Masters
+      final masters = await _api.getCuttingMasters();
+      var match = masters.firstWhere((m) {
+        final m_ln = (m['lotName'] ?? '').toString().trim().toUpperCase();
+        final m_dia = (m['diaName'] ?? m['dia'] ?? '').toString().trim().toUpperCase();
+        final m_size = (m['size'] ?? '').toString().trim().toUpperCase();
+        final m_item = (m['itemName'] ?? '').toString().trim().toUpperCase();
+        
+        bool isMatch = m_ln == ln;
+        if (dia.isNotEmpty && m_dia.isNotEmpty) isMatch = isMatch && (m_dia == dia);
+        if (size.isNotEmpty && m_size.isNotEmpty) isMatch = isMatch && (m_size == size);
+        if (item.isNotEmpty && m_item.isNotEmpty) isMatch = isMatch && (m_item == item);
+        
+        return isMatch;
+      }, orElse: () => null);
+
+      if (match != null) {
+        setState(() {
+          _planRows[i]['layLength'] = num.tryParse((match['layLengthMeter'] ?? match['layLength'] ?? 0).toString()) ?? 0;
+          _planRows[i]['layPcs'] = num.tryParse((match['layPcs'] ?? match['layPieces'] ?? 0).toString()) ?? 0;
+          _planRows[i]['timing'] = (match['timeToComplete'] ?? match['timingTaken'] ?? '').toString();
+        });
+        return;
+      }
+
+      // 2. Secondary Source: Item Assignments
+      final assignments = await _api.getAssignments();
+      match = assignments.firstWhere((m) {
+        final m_ln = (m['lotName'] ?? '').toString().trim().toUpperCase();
+        final m_dia = (m['dia'] ?? '').toString().trim().toUpperCase();
+        final m_size = (m['size'] ?? '').toString().trim().toUpperCase();
+        final m_item = (m['fabricItem'] ?? m['itemName'] ?? '').toString().trim().toUpperCase();
+        
+        bool isMatch = m_ln == ln;
+        if (dia.isNotEmpty && m_dia.isNotEmpty) isMatch = isMatch && (m_dia == dia);
+        if (size.isNotEmpty && m_size.isNotEmpty) isMatch = isMatch && (m_size == size);
+        if (item.isNotEmpty && m_item.isNotEmpty) isMatch = isMatch && (m_item == item);
+        
+        return isMatch;
+      }, orElse: () => null);
+
+      if (match != null) {
+        setState(() {
+          _planRows[i]['layLength'] = num.tryParse((match['layLength'] ?? 0).toString()) ?? 0;
+          _planRows[i]['layPcs'] = num.tryParse((match['layPcs'] ?? 0).toString()) ?? 0;
+          _planRows[i]['timing'] = (match['timing'] ?? '').toString();
+        });
+      }
+    } catch (e) {
+      debugPrint('AUTO_ENRICH_ERROR: $e');
+    }
   }
 
   Future<void> _loadForDate() async {
@@ -110,8 +195,27 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
             });
           }
         }
-        _loading = false;
       });
+      
+      // Auto-Enrich from Cutting Master
+      final masters = await _api.getCuttingMasters();
+      setState(() {
+        for (var row in _planRows) {
+          if ((row['layLength'] == 0 || row['layLength'] == null) && row['lotName'].toString().isNotEmpty) {
+             final match = masters.firstWhere((m) => 
+               m['lotName'].toString().trim().toUpperCase() == row['lotName'].toString().trim().toUpperCase() &&
+               m['dia'].toString().trim() == row['dia'].toString().trim(),
+               orElse: () => null
+             );
+             if (match != null) {
+                row['layLength'] = num.tryParse(match['layLength'].toString()) ?? 0;
+                row['layPcs'] = num.tryParse(match['layPieces'].toString()) ?? 0;
+                row['timing'] = match['timingTaken']?.toString() ?? '';
+             }
+          }
+        }
+      });
+      setState(() => _loading = false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -257,7 +361,8 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
     );
   }
 
-  Widget _dropCell(double width, String value, Function(String?) onChange) {
+  Widget _dropCell(double width, String value, Function(String?) onChange, {List<String>? options}) {
+    final list = options ?? _statusOptions;
     return Container(
       width: width,
       height: _rowH,
@@ -270,13 +375,13 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _statusOptions.contains(value) ? value : 'Pending',
+          value: list.contains(value) ? value : (list.isNotEmpty ? list.first : null),
           isDense: true,
           isExpanded: true,
           icon: const Icon(LucideIcons.chevronDown, size: 14, color: Color(0xFF64748B)),
           padding: const EdgeInsets.symmetric(horizontal: 4),
           style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
-          items: _statusOptions
+          items: list
               .map((s) => DropdownMenuItem(
                   value: s, child: Text(s.toUpperCase(), style: const TextStyle(fontSize: 9, letterSpacing: 0.5))))
               .toList(),
@@ -367,17 +472,17 @@ class _CuttingDailyPlanScreenState extends State<CuttingDailyPlanScreen> {
                   final row = e.value;
                   final bg = i.isOdd ? const Color(0xFFF5F7FF) : Colors.white;
                   return Row(children: [
-                    _inputCell(_wLotName,  row['lotName']  ?? '', (v) => setState(() => _planRows[i]['lotName']  = v), bg: bg),
-                    _inputCell(_wLotNo,    row['lotNo']    ?? '', (v) => setState(() => _planRows[i]['lotNo']    = v), bg: bg),
-                    _inputCell(_wDia,      (row['dia']     ?? '').toString(), (v) => setState(() => _planRows[i]['dia']     = v), bg: bg),
+                    _inputCell(_wLotName,  row['lotName']  ?? '', (v) { setState(() => _planRows[i]['lotName']  = v); _autoEnrichRow(i); }, bg: bg),
+                    _inputCell(_wLotNo,    row['lotNo']    ?? '', (v) { setState(() => _planRows[i]['lotNo']    = v); _autoEnrichRow(i); }, bg: bg),
+                    _inputCell(_wDia,      (row['dia']     ?? '').toString(), (v) { setState(() => _planRows[i]['dia']     = v); _autoEnrichRow(i); }, bg: bg),
                     _inputCell(_wSetNo,    (row['setNo']   ?? '').toString(), (v) => setState(() => _planRows[i]['setNo']   = v), bg: bg),
-                    _inputCell(_wItemName, row['itemName'] ?? '', (v) => setState(() => _planRows[i]['itemName'] = v), bg: bg),
-                    _inputCell(_wSize,     (row['size']    ?? '').toString(), (v) => setState(() => _planRows[i]['size']    = v), bg: bg),
+                    _inputCell(_wItemName, row['itemName'] ?? '', (v) { setState(() => _planRows[i]['itemName'] = v); _autoEnrichRow(i); }, bg: bg),
+                    _inputCell(_wSize,     (row['size']    ?? '').toString(), (v) { setState(() => _planRows[i]['size']    = v); _autoEnrichRow(i); }, bg: bg),
                     _inputCell(_wDozen,    (row['dozen']   ?? 0).toString(),  (v) => setState(() => _planRows[i]['dozen']   = num.tryParse(v) ?? 0), numeric: true, bg: bg),
                     _inputCell(_wLayLength,(row['layLength']?? 0).toString(), (v) => setState(() => _planRows[i]['layLength']= num.tryParse(v) ?? 0), numeric: true, bg: bg),
                     _inputCell(_wLayPcs,   (row['layPcs']  ?? 0).toString(),  (v) => setState(() => _planRows[i]['layPcs']  = num.tryParse(v) ?? 0), numeric: true, bg: bg),
                     _inputCell(_wTiming,   row['timing']   ?? '', (v) => setState(() => _planRows[i]['timing']   = v), bg: bg),
-                    _inputCell(_wMachine,  row['machineNo']?? '', (v) => setState(() => _planRows[i]['machineNo']= v), bg: bg),
+                    _dropCell(_wMachine,  row['machineNo']?? '', (v) => setState(() => _planRows[i]['machineNo']= v ?? ''), options: _machines),
                     _checkCell(_wApproval, row['approval'] == true, (v) => setState(() => _planRows[i]['approval'] = v)),
                     _inputCell(_wActualTime, row['actualTimeTaken'] ?? '', (v) => setState(() => _planRows[i]['actualTimeTaken'] = v), bg: bg),
                     _inputCell(_wDiff,     row['diff']     ?? '', (v) => setState(() => _planRows[i]['diff']     = v), bg: bg),

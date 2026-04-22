@@ -506,6 +506,20 @@ class _FilterDialogState extends State<_FilterDialog> {
               selectedValues: List<String>.from(_filters['lotNo'] ?? []), 
               onChanged: (v) => setState(() => _filters['lotNo'] = v)
             ),
+            const SizedBox(height: 16),
+            CustomMultiSelectField(
+              label: 'DIA', 
+              items: widget.dias, 
+              selectedValues: List<String>.from(_filters['dia'] ?? []), 
+              onChanged: (v) => setState(() => _filters['dia'] = v)
+            ),
+            const SizedBox(height: 16),
+            CustomMultiSelectField(
+              label: 'COLOUR', 
+              items: widget.colours, 
+              selectedValues: List<String>.from(_filters['colour'] ?? []), 
+              onChanged: (v) => setState(() => _filters['colour'] = v)
+            ),
             if (widget.tabIndex == 2) ...[
               const SizedBox(height: 16),
               _buildDropdown('party', 'PARTY NAME', widget.parties),

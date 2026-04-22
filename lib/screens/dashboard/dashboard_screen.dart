@@ -9,6 +9,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/constants/layout_constants.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/mobile_api_service.dart';
+import '../../core/storage/storage_service.dart';
 import '../../widgets/responsive_layout_shell.dart';
 import '../masters/masters_dashboard.dart';
 import '../transactions/lot_inward_screen.dart';
@@ -72,6 +73,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 15: return 'Cutting Daily Plan';
       default: return 'Modern Garments';
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Task 2: Check for new mission-critical tasks on app entry
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkNewTasks();
+    });
+  }
+
+  Future<void> _checkNewTasks() async {
+    final api = MobileApiService();
+    final storage = StorageService();
+    
+    try {
+      final tasks = await api.getTasks();
+      if (tasks != null && tasks.isNotEmpty) {
+        final latestTask = tasks.first;
+        final taskId = latestTask['title'].toString() + (latestTask['createdAt'] ?? '');
+        
+        final lastSeenId = await storage.readValue('last_seen_task_id');
+        
+        if (taskId != lastSeenId) {
+          _showNewTaskAlert(latestTask);
+          await storage.writeValue('last_seen_task_id', taskId);
+        }
+      }
+    } catch (e) {
+      debugPrint('Task alert check failed: $e');
+    }
+  }
+
+  void _showNewTaskAlert(dynamic task) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 30,
+                offset: const Offset(0, 15),
+              ),
+            ],
+          ),
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 64,
+                width: 64,
+                decoration: BoxDecoration(
+                  color: ColorPalette.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(LucideIcons.bell, color: ColorPalette.primary, size: 32),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'NEW MISSION ASSIGNED',
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                  color: ColorPalette.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                (task['title'] ?? 'Untitled Task').toString().toUpperCase(),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: ColorPalette.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (task['description'] != null && task['description'].toString().isNotEmpty)
+                Text(
+                  task['description'].toString(),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: ColorPalette.textSecondary,
+                    height: 1.5,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: ColorPalette.textPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    'ACKNOWLEDGE TASK',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      letterSpacing: 1.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _onIndexChanged(int index) {
@@ -726,85 +851,54 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
       crossAxisCount: isWeb ? 4 : 2,
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
-      childAspectRatio: isWeb ? 1.6 : 2.2,
+      childAspectRatio: isWeb ? 1.8 : 2.0,
       children: [
         _StockCard(
-          title: 'Opening Stock',
+          title: 'Opening Balance',
           weight: _summary['opening']['weight'],
           rolls: _summary['opening']['rolls'],
-          color: Theme.of(context).primaryColor,
+          color: const Color(0xFF6366F1),
           icon: LucideIcons.box,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => InventoryDrillDownScreen(
-                  type: 'opening',
-                  startDate: _startDate?.toIso8601String(),
-                  endDate: _endDate?.toIso8601String(),
-                ),
-              ),
-            );
-          },
+          onTap: () => _navigateToDrillDown('opening'),
         ),
         _StockCard(
-          title: 'Inward',
+          title: 'Inward Flow',
           weight: _summary['inward']['weight'],
           rolls: _summary['inward']['rolls'],
-          color: ColorPalette.success,
+          color: const Color(0xFF10B981),
           icon: LucideIcons.arrowDownCircle,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => InventoryDrillDownScreen(
-                  type: 'inward',
-                  startDate: _startDate?.toIso8601String(),
-                  endDate: _endDate?.toIso8601String(),
-                ),
-              ),
-            );
-          },
+          onTap: () => _navigateToDrillDown('inward'),
         ),
         _StockCard(
-          title: 'Outward',
+          title: 'Outward Flow',
           weight: _summary['outward']['weight'],
           rolls: _summary['outward']['rolls'],
-          color: ColorPalette.error,
+          color: const Color(0xFFEF4444),
           icon: LucideIcons.arrowUpCircle,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => InventoryDrillDownScreen(
-                  type: 'outward',
-                  startDate: _startDate?.toIso8601String(),
-                  endDate: _endDate?.toIso8601String(),
-                ),
-              ),
-            );
-          },
+          onTap: () => _navigateToDrillDown('outward'),
         ),
         _StockCard(
-          title: 'Closing Stock',
+          title: 'Closing Balance',
           weight: _summary['closing']['weight'],
           rolls: _summary['closing']['rolls'],
-          color: ColorPalette.primary,
+          color: const Color(0xFF3B82F6),
           icon: LucideIcons.checkCircle2,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => InventoryDrillDownScreen(
-                  type: 'closing',
-                  startDate: _startDate?.toIso8601String(),
-                  endDate: _endDate?.toIso8601String(),
-                ),
-              ),
-            );
-          },
+          onTap: () => _navigateToDrillDown('closing'),
         ),
       ],
+    );
+  }
+
+  void _navigateToDrillDown(String type) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => InventoryDrillDownScreen(
+          type: type,
+          startDate: _startDate?.toIso8601String(),
+          endDate: _endDate?.toIso8601String(),
+        ),
+      ),
     );
   }
 
@@ -983,10 +1077,10 @@ class _DynamicDataHomeTabState extends ConsumerState<_DynamicDataHomeTab> {
   }
 }
 
-class _StockCard extends StatelessWidget {
+class _StockCard extends StatefulWidget {
   final String title;
-  final dynamic weight;
-  final dynamic rolls;
+  final String weight;
+  final int rolls;
   final Color color;
   final IconData icon;
   final VoidCallback onTap;
@@ -1001,61 +1095,107 @@ class _StockCard extends StatelessWidget {
   });
 
   @override
+  State<_StockCard> createState() => _StockCardState();
+}
+
+class _StockCardState extends State<_StockCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: ColorPalette.border),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: _isHovered ? widget.color : const Color(0xFFF1F5F9),
+            width: _isHovered ? 1.5 : 1,
+          ),
+          boxShadow: _isHovered ? [
+            BoxShadow(
+              color: widget.color.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
+          ] : [],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: color, size: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Icon(widget.icon, color: widget.color, size: 16),
+                    ),
+                    Icon(LucideIcons.expand, size: 12, color: const Color(0xFF94A3B8).withOpacity(0.5)),
+                  ],
                 ),
-                Text(
-                  title.toUpperCase(),
-                  style: GoogleFonts.inter(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: ColorPalette.textMuted,
-                    letterSpacing: 0.5,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title.toUpperCase(),
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF64748B),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          widget.weight,
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1E293B),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'KG',
+                          style: GoogleFonts.inter(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${widget.rolls} ROLLS',
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: widget.color,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              '${FormatUtils.formatWeight(double.tryParse(weight.toString()) != null && double.parse(weight.toString()) < 0 ? 0 : weight)} Kg',
-              style: GoogleFonts.inter(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: ColorPalette.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${FormatUtils.formatQuantity(double.tryParse(rolls.toString()) != null && double.parse(rolls.toString()) < 0 ? 0 : rolls)} ROLLS',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: ColorPalette.textSecondary,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

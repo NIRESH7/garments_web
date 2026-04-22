@@ -593,6 +593,81 @@ const getRackPalletStockReport = asyncHandler(async (req, res) => {
     res.json(stockReport);
 });
 
+// @desc    Get 3D Warehouse Setup
+// @route   GET /api/inventory/reports/warehouse-3d
+const getWarehouse3DData = asyncHandler(async (req, res) => {
+    // 1. Get Masters
+    const categories = await Category.find({});
+    const rackCat = categories.find(c => c.name.toLowerCase().includes('rack'));
+    const palletCat = categories.find(c => c.name.toLowerCase().includes('pallet'));
+    
+    const rackValues = rackCat ? rackCat.values.map(v => v.name) : [];
+    const palletValues = palletCat ? palletCat.values.map(v => v.name) : [];
+
+    // 2. Get Current Stock Snapshot
+    // Reuse calculation from getRackPalletStockReport (Internal call)
+    // For 3D, we need it indexed by [rack][pallet]
+    const inwards = await Inward.find({}).sort({ inwardDate: -1 });
+    const outwards = await Outward.find({});
+    const usedSetsMap = new Set();
+    outwards.forEach(o => {
+        if (o.items) {
+            o.items.forEach(item => {
+                const key = `${o.lotNo}_${o.dia}_${item.set_no}`.toLowerCase();
+                usedSetsMap.add(key);
+            });
+        }
+    });
+
+    const occupancy = {};
+    inwards.forEach(inw => {
+        if (inw.storageDetails && Array.isArray(inw.storageDetails)) {
+            inw.storageDetails.forEach(sd => {
+                if (sd.rows && Array.isArray(sd.rows)) {
+                    sd.rows.forEach(row => {
+                        if (row.setWeights && Array.isArray(row.setWeights)) {
+                            row.setWeights.forEach((weight, index) => {
+                                const labels = Array.isArray(row.setLabels) ? row.setLabels : [];
+                                const setLabel = (labels[index] ?? '').toString().trim();
+                                const setNo = setLabel || (index + 1).toString();
+                                const rack = (sd.racks && sd.racks[index] ? sd.racks[index] : 'N/A').toString();
+                                const pallet = (sd.pallets && sd.pallets[index] ? sd.pallets[index] : 'N/A').toString();
+
+                                const setKey = `${inw.lotNo}_${sd.dia}_${setNo}`.toLowerCase();
+                                if (!usedSetsMap.has(setKey)) {
+                                    if (!occupancy[rack]) occupancy[rack] = {};
+                                    if (!occupancy[rack][pallet]) occupancy[rack][pallet] = [];
+                                    // Fallback for color from main diaEntries if blank in storage rows
+                                    let itemColor = row.colour;
+                                    if (!itemColor && inw.diaEntries) {
+                                        const diaMatch = inw.diaEntries.find(de => de.dia === sd.dia);
+                                        if (diaMatch) itemColor = diaMatch.colour;
+                                    }
+
+                                    occupancy[rack][pallet].push({
+                                        lotName: inw.lotName,
+                                        lotNo: inw.lotNo,
+                                        dia: sd.dia,
+                                        colour: itemColor || '',
+                                        weight: parseFloat(weight) || 0,
+                                        setNo: setNo
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+
+    res.json({
+        racks: rackValues,
+        pallets: palletValues,
+        occupancy: occupancy
+    });
+});
+
 export {
     getOverviewReport,
     getInwardOutwardReport,
@@ -601,5 +676,6 @@ export {
     getGodownStockReport,
     getShadeCardReport,
     getLotAgingSummaryReport,
-    getRackPalletStockReport
+    getRackPalletStockReport,
+    getWarehouse3DData
 };

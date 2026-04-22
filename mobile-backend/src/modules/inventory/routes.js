@@ -36,6 +36,7 @@ import {
     getShadeCardReport,
     getLotAgingSummaryReport,
     getRackPalletStockReport,
+    getWarehouse3DData,
 } from './reportController.js';
 
 import { getDrillDownSummary } from './drillDownController.js';
@@ -118,5 +119,6 @@ router.get('/reports/monthly', protect, getMonthlySummaryReport);
 router.get('/reports/shade-card', protect, getShadeCardReport);
 router.get('/reports/aging-summary', protect, getLotAgingSummaryReport);
 router.get('/reports/rack-pallet', protect, getRackPalletStockReport);
+router.get('/reports/warehouse-3d', getWarehouse3DData);
 
 export default router;

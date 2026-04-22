@@ -7,6 +7,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../services/mobile_api_service.dart';
 import '../../utils/print_utils.dart';
+import 'color_wise_inventory_screen.dart';
+import 'rack_pallet_3d_details_screen.dart';
 
 class RackPalletReportScreen extends StatefulWidget {
   const RackPalletReportScreen({super.key});
@@ -234,6 +236,15 @@ class _RackPalletReportScreenState extends State<RackPalletReportScreen> {
   Widget _buildActionIcons() {
     return Row(
       children: [
+        IconButton(
+          icon: const Icon(LucideIcons.box, size: 18, color: Color(0xFF2563EB)),
+          tooltip: '3D WAREHOUSE',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const RackPallet3DDetailsScreen()),
+          ),
+        ),
+        const SizedBox(width: 8),
         if (_isPrinting)
           const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
         else
@@ -376,14 +387,13 @@ class _RackPalletReportScreenState extends State<RackPalletReportScreen> {
                 _hdr('COLOURS', 1),
                 _hdr('TOTAL WEIGHT', 1),
                 _hdr('INWARD DATE', 1),
+                _hdr('ACTION', 1),
               ],
             ),
           ),
 
           // Data rows
           ...paginated.map((group) {
-            final key = '${group['lotNo']}||${group['setNo']}';
-            final isExpanded = _expandedSets.contains(key);
             final rack = group['rack'] as String;
             final pallet = group['pallet'] as String;
             final isUnassigned = rack == '-' || rack == 'N/A' || pallet == '-' || pallet == 'N/A';
@@ -395,147 +405,137 @@ class _RackPalletReportScreenState extends State<RackPalletReportScreen> {
             return Column(
               children: [
                 // Set summary row
-                InkWell(
-                  onTap: () => setState(() {
-                    if (isExpanded) _expandedSets.remove(key);
-                    else _expandedSets.add(key);
-                  }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                    decoration: BoxDecoration(
-                      color: isExpanded ? const Color(0xFFF0F9FF) : Colors.white,
-                      border: const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                    ),
-                    child: Row(
-                      children: [
-                        // Expand icon
-                        Icon(
-                          isExpanded ? LucideIcons.chevronDown : LucideIcons.chevronRight,
-                          size: 14,
-                          color: const Color(0xFF64748B),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 28),
+                      // Location
+                      Expanded(
+                        flex: 2,
+                        child: isUnassigned
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(2)),
+                                child: Text('NOT ASSIGNED', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFFEF4444))),
+                              )
+                            : Text('R:$rack - P:$pallet', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B))),
+                      ),
+                      // Lot Name
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(group['lotName'].toString().toUpperCase(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B))),
+                            Text(group['lotNo'].toString(), style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFF94A3B8))),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        // Location
-                        Expanded(
-                          flex: 2,
-                          child: isUnassigned
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(2)),
-                                  child: Text('NOT ASSIGNED', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFFEF4444))),
-                                )
-                              : Text('R:$rack - P:$pallet', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B))),
-                        ),
-                        // Lot Name
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(group['lotName'].toString().toUpperCase(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B))),
-                              Text(group['lotNo'].toString(), style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFF94A3B8))),
-                            ],
+                      ),
+                      // DIA
+                      Expanded(
+                        flex: 1,
+                        child: InkWell(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ColorWiseInventoryScreen(
+                                lotName: group['lotName'].toString(),
+                                lotNo: group['lotNo'].toString(),
+                                dia: group['dia'].toString(),
+                                initialData: _reportData,
+                              ),
+                            ),
                           ),
-                        ),
-                        // DIA
-                        Expanded(
-                          flex: 1,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEFF6FF),
                               borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFDBEAFE)),
                             ),
-                            child: Text(
-                              group['dia'].toString(),
-                              style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1D4ED8)),
-                            ),
-                          ),
-                        ),
-                        // Set No
-                        Expanded(
-                          flex: 1,
-                          child: Text(group['setNo'].toString(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B))),
-                        ),
-                        // Colours count
-                        Expanded(
-                          flex: 1,
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(4)),
-                                child: Text(
-                                  '${colours.length} colours',
-                                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF166534)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  group['dia'].toString(),
+                                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1D4ED8)),
                                 ),
+                                const SizedBox(width: 4),
+                                const Icon(LucideIcons.externalLink, size: 10, color: Color(0xFF2563EB)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Set No
+                      Expanded(
+                        flex: 1,
+                        child: Text(group['setNo'].toString(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B))),
+                      ),
+                      // Colours count
+                      Expanded(
+                        flex: 1,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(4)),
+                              child: Text(
+                                '${colours.length} colours',
+                                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF166534)),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        // Total weight
-                        Expanded(
-                          flex: 1,
+                      ),
+                      // Total weight
+                      Expanded(
+                        flex: 1,
+                        child: Text(
+                          '${(group['totalWeight'] as double).toStringAsFixed(2)} kg',
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF2563EB)),
+                        ),
+                      ),
+                      // Date
+                      Expanded(
+                        flex: 1,
+                        child: Text(date, style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B))),
+                      ),
+                      // Action - Set Detail
+                      Expanded(
+                        flex: 1,
+                        child: TextButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ColorWiseInventoryScreen(
+                                lotName: group['lotName'].toString(),
+                                lotNo: group['lotNo'].toString(),
+                                dia: group['dia'].toString(),
+                                setNo: group['setNo'].toString(),
+                                initialData: _reportData,
+                              ),
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                           child: Text(
-                            '${(group['totalWeight'] as double).toStringAsFixed(2)} kg',
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFF2563EB)),
+                            'SET DETAIL',
+                            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF2563EB), decoration: TextDecoration.underline),
                           ),
                         ),
-                        // Date
-                        Expanded(
-                          flex: 1,
-                          child: Text(date, style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B))),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-
-                // Expanded colour detail rows
-                if (isExpanded)
-                  Container(
-                    color: const Color(0xFFF8FAFF),
-                    child: Column(
-                      children: [
-                        // Colour sub-header
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
-                          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE0E7FF)))),
-                          child: Row(
-                            children: [
-                              Expanded(flex: 3, child: Text('COLOUR', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1), letterSpacing: 0.5))),
-                              Expanded(flex: 1, child: Text('WEIGHT (KG)', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF6366F1), letterSpacing: 0.5))),
-                            ],
-                          ),
-                        ),
-                        ...colours.map((c) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 9),
-                          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF2FF)))),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Row(
-                                  children: [
-                                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle)),
-                                    const SizedBox(width: 10),
-                                    Text(c['colour'].toString().toUpperCase(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B))),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                flex: 1,
-                                child: Text(
-                                  '${(c['weight'] as double).toStringAsFixed(2)}',
-                                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF2563EB)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
-                      ],
-                    ),
-                  ),
               ],
             );
           }),
@@ -614,26 +614,22 @@ class _RackPalletReportScreenState extends State<RackPalletReportScreen> {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(color: PdfColors.blueGrey100)),
+                ),
                 child: pw.Row(
                   children: [
-                    pw.Expanded(flex: 2, child: pw.Text('$loc', style: pw.TextStyle(font: bold, fontSize: 8, color: PdfColors.white))),
-                    pw.Expanded(flex: 3, child: pw.Text('${group['lotName'].toString().toUpperCase()}  (${group['lotNo']})', style: pw.TextStyle(font: bold, fontSize: 8, color: PdfColors.white))),
-                    pw.Expanded(flex: 1, child: pw.Text('DIA: ${group['dia']}', style: pw.TextStyle(font: bold, fontSize: 8, color: PdfColors.white))),
-                    pw.Expanded(flex: 1, child: pw.Text('Set: ${group['setNo']}', style: pw.TextStyle(font: bold, fontSize: 8, color: PdfColors.white))),
-                    pw.Expanded(flex: 1, child: pw.Text('${(group['totalWeight'] as double).toStringAsFixed(2)} kg', style: pw.TextStyle(font: bold, fontSize: 8, color: PdfColors.yellow))),
+                    pw.Expanded(flex: 3, child: pw.Text('$loc', style: pw.TextStyle(font: bold, fontSize: 9))),
+                    pw.Expanded(flex: 4, child: pw.Text('${group['lotName'].toString().toUpperCase()} (${group['lotNo']})', style: pw.TextStyle(font: bold, fontSize: 9))),
+                    pw.Expanded(flex: 2, child: pw.Text('DIA: ${group['dia']}', style: pw.TextStyle(font: normal, fontSize: 9))),
+                    pw.Expanded(flex: 2, child: pw.Text('SET: ${group['setNo']}', style: pw.TextStyle(font: bold, fontSize: 9))),
+                    pw.Expanded(flex: 2, child: pw.Text('${(group['totalWeight'] as double).toStringAsFixed(2)} KG', style: pw.TextStyle(font: bold, fontSize: 9, color: PdfColors.blue900))),
+                    pw.Expanded(flex: 2, child: pw.Text('${(group['colours'] as List).length} COLOURS', style: pw.TextStyle(font: normal, fontSize: 8))),
                   ],
                 ),
               ),
-              pw.TableHelper.fromTextArray(
-                headers: ['COLOUR', 'WEIGHT (KG)'],
-                headerStyle: pw.TextStyle(font: bold, fontSize: 7, color: PdfColors.blueGrey700),
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey100),
-                cellStyle: pw.TextStyle(font: normal, fontSize: 7),
-                data: colours.map((c) => [c['colour'].toString().toUpperCase(), (c['weight'] as double).toStringAsFixed(2)]).toList(),
-              ),
-              pw.SizedBox(height: 8),
+              pw.SizedBox(height: 4),
             ],
           );
         }),

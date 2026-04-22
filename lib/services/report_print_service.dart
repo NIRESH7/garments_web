@@ -107,6 +107,7 @@ class ReportPrintService {
               children: [
                 // Header Row
                 pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
                   children: headers.map((h) => pw.Container(
                     padding: const pw.EdgeInsets.all(6),
                     alignment: pw.Alignment.centerLeft,
