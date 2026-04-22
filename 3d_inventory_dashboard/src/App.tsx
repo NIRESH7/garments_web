@@ -16,7 +16,7 @@ import { gsap } from 'gsap';
 const getParams = () => {
     const urlParams = new URLSearchParams(window.location.search);
     return {
-        server: urlParams.get('server') || 'http://localhost:5001',
+        server: urlParams.get('server') || 'http://34.229.76.36:5001',
         token: urlParams.get('token') || ''
     };
 };
@@ -181,7 +181,7 @@ export default function App() {
         fetch(`${cleanUrl}/api/inventory/reports/warehouse-3d`)
             .then(res => { if(!res.ok) throw new Error(); return res.json(); })
             .then(data => { setWarehouseData(data); setBaseUrl(cleanUrl); })
-            .catch(() => { if (url !== 'http://localhost:5001') pullData('http://localhost:5001'); });
+            .catch(() => { if (url !== 'http://34.229.76.36:5001') pullData('http://34.229.76.36:5001'); });
     };
 
     useEffect(() => {
